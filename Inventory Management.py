@@ -19,6 +19,7 @@ class Application(tk.Frame):
         super().__init__(master)
         
         self.missing_docs = []  # Initialize missing_docs as an empty list
+        self.excel_data_frame = None  # Initialize the DataFrame as None
 
         
         self.after(10000, self.check_and_update_product_list)  # Start the periodic check
@@ -170,7 +171,7 @@ class Application(tk.Frame):
         self.excel_db_button.grid(row=3, column=0, padx=(window_width//4, 0))
         self.excel_db_label.grid(row=3, column=1, padx=(0, window_width//4), sticky='ew')
         
-            # Add a new button for "Correlate new data" functionality
+        # Add a new button for "Correlate new data" functionality
         self.correlate_button = tk.Button(self.settings_window, text="Correlate new data", command=self.correlate_data)
         # Adjust the row index accordingly to place the new button
         self.correlate_button.grid(row=4, column=0, padx=(window_width//4, 0), sticky='w')
@@ -530,12 +531,12 @@ class Application(tk.Frame):
 
     def load_excel_data(self, filepath, sheet_name):
         try:
-            df = pd.read_excel(filepath, sheet_name=sheet_name, engine='openpyxl')
-            # Here you would handle the DataFrame, e.g., storing it, processing it, etc.
-            # For example, you can assign it to an attribute of your class
-            self.excel_data_frame = df
+            self.excel_data_frame = pd.read_excel(filepath, sheet_name=sheet_name, engine='openpyxl')
+            print("Excel data loaded successfully.")
         except Exception as e:
             messagebox.showerror("Error", str(e))
+            print(f"Failed to load Excel data: {e}")
+
             
     def save_excel_settings(self, filepath, sheet_name):
         try:
@@ -562,6 +563,8 @@ class Application(tk.Frame):
         
         # Load Excel settings
         filepath, sheet_name = self.load_excel_settings()
+        self.load_excel_data(filepath, sheet_name)
+
         if not filepath or not sheet_name:
             messagebox.showerror("Error", "Excel database settings not found.")
             return
@@ -649,44 +652,50 @@ class Application(tk.Frame):
         # Call the create_word_doc function with doc_data and the item's iid
         self.create_word_doc(doc_data, item_id)  # show_message is True by default
 
-
     def create_all_word_docs(self):
-        for iid in self.correlate_tree.get_children()[:]:  # Use a copy of the list
+        print("Create all word docs function called")  # Debug print statement
+        for iid in self.correlate_tree.get_children():
             item_values = self.correlate_tree.item(iid, 'values')
             doc_data = (item_values[0], item_values[1], item_values[2])
-            self.create_word_doc(doc_data, iid, show_message=False)  # Do not show message for each document
-
-        # After all documents have been created, show a single message
+            self.create_word_doc(doc_data, iid, show_message=False)
         messagebox.showinfo("Success", "All Word documents have been created.")
         self.correlate_window.destroy()
         self.open_settings()
 
 
+
     def create_word_doc(self, doc_data, iid, show_message=True):
+        print("Create word doc function called")  # Debug print statement
         folder_name, product_id, product_name = doc_data
         folder_path = self.get_folder_path_from_db(str(product_id))
         if folder_path:
-            doc_path = os.path.join(folder_path, f"{product_id}.docx")
-            doc = Document()
-            doc.add_paragraph(f"Product ID: {product_id}")
-            doc.add_paragraph(f"Product Name: {product_name}")
             try:
+                fair_market_value = self.excel_data_frame.loc[self.excel_data_frame['Product ID'] == product_id, 'Fair Market Value'].iloc[0]
+            except Exception as e:
+                print(f"Error retrieving fair market value: {e}")  # Debug print statement
+                fair_market_value = "N/A"
+
+            doc_path = os.path.join(folder_path, f"{product_id}.docx")
+            try:
+                doc = Document()
+                doc.add_paragraph(f"Product ID: {product_id}")
+                doc.add_paragraph(f"Product Name: {product_name}")
+                doc.add_paragraph(f"Fair Market Value: {fair_market_value}")
                 doc.save(doc_path)
                 if show_message:
                     messagebox.showinfo("Document Created", f"Word document for '{product_id}' has been created successfully.")
-                # Remove the corresponding entry from the Treeview
                 self.correlate_tree.delete(iid)
-
-                # If there are no more items in the Treeview, close the window and open Settings
-                if not self.correlate_tree.get_children():  # Check if the Treeview is empty
-                    self.correlate_window.destroy()
-                    self.open_settings()
-
             except Exception as e:
+                print(f"Error creating word doc: {e}")  # Debug print statement
                 messagebox.showerror("Error", f"Failed to create document for Product ID {product_id}: {e}")
         else:
             messagebox.showerror("Error", f"No folder found for Product ID {product_id}")
-
+        
+        # After creating the document, check if there are any items left
+        if not self.correlate_tree.get_children():
+            # If the Treeview is empty, close the 'Correlate Data' window and open the 'Settings' window
+            self.correlate_window.destroy()
+            self.open_settings()
 
 root = tk.Tk()
 root.title("Improved Inventory Manager")
