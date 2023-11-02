@@ -8,6 +8,8 @@ from tkinter import ttk
 from tkcalendar import DateEntry
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+import pandas as pd
+from tkinter import filedialog, messagebox
 
 class Application(tk.Frame):
     def __init__(self, master=None):
@@ -143,9 +145,19 @@ class Application(tk.Frame):
         self.sold_folder_label = tk.Label(self.sold_folder_frame, text=self.sold_folder if hasattr(self, 'sold_folder') else "Not chosen")
         self.sold_folder_label.grid(row=2, column=1, padx=(0, window_width//4), sticky='ew')
 
+
+        # Add a new frame for the Excel database selection
+        self.excel_db_frame = tk.Frame(self.settings_window)
+        self.excel_db_frame.grid(row=2, column=0, sticky='w')  # Adjust row as needed, added padding for spacing
+        self.excel_db_button = tk.Button(self.excel_db_frame, text="Select Excel Database", command=self.select_excel_database)
+        self.excel_db_button.grid(row=3, column=0, padx=(window_width//4, 0))
+        self.excel_db_label = tk.Label(self.excel_db_frame, text="Not chosen")
+        self.excel_db_label.grid(row=3, column=1, padx=(0, window_width//4), sticky='ew')
+
+
         self.back_button = tk.Button(self.settings_window, text="<- Back", command=self.back_to_main)
         self.back_button.grid(row=0, column=0, sticky='nw')  # Change this line to place the back button in the fourth row
-
+        
         self.master.withdraw()
 
     def back_to_main(self):
@@ -436,6 +448,49 @@ class Application(tk.Frame):
 
     def __del__(self):
         self.conn.close()
+
+    def select_excel_database(self):
+        filepath = filedialog.askopenfilename(
+            title="Select Excel Database",
+            filetypes=[("Excel Files", "*.xlsx *.xls *.xlsm")]
+        )
+        if not filepath:
+            return
+        
+        xls = pd.ExcelFile(filepath)
+        sheet_names = xls.sheet_names
+        self.ask_sheet_name(sheet_names, filepath)  # Pass filepath here
+
+
+    def ask_sheet_name(self, sheet_names, filepath):  # Add filepath as a parameter
+        sheet_window = tk.Toplevel(self)
+        sheet_window.title("Select a Sheet")
+        
+        sheet_var = tk.StringVar(sheet_window)
+        sheet_var.set(sheet_names[0])  # default value
+        
+        def confirm_selection():
+            selected_sheet = sheet_var.get()
+            sheet_window.destroy()
+            self.load_excel_data(filepath, selected_sheet)  # Now filepath is in scope
+
+        # Create a listbox instead of dropdown for better UX in settings
+        listbox = tk.Listbox(sheet_window, listvariable=tk.StringVar(value=sheet_names))
+        listbox.pack(padx=10, pady=10)
+        
+        confirm_button = tk.Button(sheet_window, text="Confirm", command=confirm_selection)
+        confirm_button.pack(pady=(0, 10))
+        
+        sheet_window.wait_window()
+
+    def load_excel_data(self, filepath, sheet_name):
+        try:
+            df = pd.read_excel(filepath, sheet_name=sheet_name, engine='openpyxl')
+            # Here you would handle the DataFrame, e.g., storing it, processing it, etc.
+            # For example, you can assign it to an attribute of your class
+            self.excel_data_frame = df
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
 
 root = tk.Tk()
 root.title("Improved Inventory Manager")
