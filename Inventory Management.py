@@ -10,17 +10,28 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import pandas as pd
 from tkinter import filedialog, messagebox
+import os
+from tkinter import Toplevel, Listbox, Button
+from docx import Document
 
 class Application(tk.Frame):
     def __init__(self, master=None):
         super().__init__(master)
+        
+        self.missing_docs = []  # Initialize missing_docs as an empty list
+
+        
         self.after(10000, self.check_and_update_product_list)  # Start the periodic check
         self.initialize_database()
+
         
         self.pack(fill='both', expand=True)
         self.create_widgets()
         self.edit_mode = False
         self.focus_search_entry()
+        
+        self.default_filepath, self.default_sheet = self.load_excel_settings()
+
         
         
     def initialize_database(self):
@@ -117,19 +128,20 @@ class Application(tk.Frame):
         self.search_entry.focus_set()
 
     def open_settings(self):
+        if hasattr(self, 'settings_window') and self.settings_window.winfo_exists():
+            self.settings_window.lift()
+            return
         self.settings_window = tk.Toplevel(self)
         self.settings_window.title("Settings")
-        # Size the window to 50% of the screen size
-        window_width = int(self.settings_window.winfo_screenwidth() * 0.5)
-        window_height = int(self.settings_window.winfo_screenheight() * 0.5)
-        self.settings_window.geometry(f"{window_width}x{window_height}")
-
-        self.settings_window.columnconfigure(0, weight=1)
-        self.settings_window.columnconfigure(1, weight=3)
-        self.settings_window.rowconfigure(0, weight=0)  # Change this line to not make the first row expand
-        self.settings_window.rowconfigure(1, weight=0)  # Change this line to not make the second row expand
-        self.settings_window.rowconfigure(2, weight=1)  # This row will expand and push the back button to the bottom
-        self.settings_window.state('zoomed')
+        
+        # Configure the grid layout to not expand the button rows
+        self.settings_window.grid_rowconfigure(0, weight=0)
+        self.settings_window.grid_rowconfigure(1, weight=0)
+        self.settings_window.grid_rowconfigure(2, weight=0)  # Add this line for your new button row
+        self.settings_window.grid_rowconfigure(3, weight=1)  # This row will expand and push content to the top
+        
+        # Configure the grid columns (if necessary)
+        self.settings_window.grid_columnconfigure(0, weight=1)
 
         self.folder_to_scan_frame = tk.Frame(self.settings_window)
         self.folder_to_scan_frame.grid(row=0, column=0, sticky='w')
@@ -145,20 +157,32 @@ class Application(tk.Frame):
         self.sold_folder_label = tk.Label(self.sold_folder_frame, text=self.sold_folder if hasattr(self, 'sold_folder') else "Not chosen")
         self.sold_folder_label.grid(row=2, column=1, padx=(0, window_width//4), sticky='ew')
 
-
         # Add a new frame for the Excel database selection
+        # Load settings
+        self.default_filepath, self.default_sheet = self.load_excel_settings()
+
+        # Excel Database Selection frame and button
         self.excel_db_frame = tk.Frame(self.settings_window)
-        self.excel_db_frame.grid(row=2, column=0, sticky='w')  # Adjust row as needed, added padding for spacing
+        self.excel_db_frame.grid(row=2, column=0, sticky='w')  # Adjust row as needed
+        excel_db_text = f"{self.default_filepath} - Sheet: {self.default_sheet}" if self.default_filepath and self.default_sheet else "Not chosen"
+        self.excel_db_label = tk.Label(self.excel_db_frame, text=excel_db_text)
         self.excel_db_button = tk.Button(self.excel_db_frame, text="Select Excel Database", command=self.select_excel_database)
         self.excel_db_button.grid(row=3, column=0, padx=(window_width//4, 0))
-        self.excel_db_label = tk.Label(self.excel_db_frame, text="Not chosen")
         self.excel_db_label.grid(row=3, column=1, padx=(0, window_width//4), sticky='ew')
+        
+            # Add a new button for "Correlate new data" functionality
+        self.correlate_button = tk.Button(self.settings_window, text="Correlate new data", command=self.correlate_data)
+        # Adjust the row index accordingly to place the new button
+        self.correlate_button.grid(row=4, column=0, padx=(window_width//4, 0), sticky='w')
 
 
         self.back_button = tk.Button(self.settings_window, text="<- Back", command=self.back_to_main)
         self.back_button.grid(row=0, column=0, sticky='nw')  # Change this line to place the back button in the fourth row
         
         self.master.withdraw()
+    def exit_correlate_window(self):
+        self.correlate_window.destroy()
+        self.open_settings()
 
     def back_to_main(self):
         self.settings_window.destroy()
@@ -442,9 +466,12 @@ class Application(tk.Frame):
         self.cur.execute("SELECT Folder FROM folder_paths")
         return [row[0] for row in self.cur.fetchall()]
 
-    def get_folder_path_from_db(self, folder_name):
-        self.cur.execute("SELECT Path FROM folder_paths WHERE Folder=?", (folder_name,))
-        return self.cur.fetchone()[0]
+    def get_folder_path_from_db(self, product_id):
+        # This query assumes that the folder name starts with the product ID followed by a space
+        self.cur.execute("SELECT Path FROM folder_paths WHERE Folder LIKE ?", (product_id + ' %',))
+        result = self.cur.fetchone()
+        return result[0] if result else None
+
 
     def __del__(self):
         self.conn.close()
@@ -456,32 +483,50 @@ class Application(tk.Frame):
         )
         if not filepath:
             return
-        
+
         xls = pd.ExcelFile(filepath)
         sheet_names = xls.sheet_names
         self.ask_sheet_name(sheet_names, filepath)  # Pass filepath here
 
-
-    def ask_sheet_name(self, sheet_names, filepath):  # Add filepath as a parameter
+    def ask_sheet_name(self, sheet_names, filepath):
         sheet_window = tk.Toplevel(self)
         sheet_window.title("Select a Sheet")
-        
-        sheet_var = tk.StringVar(sheet_window)
-        sheet_var.set(sheet_names[0])  # default value
-        
-        def confirm_selection():
-            selected_sheet = sheet_var.get()
-            sheet_window.destroy()
-            self.load_excel_data(filepath, selected_sheet)  # Now filepath is in scope
 
-        # Create a listbox instead of dropdown for better UX in settings
-        listbox = tk.Listbox(sheet_window, listvariable=tk.StringVar(value=sheet_names))
+        sheet_var = tk.StringVar(sheet_window)
+        # Pre-select the default sheet if it's in the list
+        default_sheet_index = sheet_names.index(self.default_sheet) if self.default_sheet in sheet_names else 0
+        sheet_var.set(sheet_names[default_sheet_index])  # Set the default value
+
+        listbox = tk.Listbox(sheet_window, exportselection=False)
         listbox.pack(padx=10, pady=10)
-        
+
+        # Populate listbox with sheet names
+        for sheet in sheet_names:
+            listbox.insert('end', sheet)
+        # Set the default selection
+        listbox.selection_set(default_sheet_index)
+        listbox.activate(default_sheet_index)
+
+        def confirm_selection():
+            # Get the index of the selected sheet name
+            selection_index = listbox.curselection()
+            selected_sheet = listbox.get(selection_index) if selection_index else sheet_names[0]
+            sheet_window.destroy()
+            self.load_excel_data(filepath, selected_sheet)
+            # Update the label to show the full path and selected sheet
+            self.excel_db_label.config(text=f"{filepath} - Sheet: {selected_sheet}")
+            # Save the settings
+            self.save_excel_settings(filepath, selected_sheet)
+
+
         confirm_button = tk.Button(sheet_window, text="Confirm", command=confirm_selection)
         confirm_button.pack(pady=(0, 10))
-        
+
         sheet_window.wait_window()
+
+
+
+
 
     def load_excel_data(self, filepath, sheet_name):
         try:
@@ -491,6 +536,157 @@ class Application(tk.Frame):
             self.excel_data_frame = df
         except Exception as e:
             messagebox.showerror("Error", str(e))
+            
+    def save_excel_settings(self, filepath, sheet_name):
+        try:
+            with open('excel_db_settings.txt', 'w') as f:
+                f.write(f"{filepath}\n{sheet_name}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Unable to save settings: {str(e)}")
+
+
+    def load_excel_settings(self):
+        try:
+            with open('excel_db_settings.txt', 'r') as f:
+                filepath, sheet_name = f.read().strip().split('\n', 1)
+                return filepath, sheet_name
+        except FileNotFoundError:
+            return None, None
+        except Exception as e:
+            messagebox.showerror("Error", f"Unable to load settings: {str(e)}")
+            return None, None
+        
+        
+    def correlate_data(self):
+        print("Correlate button pressed")
+        
+        # Load Excel settings
+        filepath, sheet_name = self.load_excel_settings()
+        if not filepath or not sheet_name:
+            messagebox.showerror("Error", "Excel database settings not found.")
+            return
+        
+        try:
+            # Load Excel data
+            df = pd.read_excel(filepath, sheet_name=sheet_name)
+            print("Excel data loaded successfully.")
+            product_ids = df['Product ID'].tolist()
+            print(f"Product IDs from Excel: {product_ids}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Unable to load Excel file: {str(e)}")
+            return
+            # Filter out nan values from the product_ids list using pandas notnull function
+            
+        # Sort the DataFrame based on 'Product ID'
+        df_sorted = df.sort_values('Product ID').dropna(subset=['Product ID'])
+
+        # Filter out nan values from the product_ids list
+        product_ids = df_sorted['Product ID'].tolist()
+        print(f"Sorted and Filtered Product IDs from Excel: {product_ids}")
+        
+        missing_docs = []
+        for product_id in product_ids:
+            folder_path = self.get_folder_path_from_db(str(product_id))
+            print(f"Checking folder for Product ID {product_id}: {folder_path}")
+            if folder_path:
+                word_docs = [f for f in os.listdir(folder_path) if f.endswith('.docx')]
+                print(f"Word documents in folder: {word_docs}")
+                if not word_docs:  # If there's no Word document
+                    product_name = df.loc[df['Product ID'] == product_id, 'Product Name'].iloc[0]
+                    missing_docs.append((os.path.basename(folder_path), product_id, product_name))
+
+
+        print(f"Missing documents: {missing_docs}")
+        if missing_docs:
+            self.prompt_correlation(missing_docs)
+        else:
+            messagebox.showinfo("Check complete", "No missing Word documents found.")
+        # Filter out nan values from the product_ids list
+
+
+    def prompt_correlation(self, missing_docs):
+        self.correlate_window = Toplevel(self)
+        self.correlate_window.title("Correlate Data")
+
+        self.missing_docs = missing_docs
+
+        # Create a Treeview with columns
+        self.correlate_tree = ttk.Treeview(self.correlate_window, columns=('Folder Name', 'Product ID', 'Product Name'), show='headings')
+        self.correlate_tree.pack(fill='both', expand=True)
+
+        # Configure the columns
+        self.correlate_tree.column('Folder Name', anchor='w', width=150)
+        self.correlate_tree.column('Product ID', anchor='center', width=100)
+        self.correlate_tree.column('Product Name', anchor='w', width=150)
+
+        # Define the headings
+        self.correlate_tree.heading('Folder Name', text='Folder Name', anchor='w')
+        self.correlate_tree.heading('Product ID', text='Product ID', anchor='center')
+        self.correlate_tree.heading('Product Name', text='Product Name', anchor='w')
+
+        # Add the items to the Treeview
+        for i, (folder_name, product_id, product_name) in enumerate(missing_docs):
+            self.correlate_tree.insert('', 'end', iid=str(i), values=(folder_name, product_id, product_name))
+
+        # Bind double-click event to an item
+        self.correlate_tree.bind('<Double-1>', self.on_item_double_click)
+        
+        # Adding a Yes to All button
+        yes_to_all_button = ttk.Button(self.correlate_window, text="Yes to All", command=self.create_all_word_docs)
+        yes_to_all_button.pack()
+
+
+        exit_button = ttk.Button(self.correlate_window, text="Exit", command=self.exit_correlate_window)
+        exit_button.pack()
+
+    def on_item_double_click(self, event):
+        item_id = self.correlate_tree.selection()[0]  # Get selected item ID (iid)
+        item_values = self.correlate_tree.item(item_id, 'values')
+        
+        # Convert item values to a doc_data tuple (folder_name, product_id, product_name)
+        doc_data = (item_values[0], item_values[1], item_values[2])
+
+        # Call the create_word_doc function with doc_data and the item's iid
+        self.create_word_doc(doc_data, item_id)  # show_message is True by default
+
+
+    def create_all_word_docs(self):
+        for iid in self.correlate_tree.get_children()[:]:  # Use a copy of the list
+            item_values = self.correlate_tree.item(iid, 'values')
+            doc_data = (item_values[0], item_values[1], item_values[2])
+            self.create_word_doc(doc_data, iid, show_message=False)  # Do not show message for each document
+
+        # After all documents have been created, show a single message
+        messagebox.showinfo("Success", "All Word documents have been created.")
+        self.correlate_window.destroy()
+        self.open_settings()
+
+
+    def create_word_doc(self, doc_data, iid, show_message=True):
+        folder_name, product_id, product_name = doc_data
+        folder_path = self.get_folder_path_from_db(str(product_id))
+        if folder_path:
+            doc_path = os.path.join(folder_path, f"{product_id}.docx")
+            doc = Document()
+            doc.add_paragraph(f"Product ID: {product_id}")
+            doc.add_paragraph(f"Product Name: {product_name}")
+            try:
+                doc.save(doc_path)
+                if show_message:
+                    messagebox.showinfo("Document Created", f"Word document for '{product_id}' has been created successfully.")
+                # Remove the corresponding entry from the Treeview
+                self.correlate_tree.delete(iid)
+
+                # If there are no more items in the Treeview, close the window and open Settings
+                if not self.correlate_tree.get_children():  # Check if the Treeview is empty
+                    self.correlate_window.destroy()
+                    self.open_settings()
+
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to create document for Product ID {product_id}: {e}")
+        else:
+            messagebox.showerror("Error", f"No folder found for Product ID {product_id}")
+
 
 root = tk.Tk()
 root.title("Improved Inventory Manager")
