@@ -135,6 +135,10 @@ class Application(tk.Frame):
         self.list_scrollbar.pack(side='right', fill='y')
         self.folder_list.config(yscrollcommand=self.list_scrollbar.set)
         self.list_scrollbar.config(command=self.folder_list.yview)
+        
+        self.Product_Form()
+
+    def Product_Form(self):
 
         self.product_frame = tk.Frame(self.bottom_frame, bg='gray')
         self.product_frame.pack(side='right', fill='both', expand=True)
@@ -155,31 +159,33 @@ class Application(tk.Frame):
         
         self.order_date_var = tk.StringVar()
         self.order_date_label = tk.Label(self.product_frame, text='Order Date')
-        self.order_date_label.grid(row=0, column=0, sticky='w', padx=0, pady=0)
+        self.order_date_label.grid(row=10, column=0, sticky='w', padx=0, pady=0)
         self.order_date_var.trace("w", self.update_to_sell_after)
-
 
         # Row 1
         self.damaged_var = tk.BooleanVar()
         self.damaged_checkbutton = tk.Checkbutton(self.product_frame, text='Damaged', variable=self.damaged_var, state='disabled')
         self.damaged_checkbutton.grid(row=1, column=6, sticky='w', padx=200, pady=0)
+        
         self.order_date_entry = DateEntry(self.product_frame, textvariable=self.order_date_var, state='disabled')
-        self.order_date_entry.grid(row=1, column=0, sticky='w', padx=0, pady=0)
+        self.order_date_entry.grid(row=11, column=0, sticky='w', padx=0, pady=0)
 
         # Row 2
         self.personal_var = tk.BooleanVar()
         self.personal_checkbutton = tk.Checkbutton(self.product_frame, text='Personal', variable=self.personal_var, state='disabled')
         self.personal_checkbutton.grid(row=2, column=6, sticky='w', padx=200, pady=0)
+        
         self.to_sell_after_var = tk.StringVar()
         self.to_sell_after_label = tk.Label(self.product_frame, text='To Sell After')
-        self.to_sell_after_label.grid(row=2, column=0, sticky='w', padx=0, pady=0)
+        self.to_sell_after_label.grid(row=12, column=0, sticky='w', padx=0, pady=0)
 
         # Row 3
         self.reviewed_var = tk.BooleanVar()
         self.reviewed_checkbutton = tk.Checkbutton(self.product_frame, text='Reviewed', variable=self.reviewed_var, state='disabled')
         self.reviewed_checkbutton.grid(row=3, column=6, sticky='w', padx=200, pady=0)
+        
         self.to_sell_after_entry = DateEntry(self.product_frame, textvariable=self.to_sell_after_var, state='disabled')
-        self.to_sell_after_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
+        self.to_sell_after_entry.grid(row=13, column=0, sticky='w', padx=0, pady=0)
 
         # Row 4
         self.pictures_downloaded_var = tk.BooleanVar()
@@ -218,17 +224,17 @@ class Application(tk.Frame):
 
         self.product_id_var = tk.StringVar()
         self.product_id_label = tk.Label(self.product_frame, text='Product ID')
-        self.product_id_label.grid(row=10, column=0, sticky='w', padx=0, pady=0)
+        self.product_id_label.grid(row=0, column=0, sticky='w', padx=0, pady=0)
         
         self.product_id_entry = tk.Entry(self.product_frame, textvariable=self.product_id_var, state='disabled')
-        self.product_id_entry.grid(row=11, column=0, sticky='w', padx=0, pady=0)
+        self.product_id_entry.grid(row=1, column=0, sticky='w', padx=0, pady=0)
 
         self.product_name_var = tk.StringVar()
         self.product_name_label = tk.Label(self.product_frame, text='Product Name')
-        self.product_name_label.grid(row=12, column=0, sticky='w', padx=0, pady=0)
+        self.product_name_label.grid(row=2, column=0, sticky='w', padx=0, pady=0)
         
         self.product_name_entry = tk.Entry(self.product_frame, textvariable=self.product_name_var, state='disabled')
-        self.product_name_entry.grid(row=13, column=0, sticky='w', padx=0, pady=0)
+        self.product_name_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
 
         # Note: Product Image requires a different approach
 
@@ -259,7 +265,6 @@ class Application(tk.Frame):
         
         self.sold_price_entry = tk.Entry(self.product_frame, textvariable=self.sold_price_var, state='disabled')
         self.sold_price_entry.grid(row=23, column=0, sticky='w', padx=0, pady=0)
-        
         
         # Load settings
         try:
