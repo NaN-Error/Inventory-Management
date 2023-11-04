@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from tkinter import ttk
 from tkcalendar import DateEntry
-from datetime import datetime
+from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 import pandas as pd
 from docx import Document
@@ -645,7 +645,7 @@ class Application(tk.Frame):
             self.order_details_entry.config(state='normal')
             self.order_link_entry.config(state='normal')
             self.sold_price_entry.config(state='normal')
-            self.save_button.config(state='disabled')
+            self.save_button.config(state='normal')
 
     def save(self):
         if self.sold_var.get():
