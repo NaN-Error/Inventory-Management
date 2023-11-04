@@ -13,7 +13,6 @@ import sqlite3
 from tkinter import END
 from tkinter import Toplevel
 
-
 class DatabaseManager:
     def __init__(self, db_name='inventory_management.db'):
         self.conn = sqlite3.connect(db_name)
@@ -53,7 +52,6 @@ class DatabaseManager:
         if hasattr(self, 'conn'):
             self.conn.close()
 
-
 class ExcelManager:
     def __init__(self, filepath=None, sheet_name=None):
         self.filepath = filepath
@@ -72,7 +70,6 @@ class ExcelManager:
                 return query_result.iloc[0].to_dict()
         return None
 
-
 class Application(tk.Frame):
     def __init__(self, master=None):
         super().__init__(master)
@@ -81,7 +78,6 @@ class Application(tk.Frame):
         self.edit_mode = False  # Add this line to initialize the edit_mode attribute
         self.pack(fill='both', expand=True)
         self.create_widgets()
-
 
     def save_settings(self):
         # This function is called after selecting the source and sold folders
@@ -94,7 +90,6 @@ class Application(tk.Frame):
         ''', (self.sold_folder,))
         self.db_manager.conn.commit()
 
-        
     def check_and_update_product_list(self):
         if not self.search_entry.get():  # Check if the search entry is empty
             folder_count = len(next(os.walk(self.folder_to_scan))[1])  # Count folders in the directory
@@ -327,7 +322,7 @@ class Application(tk.Frame):
         self.excel_db_label.grid(row=3, column=1, padx=(0, window_width//4), sticky='ew')
         
         # Add a new button for "Correlate new data" functionality
-        self.correlate_button = tk.Button(self.settings_window, text="Correlate new data", command=self.correlate_data)
+        self.correlate_button = tk.Button(self.settings_window, text="Create Word Files for Products", command=self.correlate_data)
         # Adjust the row index accordingly to place the new button
         self.correlate_button.grid(row=4, column=0, padx=(window_width//4, 0), sticky='w')
 
@@ -336,6 +331,7 @@ class Application(tk.Frame):
         self.back_button.grid(row=0, column=0, sticky='nw')  # Change this line to place the back button in the fourth row
         
         self.master.withdraw()
+
     def exit_correlate_window(self):
         self.correlate_window.destroy()
         self.open_settings()
@@ -347,7 +343,6 @@ class Application(tk.Frame):
         if hasattr(self, 'folder_to_scan'):  # Check if folder_to_scan is defined
             self.display_folders(self.folder_to_scan)
         self.focus_search_entry()
-
 
     def choose_folder_to_scan(self):
         folder_to_scan = filedialog.askdirectory()
@@ -383,6 +378,7 @@ class Application(tk.Frame):
         ''', (self.sold_folder,))
 
         self.db_manager.conn.commit()
+
     def save_settings(self):
         if getattr(self, 'folder_to_scan', None) is not None and getattr(self, 'sold_folder', None) is not None:
             with open("settings.txt", "w") as file:
@@ -403,8 +399,6 @@ class Application(tk.Frame):
                         self.folder_list.insert(END, folder_name)
         else:
             self.display_folders(self.folder_to_scan)  # If the search box is empty, display all folders
-
-
 
     def display_product_details(self, event):
         if self.edit_mode:
@@ -509,7 +503,6 @@ class Application(tk.Frame):
             # Update the to_sell_after_var
             self.to_sell_after_var.set(to_sell_after.strftime("%m/%d/%y"))
 
-
     def toggle_edit_mode(self):
         if self.edit_mode:
             self.edit_mode = False
@@ -579,7 +572,6 @@ class Application(tk.Frame):
 
         self.focus_search_entry()
 
-
     def get_folder_names_from_db(self):
         self.db_manager.cur.execute("SELECT Folder FROM folder_paths")
         return [row[0] for row in self.db_manager.cur.fetchall()]
@@ -589,7 +581,6 @@ class Application(tk.Frame):
         self.db_manager.cur.execute("SELECT Path FROM folder_paths WHERE Folder LIKE ?", (product_id + ' %',))
         result = self.db_manager.cur.fetchone()
         return result[0] if result else None
-
 
     def __del__(self):
         self.db_manager.conn.close()
@@ -621,41 +612,41 @@ class Application(tk.Frame):
         sheet_window = tk.Toplevel(self)
         sheet_window.title("Select a Sheet")
 
-        sheet_var = tk.StringVar(sheet_window)
-        # Pre-select the default sheet if it's in the list
-        default_sheet_index = sheet_names.index(self.default_sheet) if self.default_sheet in sheet_names else 0
-        sheet_var.set(sheet_names[default_sheet_index])  # Set the default value
-
         listbox = tk.Listbox(sheet_window, exportselection=False)
         listbox.pack(padx=10, pady=10)
 
         # Populate listbox with sheet names
         for sheet in sheet_names:
             listbox.insert('end', sheet)
+
         # Set the default selection
+        default_sheet_index = sheet_names.index(self.default_sheet) if self.default_sheet in sheet_names else 0
         listbox.selection_set(default_sheet_index)
         listbox.activate(default_sheet_index)
 
-        def confirm_selection():
-            # Get the index of the selected sheet name
-            selection_index = listbox.curselection()
-            selected_sheet = listbox.get(selection_index) if selection_index else sheet_names[0]
-            sheet_window.destroy()
-            self.excel_manager.filepath = filepath  # Set the filepath in ExcelManager
-            self.excel_manager.sheet_name = selected_sheet  # Set the sheet_name in ExcelManager
-            self.excel_manager.load_data()  # Load the data
-            self.update_excel_label()  # Update the label to show the full path and selected sheet
-            self.save_excel_settings(filepath, selected_sheet)  # Save the settings
+        # Bind double-click event to the listbox
+        listbox.bind('<Double-1>', lambda event: self.confirm_sheet_selection(event, listbox, filepath))
 
-
-        confirm_button = tk.Button(sheet_window, text="Confirm", command=confirm_selection)
+        confirm_button = tk.Button(sheet_window, text="Confirm", command=lambda: self.confirm_sheet_selection(None, listbox, filepath))
         confirm_button.pack(pady=(0, 10))
 
         sheet_window.wait_window()
 
+    def confirm_sheet_selection(self, event, listbox, filepath):
+        selection_index = listbox.curselection()
+        if selection_index:
+            selected_sheet = listbox.get(selection_index[0])
+            self.select_excel_sheet(selected_sheet, filepath)
+            listbox.master.destroy()  # Closes the sheet_window
 
+    def select_excel_sheet(self, selected_sheet, filepath):
+        # Code to update the ExcelManager with the new sheet and load data
+        self.excel_manager.filepath = filepath
+        self.excel_manager.sheet_name = selected_sheet
+        self.excel_manager.load_data()
+        self.update_excel_label()
+        self.save_excel_settings(filepath, selected_sheet)
 
-            
     def save_excel_settings(self, filepath, sheet_name):
         try:
             with open('excel_db_settings.txt', 'w') as f:
@@ -663,8 +654,6 @@ class Application(tk.Frame):
             self.update_excel_label()  # Update the label when settings are saved
         except Exception as e:
             messagebox.showerror("Error", f"Unable to save settings: {str(e)}")
-
-
 
     def load_excel_settings(self):
         try:
@@ -676,8 +665,7 @@ class Application(tk.Frame):
         except Exception as e:
             messagebox.showerror("Error", f"Unable to load settings: {str(e)}")
             return None, None
-        
-        
+
     def correlate_data(self):
         #print("Correlate button pressed")
         
@@ -729,7 +717,6 @@ class Application(tk.Frame):
         else:
             messagebox.showinfo("Check complete", "No missing Word documents found.")
         # Filter out nan values from the product_ids list
-
 
     def prompt_correlation(self, missing_docs):
         self.correlate_window = Toplevel(self)
@@ -786,7 +773,6 @@ class Application(tk.Frame):
         self.correlate_window.destroy()
         self.open_settings()
 
-
     def create_word_doc(self, doc_data, iid, show_message=True):
         #print("Create word doc function called")  # Debug #print statement
         folder_name, product_id, product_name = doc_data
@@ -827,15 +813,11 @@ class Application(tk.Frame):
             self.correlate_window.destroy()
             self.open_settings()
 
-    # Other methods for the Application class go here
-
-
 def main():
     root = tk.Tk()
     root.title("Improved Inventory Manager")
     app = Application(master=root)
     app.mainloop()
-
 
 if __name__ == '__main__':
     main()
