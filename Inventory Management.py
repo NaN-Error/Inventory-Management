@@ -231,7 +231,6 @@ class Application(tk.Frame):
         self.product_name_entry.grid(row=13, column=0, sticky='w', padx=0, pady=0)
 
         # Note: Product Image requires a different approach
-        # This will be covered later
 
         self.fair_market_value_var = tk.StringVar()
         self.fair_market_value_label = tk.Label(self.product_frame, text='Fair Market Value')
@@ -442,7 +441,17 @@ class Application(tk.Frame):
                     self.to_sell_after_var.set('' if pd.isnull(product_info.get('To Sell After')) else product_info.get('To Sell After', ''))
                     # ... handle the product image ...
                     self.product_name_var.set('' if pd.isnull(product_info.get('Product Name')) else product_info.get('Product Name', ''))
-                    self.order_date_var.set('' if pd.isnull(product_info.get('Order Date')) else product_info.get('Order Date', ''))
+                    
+                    # Get the order date and format it
+                    order_date = product_info.get('Order Date', '')
+                    if isinstance(order_date, datetime):
+                        formatted_order_date = order_date.strftime('%m/%d/%Y')
+                    elif isinstance(order_date, str):
+                        formatted_order_date = order_date  # Assuming the string is already in the correct format
+                    else:
+                        formatted_order_date = ''  # If it's neither a datetime object nor a string, set it to an empty string
+
+                    self.order_date_var.set(formatted_order_date)
                     self.fair_market_value_var.set('' if pd.isnull(product_info.get('Fair Market Value')) else product_info.get('Fair Market Value', ''))
                     self.order_details_var.set('' if pd.isnull(product_info.get('Order details')) else product_info.get('Order details', ''))
                     self.order_link_var.set('' if pd.isnull(product_info.get('Order Link')) else product_info.get('Order Link', ''))
@@ -492,16 +501,26 @@ class Application(tk.Frame):
         return False
 
     def update_to_sell_after(self, *args):
-        order_date = self.order_date_var.get()
-        if order_date:
-            # Convert the string to a date
-            order_date = datetime.strptime(order_date, "%m/%d/%y")
+        order_date_str = self.order_date_var.get()
+        if order_date_str:
+            try:
+                # If the date is in the format 'mm/dd/yy', such as '2/15/23'
+                if len(order_date_str.split('/')[-1]) == 2:  # If the year is two digits
+                    order_date = datetime.strptime(order_date_str, "%m/%d/%y")
+                else:  # If the year is four digits
+                    order_date = datetime.strptime(order_date_str, "%m/%d/%Y")
 
-            # Add 6 months to the date
-            to_sell_after = order_date + relativedelta(months=6)
+                to_sell_after = order_date + relativedelta(months=6)
+                self.to_sell_after_var.set(to_sell_after.strftime("%m/%d/%Y"))
+            except ValueError as e:
+                messagebox.showerror("Error", f"Incorrect date format: {e}")
 
-            # Update the to_sell_after_var
-            self.to_sell_after_var.set(to_sell_after.strftime("%m/%d/%y"))
+
+
+
+
+
+
 
     def toggle_edit_mode(self):
         if self.edit_mode:
