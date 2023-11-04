@@ -13,7 +13,8 @@ import sqlite3
 from tkinter import END
 from tkinter import Toplevel
 
-class DatabaseManager:
+class DatabaseManager: #DB practice(use txt to store folder paths when program finished for faster reads.)
+
     def __init__(self, db_name='inventory_management.db'):
         self.conn = sqlite3.connect(db_name)
         self.cur = self.conn.cursor()
@@ -53,6 +54,7 @@ class DatabaseManager:
             self.conn.close()
 
 class ExcelManager:
+
     def __init__(self, filepath=None, sheet_name=None):
         self.filepath = filepath
         self.sheet_name = sheet_name
@@ -71,13 +73,36 @@ class ExcelManager:
         return None
 
 class Application(tk.Frame):
+
     def __init__(self, master=None):
         super().__init__(master)
         self.db_manager = DatabaseManager()
         self.excel_manager = ExcelManager()
         self.edit_mode = False  # Add this line to initialize the edit_mode attribute
+        self.folder_to_scan = None
+        self.sold_folder = None
+        self.products_to_sell_folder = None
         self.pack(fill='both', expand=True)
-        self.create_widgets()
+        
+        # Make sure you call this before combining and displaying folders
+        self.Main_Window_Widgets() 
+        
+        # Now it's safe to load settings and combine folders since the list widget is created
+        self.load_settings()
+        self.combine_and_display_folders()
+
+    def load_settings(self):
+        # Load settings
+        try:
+            with open("folders_settings.txt", "r") as file:
+                lines = file.read().splitlines()
+                self.folder_to_scan = lines[0]
+                self.sold_folder = lines[1]
+                self.products_to_sell_folder = lines[2] if len(lines) > 2 else None
+                # ... The rest of your settings loading code ...
+        except FileNotFoundError:
+            pass
+        # Here you could handle the situation if the file is not found, like setting default paths or prompting the user.
 
     def save_settings(self):
         # This function is called after selecting the source and sold folders
@@ -101,7 +126,7 @@ class Application(tk.Frame):
             # Schedule this method to be called again after 10000 milliseconds (10 seconds)
             self.after(10000, self.check_and_update_product_list)
 
-    def create_widgets(self):
+    def Main_Window_Widgets(self):
         self.top_frame = tk.Frame(self)
         self.top_frame.pack(fill='x')
 
@@ -146,7 +171,7 @@ class Application(tk.Frame):
         self.sold_var = tk.BooleanVar()
         self.sold_checkbutton = tk.Checkbutton(self.product_frame, text='Sold', variable=self.sold_var)
         
-        self.save_button = tk.Button(self.product_frame, text='Save', command=self.save)
+        self.save_button = tk.Button(self.product_frame, text='Save', command=self.save, state='disabled')
         self.save_button.grid(row=0, column=8, sticky='w', padx=200, pady=0)
 
         # Row 0
@@ -268,12 +293,16 @@ class Application(tk.Frame):
         
         # Load settings
         try:
-            with open("settings.txt", "r") as file:
-                self.folder_to_scan, self.sold_folder = file.read().splitlines()
-                if hasattr(self, 'folder_to_scan'):  # Check if folder_to_scan is defined
+            with open("folders_settings.txt", "r") as file:
+                lines = file.read().splitlines()
+                self.folder_to_scan = lines[0]
+                self.sold_folder = lines[1]
+                self.products_to_sell_folder = lines[2] if len(lines) > 2 else None
+                if self.folder_to_scan:  # Check if folder_to_scan is defined
                     self.display_folders(self.folder_to_scan)
         except FileNotFoundError:
             pass
+
 
         self.search_entry.focus_set()
 
@@ -312,6 +341,23 @@ class Application(tk.Frame):
         self.sold_folder_label = tk.Label(self.sold_folder_frame, text=self.sold_folder if hasattr(self, 'sold_folder') else "Not chosen")
         self.sold_folder_label.grid(row=2, column=1, padx=(0, window_width//4), sticky='ew')
 
+        # Inside the open_settings method of Application class after existing setup code for other buttons
+
+        # Choose Folder with Products to Sell Button and Label
+        self.products_to_sell_folder_frame = tk.Frame(self.settings_window)
+        self.products_to_sell_folder_frame.grid(row=3, column=0, sticky='w')  # Adjust the row index as needed
+        self.products_to_sell_folder_button = tk.Button(
+            self.products_to_sell_folder_frame,
+            text="Choose Folder with Products to Sell",
+            command=self.choose_products_to_sell_folder
+        )
+        self.products_to_sell_folder_button.grid(row=3, column=0, padx=(window_width // 4, 0))
+        self.products_to_sell_folder_label = tk.Label(
+            self.products_to_sell_folder_frame,
+            text=self.products_to_sell_folder if self.products_to_sell_folder else "Not chosen"
+        )
+        self.products_to_sell_folder_label.grid(row=3, column=1, padx=(0, window_width // 4), sticky='ew')
+
         # Add a new frame for the Excel database selection
         # Load settings
         self.default_filepath, self.default_sheet = self.load_excel_settings()
@@ -334,6 +380,8 @@ class Application(tk.Frame):
         self.back_button = tk.Button(self.settings_window, text="<- Back", command=self.back_to_main)
         self.back_button.grid(row=0, column=0, sticky='nw')  # Change this line to place the back button in the fourth row
         
+        self.combine_and_display_folders()
+
         self.master.withdraw()
 
     def exit_correlate_window(self):
@@ -343,10 +391,16 @@ class Application(tk.Frame):
     def back_to_main(self):
         self.settings_window.destroy()
         self.master.deiconify()
-        self.master.state('zoomed')  # Add this line
-        if hasattr(self, 'folder_to_scan'):  # Check if folder_to_scan is defined
-            self.display_folders(self.folder_to_scan)
+        self.master.state('zoomed')
+        
+        # Load settings again in case they were changed
+        self.load_settings()
+        
+        # Refresh the folder list with the updated settings
+        self.combine_and_display_folders()
+        
         self.focus_search_entry()
+
 
     def choose_folder_to_scan(self):
         folder_to_scan = filedialog.askdirectory()
@@ -368,6 +422,25 @@ class Application(tk.Frame):
         for folder in sorted(self.get_folder_names_from_db()):
             self.folder_list.insert(END, folder)
 
+    def combine_and_display_folders(self):
+        # Clear the folder list first
+        self.folder_list.delete(0, tk.END)
+        
+        # Combine the folders from all three paths
+        combined_folders = []
+        for folder_path in [self.folder_to_scan, self.sold_folder, self.products_to_sell_folder]:
+            if folder_path and os.path.exists(folder_path):
+                combined_folders.extend(next(os.walk(folder_path))[1])  # Get the directory names
+        
+        # Deduplicate folder names
+        unique_folders = list(set(combined_folders))
+        
+        # Insert the unique folders into the list
+        for folder in sorted(unique_folders):
+            self.folder_list.insert(tk.END, folder)
+
+
+
     def choose_sold_folder(self):
         self.sold_folder = filedialog.askdirectory()
         if self.sold_folder:
@@ -383,10 +456,18 @@ class Application(tk.Frame):
 
         self.db_manager.conn.commit()
 
+    def choose_products_to_sell_folder(self):
+        self.products_to_sell_folder = filedialog.askdirectory()
+        if self.products_to_sell_folder:
+            self.products_to_sell_folder_label.config(text=self.products_to_sell_folder)
+            self.save_settings()  # Save the settings including the new folder path
+
+
     def save_settings(self):
-        if getattr(self, 'folder_to_scan', None) is not None and getattr(self, 'sold_folder', None) is not None:
-            with open("settings.txt", "w") as file:
-                file.write(f"{self.folder_to_scan}\n{self.sold_folder}")
+        # Here you will gather all the paths and write them to the settings.txt file
+        with open("folders_settings.txt", "w") as file:
+            file.write(f"{self.folder_to_scan}\n{self.sold_folder}\n{self.products_to_sell_folder}")
+
 
     def search(self, event):
         search_terms = self.search_entry.get().split()  # Split the search string into words
@@ -542,6 +623,7 @@ class Application(tk.Frame):
             self.order_details_entry.config(state='disabled')
             self.order_link_entry.config(state='disabled')
             self.sold_price_entry.config(state='disabled')
+            self.save_button.config(state='disabled')
         else:
             self.edit_mode = True
             self.sold_checkbutton.config(state='normal')
@@ -563,6 +645,7 @@ class Application(tk.Frame):
             self.order_details_entry.config(state='normal')
             self.order_link_entry.config(state='normal')
             self.sold_price_entry.config(state='normal')
+            self.save_button.config(state='disabled')
 
     def save(self):
         if self.sold_var.get():
@@ -831,6 +914,7 @@ class Application(tk.Frame):
             self.open_settings()
 
 def main():
+
     root = tk.Tk()
     root.title("Improved Inventory Manager")
     app = Application(master=root)
