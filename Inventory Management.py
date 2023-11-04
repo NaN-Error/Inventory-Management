@@ -1,46 +1,26 @@
+
 import os
 import shutil
 import tkinter as tk
-import sqlite3
-from tkinter import messagebox, filedialog, LEFT, Y, BOTH, END
-from datetime import timedelta
+from tkinter import filedialog, messagebox
 from tkinter import ttk
 from tkcalendar import DateEntry
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import pandas as pd
-from tkinter import filedialog, messagebox
-import os
-from tkinter import Toplevel, Listbox, Button
 from docx import Document
+import sqlite3
+from tkinter import END
+from tkinter import Toplevel
 
-class Application(tk.Frame):
-    def __init__(self, master=None):
-        super().__init__(master)
-        
-        self.missing_docs = []  # Initialize missing_docs as an empty list
-        self.excel_data_frame = None  # Initialize the DataFrame as None
 
-        
-        self.after(10000, self.check_and_update_product_list)  # Start the periodic check
-        self.initialize_database()
-
-        
-        self.pack(fill='both', expand=True)
-        self.create_widgets()
-        self.edit_mode = False
-        self.focus_search_entry()
-        
-        self.default_filepath, self.default_sheet = self.load_excel_settings()
-
-        
-        
-    def initialize_database(self):
-        # Connect to the SQLite database
-        self.conn = sqlite3.connect('inventory_management.db')
+class DatabaseManager:
+    def __init__(self, db_name='inventory_management.db'):
+        self.conn = sqlite3.connect(db_name)
         self.cur = self.conn.cursor()
+        self.setup_database()
 
-        # Create a new table with the specified columns
+    def setup_database(self):
         self.cur.execute('''
             CREATE TABLE IF NOT EXISTS folder_paths (
                 Folder TEXT PRIMARY KEY,
@@ -49,16 +29,70 @@ class Application(tk.Frame):
         ''')
         self.conn.commit()
 
+    def save_folder_path(self, folder, path):
+        self.cur.execute('''
+            INSERT INTO folder_paths (Folder, Path) VALUES (?, ?)
+            ON CONFLICT(Folder) DO UPDATE SET Path = excluded.Path;
+        ''', (folder, path))
+        self.conn.commit()
+
+    def get_folder_path(self, folder_name):
+        self.cur.execute('SELECT Path FROM folder_paths WHERE Folder = ?', (folder_name,))
+        result = self.cur.fetchone()
+        return result[0] if result else None
+
+    def get_all_folders(self):
+        self.cur.execute('SELECT Folder FROM folder_paths')
+        return [row[0] for row in self.cur.fetchall()]
+
+    def delete_all_folders(self):
+        self.cur.execute('DELETE FROM folder_paths')
+        self.conn.commit()
+
+    def __del__(self):
+        if hasattr(self, 'conn'):
+            self.conn.close()
+
+
+class ExcelManager:
+    def __init__(self, filepath=None, sheet_name=None):
+        self.filepath = filepath
+        self.sheet_name = sheet_name
+        self.data_frame = None
+
+    def load_data(self):
+        if self.filepath and self.sheet_name:
+            self.data_frame = pd.read_excel(self.filepath, sheet_name=self.sheet_name, engine='openpyxl')
+
+    def get_product_info(self, product_id):
+        if self.data_frame is not None:
+            # Convert both the product_id and the 'Product ID' column to lower case for comparison
+            query_result = self.data_frame[self.data_frame['Product ID'].str.lower() == product_id.lower()]
+            if not query_result.empty:
+                return query_result.iloc[0].to_dict()
+        return None
+
+
+class Application(tk.Frame):
+    def __init__(self, master=None):
+        super().__init__(master)
+        self.db_manager = DatabaseManager()
+        self.excel_manager = ExcelManager()
+        self.edit_mode = False  # Add this line to initialize the edit_mode attribute
+        self.pack(fill='both', expand=True)
+        self.create_widgets()
+
+
     def save_settings(self):
         # This function is called after selecting the source and sold folders
         # Update the table with the new paths
-        self.cur.execute('''
+        self.db_manager.cur.execute('''
             UPDATE folder_paths SET Path = ? WHERE Folder = 'Root Folder'
         ''', (self.folder_to_scan,))
-        self.cur.execute('''
+        self.db_manager.cur.execute('''
             UPDATE folder_paths SET Path = ? WHERE Folder = 'Sold'
         ''', (self.sold_folder,))
-        self.conn.commit()
+        self.db_manager.conn.commit()
 
         
     def check_and_update_product_list(self):
@@ -112,155 +146,9 @@ class Application(tk.Frame):
 
         self.sold_var = tk.BooleanVar()
         self.sold_checkbutton = tk.Checkbutton(self.product_frame, text='Sold', variable=self.sold_var)
+        
         self.save_button = tk.Button(self.product_frame, text='Save', command=self.save)
-        
-        # Load settings
-        try:
-            with open("settings.txt", "r") as file:
-                self.folder_to_scan, self.sold_folder = file.read().splitlines()
-                if hasattr(self, 'folder_to_scan'):  # Check if folder_to_scan is defined
-                    self.display_folders(self.folder_to_scan)
-        except FileNotFoundError:
-            pass
-
-        self.search_entry.focus_set()
-
-    def focus_search_entry(self):
-        self.search_entry.focus_set()
-
-    def open_settings(self):
-        if hasattr(self, 'settings_window') and self.settings_window.winfo_exists():
-            self.settings_window.lift()
-            return
-        self.settings_window = tk.Toplevel(self)
-        self.settings_window.title("Settings")
-        
-        # Configure the grid layout to not expand the button rows
-        self.settings_window.grid_rowconfigure(0, weight=0)
-        self.settings_window.grid_rowconfigure(1, weight=0)
-        self.settings_window.grid_rowconfigure(2, weight=0)  # Add this line for your new button row
-        self.settings_window.grid_rowconfigure(3, weight=1)  # This row will expand and push content to the top
-        
-        # Configure the grid columns (if necessary)
-        self.settings_window.grid_columnconfigure(0, weight=1)
-
-        self.folder_to_scan_frame = tk.Frame(self.settings_window)
-        self.folder_to_scan_frame.grid(row=0, column=0, sticky='w')
-        self.folder_to_scan_button = tk.Button(self.folder_to_scan_frame, text="Choose Root Inventory Folder", command=self.choose_folder_to_scan)
-        self.folder_to_scan_button.grid(row=1, column=0, padx=(window_width//4, 0))  # Half the remaining space to the left
-        self.folder_to_scan_label = tk.Label(self.folder_to_scan_frame, text=self.folder_to_scan if hasattr(self, 'folder_to_scan') else "Not chosen")
-        self.folder_to_scan_label.grid(row=1, column=1, padx=(0, window_width//4), sticky='ew')  # Half the remaining space to the right
-
-        self.sold_folder_frame = tk.Frame(self.settings_window)
-        self.sold_folder_frame.grid(row=1, column=0, sticky='w')
-        self.sold_folder_button = tk.Button(self.sold_folder_frame, text="Choose Sold Inventory Folder", command=self.choose_sold_folder)
-        self.sold_folder_button.grid(row=2, column=0, padx=(window_width//4, 0))
-        self.sold_folder_label = tk.Label(self.sold_folder_frame, text=self.sold_folder if hasattr(self, 'sold_folder') else "Not chosen")
-        self.sold_folder_label.grid(row=2, column=1, padx=(0, window_width//4), sticky='ew')
-
-        # Add a new frame for the Excel database selection
-        # Load settings
-        self.default_filepath, self.default_sheet = self.load_excel_settings()
-
-        # Excel Database Selection frame and button
-        self.excel_db_frame = tk.Frame(self.settings_window)
-        self.excel_db_frame.grid(row=2, column=0, sticky='w')  # Adjust row as needed
-        excel_db_text = f"{self.default_filepath} - Sheet: {self.default_sheet}" if self.default_filepath and self.default_sheet else "Not chosen"
-        self.excel_db_label = tk.Label(self.excel_db_frame, text=excel_db_text)
-        self.excel_db_button = tk.Button(self.excel_db_frame, text="Select Excel Database", command=self.select_excel_database)
-        self.excel_db_button.grid(row=3, column=0, padx=(window_width//4, 0))
-        self.excel_db_label.grid(row=3, column=1, padx=(0, window_width//4), sticky='ew')
-        
-        # Add a new button for "Correlate new data" functionality
-        self.correlate_button = tk.Button(self.settings_window, text="Correlate new data", command=self.correlate_data)
-        # Adjust the row index accordingly to place the new button
-        self.correlate_button.grid(row=4, column=0, padx=(window_width//4, 0), sticky='w')
-
-
-        self.back_button = tk.Button(self.settings_window, text="<- Back", command=self.back_to_main)
-        self.back_button.grid(row=0, column=0, sticky='nw')  # Change this line to place the back button in the fourth row
-        
-        self.master.withdraw()
-    def exit_correlate_window(self):
-        self.correlate_window.destroy()
-        self.open_settings()
-
-    def back_to_main(self):
-        self.settings_window.destroy()
-        self.master.deiconify()
-        self.master.state('zoomed')  # Add this line
-        if hasattr(self, 'folder_to_scan'):  # Check if folder_to_scan is defined
-            self.display_folders(self.folder_to_scan)
-        self.focus_search_entry()
-
-
-    def choose_folder_to_scan(self):
-        folder_to_scan = filedialog.askdirectory()
-        if folder_to_scan:
-            self.folder_to_scan = folder_to_scan
-            self.folder_to_scan_label.config(text=folder_to_scan)  # Update the label directly
-            self.save_settings()
-            self.display_folders(self.folder_to_scan)
-
-    def display_folders(self, folder_to_scan):
-        self.folder_list.delete(0, END)
-        self.cur.execute("DELETE FROM folder_paths")  # Clear the previous folder paths in the database
-        for root, dirs, files in os.walk(folder_to_scan):
-            if not dirs:
-                name = os.path.basename(root)
-                path = root
-                self.cur.execute("INSERT OR REPLACE INTO folder_paths VALUES (?, ?)", (name, path))
-        self.conn.commit()
-        for folder in sorted(self.get_folder_names_from_db()):
-            self.folder_list.insert(END, folder)
-
-    def choose_sold_folder(self):
-        self.sold_folder = filedialog.askdirectory()
-        if self.sold_folder:
-            self.sold_folder_label.config(text=self.sold_folder)  # Update the label directly
-            self.save_settings()
-
-
-        # Update the Sold Folder path
-        self.cur.execute('''
-            INSERT INTO folder_paths (Folder, Path) VALUES ('Sold', ?)
-            ON CONFLICT(Folder) DO UPDATE SET Path = excluded.Path;
-        ''', (self.sold_folder,))
-
-        self.conn.commit()
-    def save_settings(self):
-        if getattr(self, 'folder_to_scan', None) is not None and getattr(self, 'sold_folder', None) is not None:
-            with open("settings.txt", "w") as file:
-                file.write(f"{self.folder_to_scan}\n{self.sold_folder}")
-
-    def search(self, event):
-        search_terms = self.search_entry.get().split()  # Split the search string into words
-        if search_terms:
-            self.folder_list.delete(0, END)  # Clear the current list
-
-            # Walk the directory tree from the folder_to_scan path
-            for root, dirs, files in os.walk(self.folder_to_scan):
-                # Check if 'dirs' is empty, meaning 'root' is a leaf directory
-                if not dirs:
-                    folder_name = os.path.basename(root)  # Get the name of the leaf directory
-                    # Check if all search terms are in the folder name (case insensitive)
-                    if all(term.lower() in folder_name.lower() for term in search_terms):
-                        self.folder_list.insert(END, folder_name)
-        else:
-            self.display_folders(self.folder_to_scan)  # If the search box is empty, display all folders
-
-
-
-    def display_product_details(self, event):
-        if self.edit_mode:
-            if messagebox.askyesno("Unsaved changes", "You have unsaved changes. Do you want to save them?"):
-                self.save()
-            else:
-                self.toggle_edit_mode()  # Reset edit mode
-
         self.save_button.grid(row=0, column=8, sticky='w', padx=200, pady=0)
-        self.edit_mode = False
-        selected_product = self.folder_list.get(self.folder_list.curselection())
 
         # Row 0
         self.edit_button = tk.Button(self.product_frame, text="Edit", command=self.toggle_edit_mode)
@@ -377,9 +265,238 @@ class Application(tk.Frame):
         
         self.sold_price_entry = tk.Entry(self.product_frame, textvariable=self.sold_price_var, state='disabled')
         self.sold_price_entry.grid(row=23, column=0, sticky='w', padx=0, pady=0)
-
-        self.product_name = self.get_folder_path_from_db(selected_product)
         
+        
+        # Load settings
+        try:
+            with open("settings.txt", "r") as file:
+                self.folder_to_scan, self.sold_folder = file.read().splitlines()
+                if hasattr(self, 'folder_to_scan'):  # Check if folder_to_scan is defined
+                    self.display_folders(self.folder_to_scan)
+        except FileNotFoundError:
+            pass
+
+        self.search_entry.focus_set()
+
+    def focus_search_entry(self):
+        self.search_entry.focus_set()
+
+    def open_settings(self):
+        if hasattr(self, 'settings_window') and self.settings_window.winfo_exists():
+            self.settings_window.lift()
+            return
+        self.settings_window = tk.Toplevel(self)
+        self.settings_window.title("Settings")
+        self.settings_window.update()  # This updates the window and calculates sizes
+        window_width = self.settings_window.winfo_width()  # Gets the width of the window
+        
+        # Configure the grid layout to not expand the button rows
+        self.settings_window.grid_rowconfigure(0, weight=0)
+        self.settings_window.grid_rowconfigure(1, weight=0)
+        self.settings_window.grid_rowconfigure(2, weight=0)  # Add this line for your new button row
+        self.settings_window.grid_rowconfigure(3, weight=1)  # This row will expand and push content to the top
+        
+        # Configure the grid columns (if necessary)
+        self.settings_window.grid_columnconfigure(0, weight=1)
+
+        self.folder_to_scan_frame = tk.Frame(self.settings_window)
+        self.folder_to_scan_frame.grid(row=0, column=0, sticky='w')
+        self.folder_to_scan_button = tk.Button(self.folder_to_scan_frame, text="Choose Root Inventory Folder", command=self.choose_folder_to_scan)
+        self.folder_to_scan_button.grid(row=1, column=0, padx=(window_width//4, 0))  # Half the remaining space to the left
+        self.folder_to_scan_label = tk.Label(self.folder_to_scan_frame, text=self.folder_to_scan if hasattr(self, 'folder_to_scan') else "Not chosen")
+        self.folder_to_scan_label.grid(row=1, column=1, padx=(0, window_width//4), sticky='ew')  # Half the remaining space to the right
+
+        self.sold_folder_frame = tk.Frame(self.settings_window)
+        self.sold_folder_frame.grid(row=1, column=0, sticky='w')
+        self.sold_folder_button = tk.Button(self.sold_folder_frame, text="Choose Sold Inventory Folder", command=self.choose_sold_folder)
+        self.sold_folder_button.grid(row=2, column=0, padx=(window_width//4, 0))
+        self.sold_folder_label = tk.Label(self.sold_folder_frame, text=self.sold_folder if hasattr(self, 'sold_folder') else "Not chosen")
+        self.sold_folder_label.grid(row=2, column=1, padx=(0, window_width//4), sticky='ew')
+
+        # Add a new frame for the Excel database selection
+        # Load settings
+        self.default_filepath, self.default_sheet = self.load_excel_settings()
+
+        # Excel Database Selection frame and button
+        self.excel_db_frame = tk.Frame(self.settings_window)
+        self.excel_db_frame.grid(row=2, column=0, sticky='w')  # Adjust row as needed
+        excel_db_text = f"{self.default_filepath} - Sheet: {self.default_sheet}" if self.default_filepath and self.default_sheet else "Not chosen"
+        self.excel_db_label = tk.Label(self.excel_db_frame, text=excel_db_text)
+        self.excel_db_button = tk.Button(self.excel_db_frame, text="Select Excel Database", command=self.select_excel_database)
+        self.excel_db_button.grid(row=3, column=0, padx=(window_width//4, 0))
+        self.excel_db_label.grid(row=3, column=1, padx=(0, window_width//4), sticky='ew')
+        
+        # Add a new button for "Correlate new data" functionality
+        self.correlate_button = tk.Button(self.settings_window, text="Correlate new data", command=self.correlate_data)
+        # Adjust the row index accordingly to place the new button
+        self.correlate_button.grid(row=4, column=0, padx=(window_width//4, 0), sticky='w')
+
+
+        self.back_button = tk.Button(self.settings_window, text="<- Back", command=self.back_to_main)
+        self.back_button.grid(row=0, column=0, sticky='nw')  # Change this line to place the back button in the fourth row
+        
+        self.master.withdraw()
+    def exit_correlate_window(self):
+        self.correlate_window.destroy()
+        self.open_settings()
+
+    def back_to_main(self):
+        self.settings_window.destroy()
+        self.master.deiconify()
+        self.master.state('zoomed')  # Add this line
+        if hasattr(self, 'folder_to_scan'):  # Check if folder_to_scan is defined
+            self.display_folders(self.folder_to_scan)
+        self.focus_search_entry()
+
+
+    def choose_folder_to_scan(self):
+        folder_to_scan = filedialog.askdirectory()
+        if folder_to_scan:
+            self.folder_to_scan = folder_to_scan
+            self.folder_to_scan_label.config(text=folder_to_scan)  # Update the label directly
+            self.save_settings()
+            self.display_folders(self.folder_to_scan)
+
+    def display_folders(self, folder_to_scan):
+        self.folder_list.delete(0, END)
+        self.db_manager.cur.execute("DELETE FROM folder_paths")  # Use the cursor from db_manager
+        for root, dirs, files in os.walk(folder_to_scan):
+            if not dirs:
+                name = os.path.basename(root)
+                path = root
+                self.db_manager.cur.execute("INSERT OR REPLACE INTO folder_paths VALUES (?, ?)", (name, path))
+        self.db_manager.conn.commit()
+        for folder in sorted(self.get_folder_names_from_db()):
+            self.folder_list.insert(END, folder)
+
+    def choose_sold_folder(self):
+        self.sold_folder = filedialog.askdirectory()
+        if self.sold_folder:
+            self.sold_folder_label.config(text=self.sold_folder)  # Update the label directly
+            self.save_settings()
+
+
+        # Update the Sold Folder path
+        self.db_manager.cur.execute('''
+            INSERT INTO folder_paths (Folder, Path) VALUES ('Sold', ?)
+            ON CONFLICT(Folder) DO UPDATE SET Path = excluded.Path;
+        ''', (self.sold_folder,))
+
+        self.db_manager.conn.commit()
+    def save_settings(self):
+        if getattr(self, 'folder_to_scan', None) is not None and getattr(self, 'sold_folder', None) is not None:
+            with open("settings.txt", "w") as file:
+                file.write(f"{self.folder_to_scan}\n{self.sold_folder}")
+
+    def search(self, event):
+        search_terms = self.search_entry.get().split()  # Split the search string into words
+        if search_terms:
+            self.folder_list.delete(0, END)  # Clear the current list
+
+            # Walk the directory tree from the folder_to_scan path
+            for root, dirs, files in os.walk(self.folder_to_scan):
+                # Check if 'dirs' is empty, meaning 'root' is a leaf directory
+                if not dirs:
+                    folder_name = os.path.basename(root)  # Get the name of the leaf directory
+                    # Check if all search terms are in the folder name (case insensitive)
+                    if all(term.lower() in folder_name.lower() for term in search_terms):
+                        self.folder_list.insert(END, folder_name)
+        else:
+            self.display_folders(self.folder_to_scan)  # If the search box is empty, display all folders
+
+
+
+    def display_product_details(self, event):
+        if self.edit_mode:
+            if messagebox.askyesno("Unsaved changes", "You have unsaved changes. Do you want to save them?"):
+                self.save()
+            else:
+                self.toggle_edit_mode()  # Reset edit mode
+                
+        # Get the index of the selected item
+        selection = self.folder_list.curselection()
+        if not selection:
+            return  # No item selected
+        index = selection[0]
+        selected_folder_name = self.folder_list.get(index)
+        selected_product_id = selected_folder_name.split(' ')[0].lower()  # Assuming the product ID is at the beginning
+
+        # Ensure that the Excel file path and sheet name are set
+        filepath, sheet_name = self.load_excel_settings()
+        if filepath and sheet_name:
+            self.excel_manager.filepath = filepath
+            self.excel_manager.sheet_name = sheet_name
+            self.excel_manager.load_data()  # Load the data
+
+            # Retrieve product information from the DataFrame
+            try:
+                product_info = self.excel_manager.get_product_info(selected_product_id)
+                if product_info:
+
+                    self.cancelled_order_var.set(self.excel_value_to_bool(product_info.get('Cancelled Order')))
+                    self.damaged_var.set(self.excel_value_to_bool(product_info.get('Damaged')))
+                    self.personal_var.set(self.excel_value_to_bool(product_info.get('Personal')))
+                    self.reviewed_var.set(self.excel_value_to_bool(product_info.get('Reviewed')))
+                    self.pictures_downloaded_var.set(self.excel_value_to_bool(product_info.get('Pictures Downloaded')))
+                    self.uploaded_to_site_var.set(self.excel_value_to_bool(product_info.get('Uploaded to Site')))
+                    self.sold_var.set(self.excel_value_to_bool(product_info.get('Sold')))
+                    
+                    # For each field, check if the value is NaN using pd.isnull and set it to an empty string if it is
+                    self.asin_var.set('' if pd.isnull(product_info.get('ASIN')) else product_info.get('ASIN', ''))
+                    self.product_id_var.set('' if pd.isnull(product_info.get('Product ID')) else product_info.get('Product ID', ''))
+                    self.product_folder_var.set('' if pd.isnull(product_info.get('Product Folder')) else product_info.get('Product Folder', ''))
+                    self.to_sell_after_var.set('' if pd.isnull(product_info.get('To Sell After')) else product_info.get('To Sell After', ''))
+                    # ... handle the product image ...
+                    self.product_name_var.set('' if pd.isnull(product_info.get('Product Name')) else product_info.get('Product Name', ''))
+                    self.order_date_var.set('' if pd.isnull(product_info.get('Order Date')) else product_info.get('Order Date', ''))
+                    self.fair_market_value_var.set('' if pd.isnull(product_info.get('Fair Market Value')) else product_info.get('Fair Market Value', ''))
+                    self.order_details_var.set('' if pd.isnull(product_info.get('Order details')) else product_info.get('Order details', ''))
+                    self.order_link_var.set('' if pd.isnull(product_info.get('Order Link')) else product_info.get('Order Link', ''))
+                    self.sold_price_var.set('' if pd.isnull(product_info.get('Sold Price')) else product_info.get('Sold Price', ''))
+                    self.payment_type_var.set('' if pd.isnull(product_info.get('Payment Type')) else product_info.get('Payment Type', ''))
+                    # ... continue with other fields as needed ...
+                    # Add code here to populate the Sold Date and other date-related fields, if applicable
+                else:
+                    self.cancelled_order_var.set(False)
+                    self.damaged_var.set(False)
+                    self.personal_var.set(False)
+                    self.reviewed_var.set(False)
+                    self.pictures_downloaded_var.set(False)
+                    self.uploaded_to_site_var.set(False)
+                    self.sold_var.set(False)
+                    
+                    # Populate the widgets with the matched data
+                    self.asin_var.set('')
+                    self.product_id_var.set('Product not found in Excel.')
+                    self.product_folder_var.set('')
+                    self.to_sell_after_var.set('')
+                    # Add code here to handle the product image, if applicable
+                    self.product_name_var.set('Product not found in Excel.')
+                    self.order_date_var.set('')
+                    self.fair_market_value_var.set('')
+                    self.order_details_var.set('')
+                    self.order_link_var.set('')
+                    self.sold_price_var.set('')
+                    self.payment_type_var.set('')
+
+            except Exception as e:
+                messagebox.showerror("Error", f"An error occurred: {e}")
+                print(f"Error retrieving product details: {e}")
+        else:
+            messagebox.showerror("Error", "Excel file path or sheet name is not set.")
+        
+        # Any other code you want to execute when displaying product details, such as configuring widget states
+
+    def excel_value_to_bool(self, value):
+        # Check for NaN explicitly and return False if found
+        if pd.isnull(value):
+            return False
+        if isinstance(value, str):
+            return value.strip().lower() in ['yes', 'true', '1']
+        elif isinstance(value, (int, float)):
+            return bool(value)
+        return False
+
     def update_to_sell_after(self, *args):
         order_date = self.order_date_var.get()
         if order_date:
@@ -464,30 +581,41 @@ class Application(tk.Frame):
 
 
     def get_folder_names_from_db(self):
-        self.cur.execute("SELECT Folder FROM folder_paths")
-        return [row[0] for row in self.cur.fetchall()]
+        self.db_manager.cur.execute("SELECT Folder FROM folder_paths")
+        return [row[0] for row in self.db_manager.cur.fetchall()]
 
     def get_folder_path_from_db(self, product_id):
         # This query assumes that the folder name starts with the product ID followed by a space
-        self.cur.execute("SELECT Path FROM folder_paths WHERE Folder LIKE ?", (product_id + ' %',))
-        result = self.cur.fetchone()
+        self.db_manager.cur.execute("SELECT Path FROM folder_paths WHERE Folder LIKE ?", (product_id + ' %',))
+        result = self.db_manager.cur.fetchone()
         return result[0] if result else None
 
 
     def __del__(self):
-        self.conn.close()
+        self.db_manager.conn.close()
 
     def select_excel_database(self):
         filepath = filedialog.askopenfilename(
             title="Select Excel Database",
             filetypes=[("Excel Files", "*.xlsx *.xls *.xlsm")]
         )
-        if not filepath:
-            return
-
+        if filepath:
+            self.excel_manager.filepath = filepath  # Save the filepath to the ExcelManager instance
+            xls = pd.ExcelFile(filepath)
+            sheet_names = xls.sheet_names
+            if sheet_names:
+                # Automatically select the first sheet if available
+                self.excel_manager.sheet_name = sheet_names[0]  # Save the sheet name to the ExcelManager instance
+                self.save_excel_settings(filepath, sheet_names[0])  # Save settings
+                self.excel_manager.load_data()  # Load the data
+                self.update_excel_label()  # Update the label
         xls = pd.ExcelFile(filepath)
         sheet_names = xls.sheet_names
         self.ask_sheet_name(sheet_names, filepath)  # Pass filepath here
+
+    def update_excel_label(self):
+        excel_db_text = f"{self.excel_manager.filepath} - Sheet: {self.excel_manager.sheet_name}"
+        self.excel_db_label.config(text=excel_db_text)
 
     def ask_sheet_name(self, sheet_names, filepath):
         sheet_window = tk.Toplevel(self)
@@ -513,11 +641,11 @@ class Application(tk.Frame):
             selection_index = listbox.curselection()
             selected_sheet = listbox.get(selection_index) if selection_index else sheet_names[0]
             sheet_window.destroy()
-            self.load_excel_data(filepath, selected_sheet)
-            # Update the label to show the full path and selected sheet
-            self.excel_db_label.config(text=f"{filepath} - Sheet: {selected_sheet}")
-            # Save the settings
-            self.save_excel_settings(filepath, selected_sheet)
+            self.excel_manager.filepath = filepath  # Set the filepath in ExcelManager
+            self.excel_manager.sheet_name = selected_sheet  # Set the sheet_name in ExcelManager
+            self.excel_manager.load_data()  # Load the data
+            self.update_excel_label()  # Update the label to show the full path and selected sheet
+            self.save_excel_settings(filepath, selected_sheet)  # Save the settings
 
 
         confirm_button = tk.Button(sheet_window, text="Confirm", command=confirm_selection)
@@ -527,23 +655,15 @@ class Application(tk.Frame):
 
 
 
-
-
-    def load_excel_data(self, filepath, sheet_name):
-        try:
-            self.excel_data_frame = pd.read_excel(filepath, sheet_name=sheet_name, engine='openpyxl')
-            print("Excel data loaded successfully.")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-            print(f"Failed to load Excel data: {e}")
-
             
     def save_excel_settings(self, filepath, sheet_name):
         try:
             with open('excel_db_settings.txt', 'w') as f:
                 f.write(f"{filepath}\n{sheet_name}")
+            self.update_excel_label()  # Update the label when settings are saved
         except Exception as e:
             messagebox.showerror("Error", f"Unable to save settings: {str(e)}")
+
 
 
     def load_excel_settings(self):
@@ -559,22 +679,26 @@ class Application(tk.Frame):
         
         
     def correlate_data(self):
-        print("Correlate button pressed")
+        #print("Correlate button pressed")
         
-        # Load Excel settings
         filepath, sheet_name = self.load_excel_settings()
-        self.load_excel_data(filepath, sheet_name)
 
+        # Check if the Excel settings are properly loaded
         if not filepath or not sheet_name:
             messagebox.showerror("Error", "Excel database settings not found.")
             return
+
+        # Load the data into the ExcelManager instance
+        self.excel_manager.filepath = filepath  # Set the filepath
+        self.excel_manager.sheet_name = sheet_name  # Set the sheet name
+        self.excel_manager.load_data()  # Load the data
         
         try:
             # Load Excel data
             df = pd.read_excel(filepath, sheet_name=sheet_name)
-            print("Excel data loaded successfully.")
+            #print("Excel data loaded successfully.")
             product_ids = df['Product ID'].tolist()
-            print(f"Product IDs from Excel: {product_ids}")
+            #print(f"Product IDs from Excel: {product_ids}")
         except Exception as e:
             messagebox.showerror("Error", f"Unable to load Excel file: {str(e)}")
             return
@@ -585,21 +709,21 @@ class Application(tk.Frame):
 
         # Filter out nan values from the product_ids list
         product_ids = df_sorted['Product ID'].tolist()
-        print(f"Sorted and Filtered Product IDs from Excel: {product_ids}")
+        #print(f"Sorted and Filtered Product IDs from Excel: {product_ids}")
         
         missing_docs = []
         for product_id in product_ids:
             folder_path = self.get_folder_path_from_db(str(product_id))
-            print(f"Checking folder for Product ID {product_id}: {folder_path}")
+            #print(f"Checking folder for Product ID {product_id}: {folder_path}")
             if folder_path:
                 word_docs = [f for f in os.listdir(folder_path) if f.endswith('.docx')]
-                print(f"Word documents in folder: {word_docs}")
+                #print(f"Word documents in folder: {word_docs}")
                 if not word_docs:  # If there's no Word document
                     product_name = df.loc[df['Product ID'] == product_id, 'Product Name'].iloc[0]
                     missing_docs.append((os.path.basename(folder_path), product_id, product_name))
 
 
-        print(f"Missing documents: {missing_docs}")
+        #print(f"Missing documents: {missing_docs}")
         if missing_docs:
             self.prompt_correlation(missing_docs)
         else:
@@ -653,7 +777,7 @@ class Application(tk.Frame):
         self.create_word_doc(doc_data, item_id)  # show_message is True by default
 
     def create_all_word_docs(self):
-        print("Create all word docs function called")  # Debug print statement
+        #print("Create all word docs function called")  # Debug #print statement
         for iid in self.correlate_tree.get_children():
             item_values = self.correlate_tree.item(iid, 'values')
             doc_data = (item_values[0], item_values[1], item_values[2])
@@ -663,16 +787,22 @@ class Application(tk.Frame):
         self.open_settings()
 
 
-
     def create_word_doc(self, doc_data, iid, show_message=True):
-        print("Create word doc function called")  # Debug print statement
+        #print("Create word doc function called")  # Debug #print statement
         folder_name, product_id, product_name = doc_data
         folder_path = self.get_folder_path_from_db(str(product_id))
+
         if folder_path:
+            # Here's where you attempt to retrieve the fair market value
             try:
-                fair_market_value = self.excel_data_frame.loc[self.excel_data_frame['Product ID'] == product_id, 'Fair Market Value'].iloc[0]
+                # Make sure the column names used here match exactly with those in your Excel file
+                fair_market_value_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Fair Market Value']
+                if not fair_market_value_series.empty:
+                    fair_market_value = fair_market_value_series.iloc[0]
+                else:
+                    fair_market_value = "N/A"  # Default to "N/A" if the value is not found
             except Exception as e:
-                print(f"Error retrieving fair market value: {e}")  # Debug print statement
+                print(f"Error retrieving fair market value: {e}")  # Debugging print statement
                 fair_market_value = "N/A"
 
             doc_path = os.path.join(folder_path, f"{product_id}.docx")
@@ -686,7 +816,7 @@ class Application(tk.Frame):
                     messagebox.showinfo("Document Created", f"Word document for '{product_id}' has been created successfully.")
                 self.correlate_tree.delete(iid)
             except Exception as e:
-                print(f"Error creating word doc: {e}")  # Debug print statement
+                #print(f"Error creating word doc: {e}")  # Debug #print statement
                 messagebox.showerror("Error", f"Failed to create document for Product ID {product_id}: {e}")
         else:
             messagebox.showerror("Error", f"No folder found for Product ID {product_id}")
@@ -697,18 +827,15 @@ class Application(tk.Frame):
             self.correlate_window.destroy()
             self.open_settings()
 
-root = tk.Tk()
-root.title("Improved Inventory Manager")
+    # Other methods for the Application class go here
 
-# Size the window to 50% of the screen size
-window_width = int(root.winfo_screenwidth() * 0.5)
-window_height = int(root.winfo_screenheight() * 0.5)
-root.geometry(f"{window_width}x{window_height}")
 
-root.columnconfigure(0, weight=1)
-root.columnconfigure(1, weight=3)
-root.rowconfigure(2, weight=1)
-app = Application(master=root)
-root.state('zoomed')
+def main():
+    root = tk.Tk()
+    root.title("Improved Inventory Manager")
+    app = Application(master=root)
+    app.mainloop()
 
-app.mainloop()
+
+if __name__ == '__main__':
+    main()
