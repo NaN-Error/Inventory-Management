@@ -515,13 +515,6 @@ class Application(tk.Frame):
             except ValueError as e:
                 messagebox.showerror("Error", f"Incorrect date format: {e}")
 
-
-
-
-
-
-
-
     def toggle_edit_mode(self):
         if self.edit_mode:
             self.edit_mode = False
@@ -558,7 +551,7 @@ class Application(tk.Frame):
             self.to_sell_after_entry.config(state='normal')
             self.payment_type_combobox.config(state='normal')
             self.asin_entry.config(state='normal')
-            self.product_id_entry.config(state='normal')
+            #self.product_id_entry.config(state='normal')
             self.product_name_entry.config(state='normal')
             self.product_folder_entry.config(state='normal')
             self.fair_market_value_entry.config(state='normal')
