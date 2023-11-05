@@ -63,6 +63,8 @@ class ExcelManager:
     def load_data(self):
         if self.filepath and self.sheet_name:
             self.data_frame = pd.read_excel(self.filepath, sheet_name=self.sheet_name, engine='openpyxl')
+            # Cast all columns to object dtype after loading data
+            self.data_frame = self.data_frame.astype('object')
 
     def get_product_info(self, product_id):
         if self.data_frame is not None:
@@ -167,129 +169,107 @@ class Application(tk.Frame):
 
         self.product_frame = tk.Frame(self.bottom_frame, bg='gray')
         self.product_frame.pack(side='right', fill='both', expand=True)
-
-        self.sold_var = tk.BooleanVar()
-        self.sold_checkbutton = tk.Checkbutton(self.product_frame, text='Sold', variable=self.sold_var)
         
         self.save_button = tk.Button(self.product_frame, text='Save', command=self.save, state='disabled')
-        self.save_button.grid(row=0, column=8, sticky='w', padx=200, pady=0)
+        self.save_button.grid(row=0, column=20, sticky='w', padx=200, pady=0)
 
-        # Row 0
         self.edit_button = tk.Button(self.product_frame, text="Edit", command=self.toggle_edit_mode)
-        self.edit_button.grid(row=0, column=8, sticky='w', padx=235, pady=0)
+        self.edit_button.grid(row=0, column=20, sticky='w', padx=235, pady=0)
         
-        self.cancelled_order_var = tk.BooleanVar()
-        self.cancelled_order_checkbutton = tk.Checkbutton(self.product_frame, text='Cancelled Order', variable=self.cancelled_order_var, state='disabled')
-        self.cancelled_order_checkbutton.grid(row=0, column=6, sticky='w', padx=200, pady=0)
         
-        self.order_date_var = tk.StringVar()
-        self.order_date_label = tk.Label(self.product_frame, text='Order Date')
-        self.order_date_label.grid(row=10, column=0, sticky='w', padx=0, pady=0)
-        self.order_date_var.trace("w", self.update_to_sell_after)
-
-        # Row 1
-        self.damaged_var = tk.BooleanVar()
-        self.damaged_checkbutton = tk.Checkbutton(self.product_frame, text='Damaged', variable=self.damaged_var, state='disabled')
-        self.damaged_checkbutton.grid(row=1, column=6, sticky='w', padx=200, pady=0)
-        
-        self.order_date_entry = DateEntry(self.product_frame, textvariable=self.order_date_var, state='disabled')
-        self.order_date_entry.grid(row=11, column=0, sticky='w', padx=0, pady=0)
-
-        # Row 2
-        self.personal_var = tk.BooleanVar()
-        self.personal_checkbutton = tk.Checkbutton(self.product_frame, text='Personal', variable=self.personal_var, state='disabled')
-        self.personal_checkbutton.grid(row=2, column=6, sticky='w', padx=200, pady=0)
-        
-        self.to_sell_after_var = tk.StringVar()
-        self.to_sell_after_label = tk.Label(self.product_frame, text='To Sell After')
-        self.to_sell_after_label.grid(row=12, column=0, sticky='w', padx=0, pady=0)
-
-        # Row 3
-        self.reviewed_var = tk.BooleanVar()
-        self.reviewed_checkbutton = tk.Checkbutton(self.product_frame, text='Reviewed', variable=self.reviewed_var, state='disabled')
-        self.reviewed_checkbutton.grid(row=3, column=6, sticky='w', padx=200, pady=0)
-        
-        self.to_sell_after_entry = DateEntry(self.product_frame, textvariable=self.to_sell_after_var, state='disabled')
-        self.to_sell_after_entry.grid(row=13, column=0, sticky='w', padx=0, pady=0)
-
-        # Row 4
-        self.pictures_downloaded_var = tk.BooleanVar()
-        self.pictures_downloaded_checkbutton = tk.Checkbutton(self.product_frame, text='Pictures Downloaded', variable=self.pictures_downloaded_var, state='disabled')
-        self.pictures_downloaded_checkbutton.grid(row=4, column=6, sticky='w', padx=200, pady=0)
-        self.payment_type_var = tk.StringVar()
-        self.payment_type_label = tk.Label(self.product_frame, text='Payment Type')
-        self.payment_type_label.grid(row=4, column=0, sticky='w', padx=0, pady=0)
-
-        # Row 5
-        self.uploaded_to_site_var = tk.BooleanVar()
-        self.uploaded_to_site_checkbutton = tk.Checkbutton(self.product_frame, text='Uploaded to Site', variable=self.uploaded_to_site_var, state='disabled')
-        self.uploaded_to_site_checkbutton.grid(row=5, column=6, sticky='w', padx=200, pady=0)
-        self.payment_type_combobox = ttk.Combobox(self.product_frame, textvariable=self.payment_type_var, state='disabled')
-        self.payment_type_combobox['values'] = ('Cash', 'ATH Movil')  # default options
-        self.payment_type_combobox.grid(row=5, column=0, sticky='w', padx=0, pady=0)
-
-
-        self.product_folder_var = tk.StringVar()
-        self.product_folder_label = tk.Label(self.product_frame, text='Product Folder')
-        self.product_folder_label.grid(row=6, column=0, sticky='w', padx=0, pady=0)
-        
-        self.product_folder_entry = tk.Entry(self.product_frame, textvariable=self.product_folder_var, state='disabled')
-        self.product_folder_entry.grid(row=7, column=0, sticky='w', padx=0, pady=0)
-        
-        self.sold_var.set(False)
-        self.sold_checkbutton = tk.Checkbutton(self.product_frame, text='Sold', variable=self.sold_var, state='disabled')
-        self.sold_checkbutton.grid(row=6, column=6, sticky='w', padx=200, pady=0)
-
-        self.asin_var = tk.StringVar()
-        self.asin_label = tk.Label(self.product_frame, text='ASIN')
-        self.asin_label.grid(row=8, column=0, sticky='w', padx=0, pady=0)
-        
-        self.asin_entry = tk.Entry(self.product_frame, textvariable=self.asin_var, state='disabled')
-        self.asin_entry.grid(row=9, column=0, sticky='w', padx=0, pady=0)
-
+        # Column 0 Widgets
         self.product_id_var = tk.StringVar()
         self.product_id_label = tk.Label(self.product_frame, text='Product ID')
         self.product_id_label.grid(row=0, column=0, sticky='w', padx=0, pady=0)
-        
         self.product_id_entry = tk.Entry(self.product_frame, textvariable=self.product_id_var, state='disabled')
         self.product_id_entry.grid(row=1, column=0, sticky='w', padx=0, pady=0)
 
         self.product_name_var = tk.StringVar()
         self.product_name_label = tk.Label(self.product_frame, text='Product Name')
         self.product_name_label.grid(row=2, column=0, sticky='w', padx=0, pady=0)
-        
         self.product_name_entry = tk.Entry(self.product_frame, textvariable=self.product_name_var, state='disabled')
         self.product_name_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
 
-        # Note: Product Image requires a different approach
+        self.order_date_var = tk.StringVar()
+        self.order_date_label = tk.Label(self.product_frame, text='Order Date')
+        self.order_date_label.grid(row=4, column=0, sticky='w', padx=0, pady=0)
+        self.order_date_entry = DateEntry(self.product_frame, textvariable=self.order_date_var, state='disabled')
+        self.order_date_entry.grid(row=5, column=0, sticky='w', padx=0, pady=0)
+
+        self.to_sell_after_var = tk.StringVar()
+        self.to_sell_after_label = tk.Label(self.product_frame, text='To Sell After')
+        self.to_sell_after_label.grid(row=6, column=0, sticky='w', padx=0, pady=0)
+        self.to_sell_after_entry = DateEntry(self.product_frame, textvariable=self.to_sell_after_var, state='disabled')
+        self.to_sell_after_entry.grid(row=7, column=0, sticky='w', padx=0, pady=0)
 
         self.fair_market_value_var = tk.StringVar()
         self.fair_market_value_label = tk.Label(self.product_frame, text='Fair Market Value')
-        self.fair_market_value_label.grid(row=16, column=0, sticky='w', padx=0, pady=0)
-        
+        self.fair_market_value_label.grid(row=8, column=0, sticky='w', padx=0, pady=0)
         self.fair_market_value_entry = tk.Entry(self.product_frame, textvariable=self.fair_market_value_var, state='disabled')
-        self.fair_market_value_entry.grid(row=17, column=0, sticky='w', padx=0, pady=0)
-
-        self.order_details_var = tk.StringVar()
-        self.order_details_label = tk.Label(self.product_frame, text='Order Details')
-        self.order_details_label.grid(row=18, column=0, sticky='w', padx=0, pady=0)
-        
-        self.order_details_entry = tk.Entry(self.product_frame, textvariable=self.order_details_var, state='disabled')
-        self.order_details_entry.grid(row=19, column=0, sticky='w', padx=0, pady=0)
+        self.fair_market_value_entry.grid(row=9, column=0, sticky='w', padx=0, pady=0)
 
         self.order_link_var = tk.StringVar()
         self.order_link_label = tk.Label(self.product_frame, text='Order Link')
-        self.order_link_label.grid(row=20, column=0, sticky='w', padx=0, pady=0)
-        
+        self.order_link_label.grid(row=10, column=0, sticky='w', padx=0, pady=0)
         self.order_link_entry = tk.Entry(self.product_frame, textvariable=self.order_link_var, state='disabled')
-        self.order_link_entry.grid(row=21, column=0, sticky='w', padx=0, pady=0)
+        self.order_link_entry.grid(row=11, column=0, sticky='w', padx=0, pady=0)
+
+        self.asin_var = tk.StringVar()
+        self.asin_label = tk.Label(self.product_frame, text='ASIN')
+        self.asin_label.grid(row=12, column=0, sticky='w', padx=0, pady=0)
+        self.asin_entry = tk.Entry(self.product_frame, textvariable=self.asin_var, state='disabled')
+        self.asin_entry.grid(row=13, column=0, sticky='w', padx=0, pady=0)
+
+        self.order_details_var = tk.StringVar()
+        self.order_details_label = tk.Label(self.product_frame, text='Order Details')
+        self.order_details_label.grid(row=14, column=0, sticky='w', padx=0, pady=0)
+        self.order_details_entry = tk.Entry(self.product_frame, textvariable=self.order_details_var, state='disabled')
+        self.order_details_entry.grid(row=15, column=0, sticky='w', padx=0, pady=0)
 
         self.sold_price_var = tk.StringVar()
         self.sold_price_label = tk.Label(self.product_frame, text='Sold Price')
-        self.sold_price_label.grid(row=22, column=0, sticky='w', padx=0, pady=0)
-        
+        self.sold_price_label.grid(row=16, column=0, sticky='w', padx=0, pady=0)
         self.sold_price_entry = tk.Entry(self.product_frame, textvariable=self.sold_price_var, state='disabled')
-        self.sold_price_entry.grid(row=23, column=0, sticky='w', padx=0, pady=0)
+        self.sold_price_entry.grid(row=17, column=0, sticky='w', padx=0, pady=0)
+
+        # Column 8 Widgets
+        self.cancelled_order_var = tk.BooleanVar()
+        self.cancelled_order_checkbutton = tk.Checkbutton(self.product_frame, text='Cancelled Order', variable=self.cancelled_order_var, state='disabled')
+        self.cancelled_order_checkbutton.grid(row=0, column=8, sticky='w', padx=0, pady=0)
+
+        self.damaged_var = tk.BooleanVar()
+        self.damaged_checkbutton = tk.Checkbutton(self.product_frame, text='Damaged', variable=self.damaged_var, state='disabled')
+        self.damaged_checkbutton.grid(row=1, column=8, sticky='w', padx=0, pady=0)
+
+        self.personal_var = tk.BooleanVar()
+        self.personal_checkbutton = tk.Checkbutton(self.product_frame, text='Personal', variable=self.personal_var, state='disabled')
+        self.personal_checkbutton.grid(row=2, column=8, sticky='w', padx=0, pady=0)
+
+        self.reviewed_var = tk.BooleanVar()
+        self.reviewed_checkbutton = tk.Checkbutton(self.product_frame, text='Reviewed', variable=self.reviewed_var, state='disabled')
+        self.reviewed_checkbutton.grid(row=4, column=8, sticky='w', padx=0, pady=0)
+
+        self.pictures_downloaded_var = tk.BooleanVar()
+        self.pictures_downloaded_checkbutton = tk.Checkbutton(self.product_frame, text='Pictures Downloaded', variable=self.pictures_downloaded_var, state='disabled')
+        self.pictures_downloaded_checkbutton.grid(row=5, column=8, sticky='w', padx=0, pady=0)
+
+        self.uploaded_to_site_var = tk.BooleanVar()
+        self.uploaded_to_site_checkbutton = tk.Checkbutton(self.product_frame, text='Uploaded to Site', variable=self.uploaded_to_site_var, state='disabled')
+        self.uploaded_to_site_checkbutton.grid(row=6, column=8, sticky='w', padx=0, pady=0)
+
+        # Column 12 Widgets
+        self.sold_var = tk.BooleanVar()
+        self.sold_checkbutton = tk.Checkbutton(self.product_frame, text='Sold', variable=self.sold_var, state='disabled')
+        self.sold_checkbutton.grid(row=0, column=12, sticky='w', padx=0, pady=0)
+
+        self.payment_type_var = tk.StringVar()
+        self.payment_type_label = tk.Label(self.product_frame, text='Payment Type')
+        self.payment_type_label.grid(row=1, column=12, sticky='w', padx=0, pady=0)
+        
+        self.payment_type_combobox = ttk.Combobox(self.product_frame, textvariable=self.payment_type_var, state='disabled')
+        self.payment_type_combobox['values'] = ('Cash', 'ATH Movil')
+        self.payment_type_combobox.grid(row=2, column=12, sticky='w', padx=0, pady=0)
+
         
         # Load settings
         try:
@@ -486,11 +466,7 @@ class Application(tk.Frame):
             self.display_folders(self.folder_to_scan)  # If the search box is empty, display all folders
 
     def display_product_details(self, event):
-        if self.edit_mode:
-            if messagebox.askyesno("Unsaved changes", "You have unsaved changes. Do you want to save them?"):
-                self.save()
-            else:
-                self.toggle_edit_mode()  # Reset edit mode
+
                 
         # Get the index of the selected item
         selection = self.folder_list.curselection()
@@ -526,7 +502,6 @@ class Application(tk.Frame):
                     # For each field, check if the value is NaN using pd.isnull and set it to an empty string if it is
                     self.asin_var.set('' if pd.isnull(product_info.get('ASIN')) else product_info.get('ASIN', ''))
                     self.product_id_var.set('' if pd.isnull(product_info.get('Product ID')) else product_info.get('Product ID', ''))
-                    self.product_folder_var.set('' if pd.isnull(product_info.get('Product Folder')) else product_info.get('Product Folder', ''))
                     self.to_sell_after_var.set('' if pd.isnull(product_info.get('To Sell After')) else product_info.get('To Sell After', ''))
                     # ... handle the product image ...
                     self.product_name_var.set('' if pd.isnull(product_info.get('Product Name')) else product_info.get('Product Name', ''))
@@ -560,7 +535,6 @@ class Application(tk.Frame):
                     # Populate the widgets with the matched data
                     self.asin_var.set('')
                     self.product_id_var.set('')
-                    self.product_folder_var.set('')
                     self.to_sell_after_var.set('')
                     # Add code here to handle the product image, if applicable
                     self.product_name_var.set('Product not found in Excel.')
@@ -617,12 +591,12 @@ class Application(tk.Frame):
         self.reviewed_checkbutton.config(state=state)
         self.pictures_downloaded_checkbutton.config(state=state)
         self.uploaded_to_site_checkbutton.config(state=state)
-        self.order_date_entry.config(state=state)
-        self.to_sell_after_entry.config(state=state)
+        self.order_date_entry.config(state='disabled')
+        self.to_sell_after_entry.config(state='disabled')
         self.payment_type_combobox.config(state=state)
         self.asin_entry.config(state=state)
-        self.product_id_entry.config(state=state)
-        self.product_name_entry.config(state=state)
+        self.product_id_entry.config(state='disabled')
+        self.product_name_entry.config(state='disabled')
         self.product_folder_entry.config(state=state)
         self.fair_market_value_entry.config(state=state)
         self.order_details_entry.config(state=state)
@@ -633,6 +607,8 @@ class Application(tk.Frame):
 
     def save(self):
         # Get the product ID from the input, make sure it's a string, and strip whitespace.
+                # Reset the form and any state as necessary.
+
         product_id = self.product_id_var.get().strip()
         
         # Convert the Product ID to lowercase for a case-insensitive comparison, if necessary.
@@ -654,6 +630,8 @@ class Application(tk.Frame):
         
         if matching_row.empty:
             messagebox.showinfo("Info", f"Product ID '{product_id}' not found in the Excel database.")
+            self.toggle_edit_mode()
+            self.focus_search_entry()
             return
         
         # Assuming you found the matching row, get the index.
@@ -669,7 +647,6 @@ class Application(tk.Frame):
             'Uploaded to Site': 'YES' if self.uploaded_to_site_var.get() else 'NO',
             'Sold': 'YES' if self.sold_var.get() else 'NO',
             'ASIN': self.asin_var.get(),
-            'Product Folder': self.product_folder_var.get(),
             'To Sell After': self.to_sell_after_var.get(),
             'Product Name': self.product_name_var.get(),
             'Fair Market Value': self.fair_market_value_var.get(),
@@ -689,13 +666,14 @@ class Application(tk.Frame):
             with pd.ExcelWriter(filepath, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
                 self.excel_manager.data_frame.to_excel(writer, sheet_name=sheet_name, index=False)
             messagebox.showinfo("Success", "Product information updated successfully.")
+
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save changes to Excel file: {e}")
         
-        # Reset the form and any state as necessary.
-        self.edit_mode = False
         self.toggle_edit_mode()
         self.focus_search_entry()
+        
+
 
 
     def get_folder_names_from_db(self):
