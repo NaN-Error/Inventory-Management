@@ -11,6 +11,9 @@ from docx import Document
 import sqlite3
 from tkinter import END
 from tkinter import Toplevel
+from openpyxl import load_workbook
+
+
 
 class DatabaseManager: #DB practice(use txt to store folder paths when program finished for faster reads.)
 
@@ -68,11 +71,62 @@ class ExcelManager:
     def get_product_info(self, product_id):
         if self.data_frame is not None:
             # Convert both the product_id and the 'Product ID' column to lower case for comparison
-            query_result = self.data_frame[self.data_frame['Product ID'].str.lower() == product_id.lower()]
+            query_result = self.data_frame[self.data_frame['Product ID'].str.upper() == product_id.upper()]
             if not query_result.empty:
                 return query_result.iloc[0].to_dict()
         return None
+    
+    def save_product_info(self, product_id, product_data):
+        if self.filepath:
+            try:
+                print(f"Loading workbook from {self.filepath}")
+                workbook = load_workbook(self.filepath)
+                print(f"Accessing sheet {self.sheet_name}")
+                sheet = workbook[self.sheet_name]
 
+                # Start by finding the column index for product IDs
+                product_id_col_index = self.get_column_index_by_header(sheet, 'Product ID')
+                if not product_id_col_index:
+                    print("Product ID column not found")
+                    return
+
+                # Update product_data dictionary to convert boolean to YES/NO strings
+                for key, value in product_data.items():
+                    if isinstance(value, bool):
+                        product_data[key] = 'YES' if value else 'NO'
+
+                # Now iterate over the rows to find the matching product ID
+                for row in sheet.iter_rows(min_col=product_id_col_index, max_col=product_id_col_index):
+                    cell = row[0]
+                    print(f"Checking cell {cell.coordinate} with value {cell.value}")
+                    if cell.value and str(cell.value).strip().upper() == product_id.upper():
+                        row_num = cell.row
+                        for key, value in product_data.items():
+                            col_index = self.get_column_index_by_header(sheet, key)
+                            if col_index:
+                                sheet.cell(row=row_num, column=col_index, value=value)
+                        workbook.save(self.filepath)
+                        break
+                else:
+                    print(f"Product ID {product_id} not found in the sheet.")
+            except Exception as e:
+                print(f"Failed to save changes to Excel file: {e}")
+                raise
+
+
+
+    @staticmethod
+    def get_column_index_by_header(sheet, header_name):
+        """
+        Gets the column index based on the header name.
+        :param sheet: The sheet to search in.
+        :param header_name: The header name to find.
+        :return: The index of the column, or None if not found.
+        """
+        for col in sheet.iter_rows(min_row=1, max_row=1, values_only=True):
+            if header_name in col:
+                return col.index(header_name) + 1
+        return None
 class Application(tk.Frame):
 
     def __init__(self, master=None):
@@ -457,7 +511,7 @@ class Application(tk.Frame):
                 if not dirs:
                     folder_name = os.path.basename(root)  # Get the name of the leaf directory
                     # Check if all search terms are in the folder name (case insensitive)
-                    if all(term.lower() in folder_name.lower() for term in search_terms):
+                    if all(term.upper() in folder_name.upper() for term in search_terms):
                         self.folder_list.insert(END, folder_name)
         else:
             self.display_folders(self.folder_to_scan)  # If the search box is empty, display all folders
@@ -471,7 +525,7 @@ class Application(tk.Frame):
             return  # No item selected
         index = selection[0]
         selected_folder_name = self.folder_list.get(index)
-        selected_product_id = selected_folder_name.split(' ')[0].lower()  # Assuming the product ID is at the beginning
+        selected_product_id = selected_folder_name.split(' ')[0].upper()  # Assuming the product ID is at the beginning
 
         # Ensure that the Excel file path and sheet name are set
         filepath, sheet_name = self.load_excel_settings()
@@ -632,45 +686,23 @@ class Application(tk.Frame):
 
 
     def save(self):
-        # Get the product ID from the input, make sure it's a string, and strip whitespace.
-                # Reset the form and any state as necessary.
+        product_id = self.product_id_var.get().strip().upper()
 
-        product_id = self.product_id_var.get().strip()
-        
-        # Convert the Product ID to lowercase for a case-insensitive comparison, if necessary.
-        product_id = product_id.lower()
-        
         # Ensure that the Excel file path and sheet name are set.
         filepath, sheet_name = self.load_excel_settings()
-        
+
         if not filepath or not sheet_name:
             messagebox.showerror("Error", "Excel file path or sheet name is not set.")
             return
-        
-        # Load the Excel data into the DataFrame.
-        self.excel_manager.load_data()
-        
-        # Find the row in the DataFrame that matches the Product ID.
-        # This is assuming that the Product ID column in Excel is formatted similarly to the input.
-        matching_row = self.excel_manager.data_frame[self.excel_manager.data_frame['Product ID'].str.lower() == product_id]
-        
-        if matching_row.empty:
-            messagebox.showinfo("Info", f"Product ID '{product_id}' not found in the Excel database.")
-            self.toggle_edit_mode()
-            self.focus_search_entry()
-            return
-        
-        # Assuming you found the matching row, get the index.
-        row_index = matching_row.index[0]
-        
+
         # Collect the data from the form.
         product_data = {
-            'Cancelled Order': 'YES' if self.cancelled_order_var.get() else 'NO',
-            'Damaged': 'YES' if self.damaged_var.get() else 'NO',
-            'Personal': 'YES' if self.personal_var.get() else 'NO',
-            'Reviewed': 'YES' if self.reviewed_var.get() else 'NO',
-            'Pictures Downloaded': 'YES' if self.pictures_downloaded_var.get() else 'NO',
-            'Sold': 'YES' if self.sold_var.get() else 'NO',
+            'Cancelled Order': self.cancelled_order_var.get(),
+            'Damaged': self.damaged_var.get(),
+            'Personal': self.personal_var.get(),
+            'Reviewed': self.reviewed_var.get(),
+            'Pictures Downloaded': self.pictures_downloaded_var.get(),
+            'Sold': self.sold_var.get(),
             'ASIN': self.asin_var.get(),
             'To Sell After': self.to_sell_after_var.get(),
             'Product Name': self.product_name_var.get(),
@@ -680,20 +712,17 @@ class Application(tk.Frame):
             'Payment Type': self.payment_type_var.get(),
             # ... and so on for the rest of your form fields.
         }
-        
-        # Update the DataFrame with the data collected from the form.
-        for key, value in product_data.items():
-            self.excel_manager.data_frame.at[row_index, key] = value
-        
-        # Save the updated DataFrame back to the Excel file.
-        try:
-            with pd.ExcelWriter(filepath, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
-                self.excel_manager.data_frame.to_excel(writer, sheet_name=sheet_name, index=False)
-            messagebox.showinfo("Success", "Product information updated successfully.")
 
+        # Use the ExcelManager method to save the data.
+        try:
+            print(f"Attempting to save: {product_data}")  # Debug print
+            self.excel_manager.save_product_info(product_id, product_data)
+            messagebox.showinfo("Success", "Product information updated successfully.")
+            print(f"Save operation successful for Product ID: {product_id}")  # Confirm save
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save changes to Excel file: {e}")
-        
+            print(f"Exception during save: {e}")  # Print any exception
+
         self.toggle_edit_mode()
         self.focus_search_entry()
         
