@@ -4,7 +4,6 @@ import shutil
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from tkinter import ttk
-from tkcalendar import DateEntry
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 import pandas as pd
@@ -193,13 +192,13 @@ class Application(tk.Frame):
         self.order_date_var = tk.StringVar()
         self.order_date_label = tk.Label(self.product_frame, text='Order Date')
         self.order_date_label.grid(row=4, column=0, sticky='w', padx=0, pady=0)
-        self.order_date_entry = DateEntry(self.product_frame, textvariable=self.order_date_var, state='disabled')
+        self.order_date_entry = tk.Entry(self.product_frame, textvariable=self.order_date_var, state='disabled')
         self.order_date_entry.grid(row=5, column=0, sticky='w', padx=0, pady=0)
 
         self.to_sell_after_var = tk.StringVar()
         self.to_sell_after_label = tk.Label(self.product_frame, text='To Sell After')
         self.to_sell_after_label.grid(row=6, column=0, sticky='w', padx=0, pady=0)
-        self.to_sell_after_entry = DateEntry(self.product_frame, textvariable=self.to_sell_after_var, state='disabled')
+        self.to_sell_after_entry = tk.Entry(self.product_frame, textvariable=self.to_sell_after_var, state='disabled')
         self.to_sell_after_entry.grid(row=7, column=0, sticky='w', padx=0, pady=0)
 
         self.fair_market_value_var = tk.StringVar()
@@ -506,15 +505,25 @@ class Application(tk.Frame):
                     # ... handle the product image ...
                     self.product_name_var.set('' if pd.isnull(product_info.get('Product Name')) else product_info.get('Product Name', ''))
                     
-                    # Get the order date and format it
+                    # When a product is selected and the order date is fetched
                     order_date = product_info.get('Order Date', '')
+                    formatted_order_date = ''  # Default value
+
                     if isinstance(order_date, datetime):
                         formatted_order_date = order_date.strftime('%m/%d/%Y')
-                    elif isinstance(order_date, str):
-                        formatted_order_date = order_date  # Assuming the string is already in the correct format
+                        self.order_date_var.set(formatted_order_date)
+                        self.update_to_sell_after()  # Call this function to set 'To Sell After' date
+                    elif isinstance(order_date, str) and order_date:
+                        try:
+                            # If the date is in the format 'mm/dd/yy', such as '2/15/23'
+                            order_date = datetime.strptime(order_date, "%m/%d/%Y")
+                            formatted_order_date = order_date.strftime('%m/%d/%Y')
+                            self.order_date_var.set(formatted_order_date)
+                            self.update_to_sell_after()  # Call this function to set 'To Sell After' date
+                        except ValueError as e:
+                            messagebox.showerror("Error", f"Incorrect date format: {e}")
                     else:
-                        formatted_order_date = ''  # If it's neither a datetime object nor a string, set it to an empty string
-
+                        self.order_date_var.set('')
                     self.order_date_var.set(formatted_order_date)
                     self.fair_market_value_var.set('' if pd.isnull(product_info.get('Fair Market Value')) else product_info.get('Fair Market Value', ''))
                     self.order_details_var.set('' if pd.isnull(product_info.get('Order Details')) else product_info.get('Order Details', ''))
@@ -597,7 +606,6 @@ class Application(tk.Frame):
         self.asin_entry.config(state=state)
         self.product_id_entry.config(state='disabled')
         self.product_name_entry.config(state='disabled')
-        self.product_folder_entry.config(state=state)
         self.fair_market_value_entry.config(state=state)
         self.order_details_entry.config(state=state)
         self.order_link_entry.config(state=state)
@@ -922,6 +930,7 @@ def main():
     root = tk.Tk()
     root.title("Improved Inventory Manager")
     app = Application(master=root)
+    root.state('zoomed')
     app.mainloop()
 
 if __name__ == '__main__':
