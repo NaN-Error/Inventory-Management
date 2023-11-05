@@ -167,7 +167,7 @@ class Application(tk.Frame):
     def Product_Form(self):
 
         self.product_frame = tk.Frame(self.bottom_frame, bg='gray')
-        self.product_frame.pack(side='right', fill='both', expand=True)
+        self.product_frame.pack(side='right', fill='both', expand=True) #change pack to grid later
         
         self.save_button = tk.Button(self.product_frame, text='Save', command=self.save, state='disabled')
         self.save_button.grid(row=0, column=20, sticky='w', padx=200, pady=0)
@@ -201,12 +201,6 @@ class Application(tk.Frame):
         self.to_sell_after_entry = tk.Entry(self.product_frame, textvariable=self.to_sell_after_var, state='disabled')
         self.to_sell_after_entry.grid(row=7, column=0, sticky='w', padx=0, pady=0)
 
-        self.fair_market_value_var = tk.StringVar()
-        self.fair_market_value_label = tk.Label(self.product_frame, text='Fair Market Value')
-        self.fair_market_value_label.grid(row=8, column=0, sticky='w', padx=0, pady=0)
-        self.fair_market_value_entry = tk.Entry(self.product_frame, textvariable=self.fair_market_value_var, state='disabled')
-        self.fair_market_value_entry.grid(row=9, column=0, sticky='w', padx=0, pady=0)
-
         self.order_link_var = tk.StringVar()
         self.order_link_label = tk.Label(self.product_frame, text='Order Link')
         self.order_link_label.grid(row=10, column=0, sticky='w', padx=0, pady=0)
@@ -218,18 +212,6 @@ class Application(tk.Frame):
         self.asin_label.grid(row=12, column=0, sticky='w', padx=0, pady=0)
         self.asin_entry = tk.Entry(self.product_frame, textvariable=self.asin_var, state='disabled')
         self.asin_entry.grid(row=13, column=0, sticky='w', padx=0, pady=0)
-
-        self.order_details_var = tk.StringVar()
-        self.order_details_label = tk.Label(self.product_frame, text='Order Details')
-        self.order_details_label.grid(row=14, column=0, sticky='w', padx=0, pady=0)
-        self.order_details_entry = tk.Entry(self.product_frame, textvariable=self.order_details_var, state='disabled')
-        self.order_details_entry.grid(row=15, column=0, sticky='w', padx=0, pady=0)
-
-        self.sold_price_var = tk.StringVar()
-        self.sold_price_label = tk.Label(self.product_frame, text='Sold Price')
-        self.sold_price_label.grid(row=16, column=0, sticky='w', padx=0, pady=0)
-        self.sold_price_entry = tk.Entry(self.product_frame, textvariable=self.sold_price_var, state='disabled')
-        self.sold_price_entry.grid(row=17, column=0, sticky='w', padx=0, pady=0)
 
         # Column 8 Widgets
         self.cancelled_order_var = tk.BooleanVar()
@@ -261,13 +243,25 @@ class Application(tk.Frame):
         self.sold_checkbutton = tk.Checkbutton(self.product_frame, text='Sold', variable=self.sold_var, state='disabled')
         self.sold_checkbutton.grid(row=0, column=12, sticky='w', padx=0, pady=0)
 
+        self.fair_market_value_var = tk.StringVar()
+        self.fair_market_value_label = tk.Label(self.product_frame, text='Fair Market Value')
+        self.fair_market_value_label.grid(row=1, column=12, sticky='w', padx=0, pady=0)
+        self.fair_market_value_entry = tk.Entry(self.product_frame, textvariable=self.fair_market_value_var, state='disabled')
+        self.fair_market_value_entry.grid(row=2, column=12, sticky='w', padx=0, pady=0)
+        
+        self.sold_price_var = tk.StringVar()
+        self.sold_price_label = tk.Label(self.product_frame, text='Sold Price')
+        self.sold_price_label.grid(row=3, column=12, sticky='w', padx=0, pady=0)
+        self.sold_price_entry = tk.Entry(self.product_frame, textvariable=self.sold_price_var, state='disabled')
+        self.sold_price_entry.grid(row=4, column=12, sticky='w', padx=0, pady=0)
+        
         self.payment_type_var = tk.StringVar()
         self.payment_type_label = tk.Label(self.product_frame, text='Payment Type')
-        self.payment_type_label.grid(row=1, column=12, sticky='w', padx=0, pady=0)
+        self.payment_type_label.grid(row=5, column=12, sticky='w', padx=0, pady=0)
         
         self.payment_type_combobox = ttk.Combobox(self.product_frame, textvariable=self.payment_type_var, state='disabled')
         self.payment_type_combobox['values'] = ('Cash', 'ATH Movil')
-        self.payment_type_combobox.grid(row=2, column=12, sticky='w', padx=0, pady=0)
+        self.payment_type_combobox.grid(row=6, column=12, sticky='w', padx=0, pady=0)
 
         
         # Load settings
@@ -465,8 +459,8 @@ class Application(tk.Frame):
             self.display_folders(self.folder_to_scan)  # If the search box is empty, display all folders
 
     def display_product_details(self, event):
-
-                
+        if self.edit_mode:
+            self.toggle_edit_mode()
         # Get the index of the selected item
         selection = self.folder_list.curselection()
         if not selection:
@@ -526,7 +520,6 @@ class Application(tk.Frame):
                         self.order_date_var.set('')
                     self.order_date_var.set(formatted_order_date)
                     self.fair_market_value_var.set('' if pd.isnull(product_info.get('Fair Market Value')) else product_info.get('Fair Market Value', ''))
-                    self.order_details_var.set('' if pd.isnull(product_info.get('Order Details')) else product_info.get('Order Details', ''))
                     self.order_link_var.set('' if pd.isnull(product_info.get('Order Link')) else product_info.get('Order Link', ''))
                     self.sold_price_var.set('' if pd.isnull(product_info.get('Sold Price')) else product_info.get('Sold Price', ''))
                     self.payment_type_var.set('' if pd.isnull(product_info.get('Payment Type')) else product_info.get('Payment Type', ''))
@@ -549,7 +542,6 @@ class Application(tk.Frame):
                     self.product_name_var.set('Product not found in Excel.')
                     self.order_date_var.set('')
                     self.fair_market_value_var.set('')
-                    self.order_details_var.set('')
                     self.order_link_var.set('')
                     self.sold_price_var.set('')
                     self.payment_type_var.set('')
@@ -607,7 +599,6 @@ class Application(tk.Frame):
         self.product_id_entry.config(state='disabled')
         self.product_name_entry.config(state='disabled')
         self.fair_market_value_entry.config(state=state)
-        self.order_details_entry.config(state=state)
         self.order_link_entry.config(state=state)
         self.sold_price_entry.config(state=state)
         self.save_button.config(state=state)
@@ -658,7 +649,6 @@ class Application(tk.Frame):
             'To Sell After': self.to_sell_after_var.get(),
             'Product Name': self.product_name_var.get(),
             'Fair Market Value': self.fair_market_value_var.get(),
-            'Order Details': self.order_details_var.get(),
             'Order Link': self.order_link_var.get(),
             'Sold Price': self.sold_price_var.get(),
             'Payment Type': self.payment_type_var.get(),
