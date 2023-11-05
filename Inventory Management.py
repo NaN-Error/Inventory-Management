@@ -510,6 +510,9 @@ class Application(tk.Frame):
             # Retrieve product information from the DataFrame
             try:
                 product_info = self.excel_manager.get_product_info(selected_product_id)
+                # Right after fetching product_info
+                self.product_folder_path = self.get_folder_path_from_db(selected_product_id)
+
                 if product_info:
 
                     self.cancelled_order_var.set(self.excel_value_to_bool(product_info.get('Cancelled Order')))
@@ -539,7 +542,7 @@ class Application(tk.Frame):
 
                     self.order_date_var.set(formatted_order_date)
                     self.fair_market_value_var.set('' if pd.isnull(product_info.get('Fair Market Value')) else product_info.get('Fair Market Value', ''))
-                    self.order_details_var.set('' if pd.isnull(product_info.get('Order details')) else product_info.get('Order details', ''))
+                    self.order_details_var.set('' if pd.isnull(product_info.get('Order Details')) else product_info.get('Order Details', ''))
                     self.order_link_var.set('' if pd.isnull(product_info.get('Order Link')) else product_info.get('Order Link', ''))
                     self.sold_price_var.set('' if pd.isnull(product_info.get('Sold Price')) else product_info.get('Sold Price', ''))
                     self.payment_type_var.set('' if pd.isnull(product_info.get('Payment Type')) else product_info.get('Payment Type', ''))
@@ -556,7 +559,7 @@ class Application(tk.Frame):
                     
                     # Populate the widgets with the matched data
                     self.asin_var.set('')
-                    self.product_id_var.set('Product not found in Excel.')
+                    self.product_id_var.set('')
                     self.product_folder_var.set('')
                     self.to_sell_after_var.set('')
                     # Add code here to handle the product image, if applicable
@@ -602,75 +605,98 @@ class Application(tk.Frame):
                 messagebox.showerror("Error", f"Incorrect date format: {e}")
 
     def toggle_edit_mode(self):
-        if self.edit_mode:
-            self.edit_mode = False
-            self.sold_checkbutton.config(state='disabled')
-            # Disable all the new fields
-            self.cancelled_order_checkbutton.config(state='disabled')
-            self.damaged_checkbutton.config(state='disabled')
-            self.personal_checkbutton.config(state='disabled')
-            self.reviewed_checkbutton.config(state='disabled')
-            self.pictures_downloaded_checkbutton.config(state='disabled')
-            self.uploaded_to_site_checkbutton.config(state='disabled')
-            self.order_date_entry.config(state='disabled')
-            self.to_sell_after_entry.config(state='disabled')
-            self.payment_type_combobox.config(state='disabled')
-            self.asin_entry.config(state='disabled')
-            self.product_id_entry.config(state='disabled')
-            self.product_name_entry.config(state='disabled')
-            self.product_folder_entry.config(state='disabled')
-            self.fair_market_value_entry.config(state='disabled')
-            self.order_details_entry.config(state='disabled')
-            self.order_link_entry.config(state='disabled')
-            self.sold_price_entry.config(state='disabled')
-            self.save_button.config(state='disabled')
-        else:
-            self.edit_mode = True
-            self.sold_checkbutton.config(state='normal')
-            # Enable all the new fields
-            self.cancelled_order_checkbutton.config(state='normal')
-            self.damaged_checkbutton.config(state='normal')
-            self.personal_checkbutton.config(state='normal')
-            self.reviewed_checkbutton.config(state='normal')
-            self.pictures_downloaded_checkbutton.config(state='normal')
-            self.uploaded_to_site_checkbutton.config(state='normal')
-            self.order_date_entry.config(state='normal')
-            self.to_sell_after_entry.config(state='normal')
-            self.payment_type_combobox.config(state='normal')
-            self.asin_entry.config(state='normal')
-            #self.product_id_entry.config(state='normal')
-            self.product_name_entry.config(state='normal')
-            self.product_folder_entry.config(state='normal')
-            self.fair_market_value_entry.config(state='normal')
-            self.order_details_entry.config(state='normal')
-            self.order_link_entry.config(state='normal')
-            self.sold_price_entry.config(state='normal')
-            self.save_button.config(state='normal')
+        # Toggle the edit mode
+        self.edit_mode = not self.edit_mode
+        
+        # Set the state based on the new edit mode
+        state = 'normal' if self.edit_mode else 'disabled'
+        self.sold_checkbutton.config(state=state)
+        self.cancelled_order_checkbutton.config(state=state)
+        self.damaged_checkbutton.config(state=state)
+        self.personal_checkbutton.config(state=state)
+        self.reviewed_checkbutton.config(state=state)
+        self.pictures_downloaded_checkbutton.config(state=state)
+        self.uploaded_to_site_checkbutton.config(state=state)
+        self.order_date_entry.config(state=state)
+        self.to_sell_after_entry.config(state=state)
+        self.payment_type_combobox.config(state=state)
+        self.asin_entry.config(state=state)
+        self.product_id_entry.config(state=state)
+        self.product_name_entry.config(state=state)
+        self.product_folder_entry.config(state=state)
+        self.fair_market_value_entry.config(state=state)
+        self.order_details_entry.config(state=state)
+        self.order_link_entry.config(state=state)
+        self.sold_price_entry.config(state=state)
+        self.save_button.config(state=state)
+
 
     def save(self):
-        if self.sold_var.get():
-            # Check if the product is already in the sold folder
-            try:
-                if os.path.samefile(self.product_name, os.path.join(self.sold_folder, os.path.basename(self.product_name))):
-                    messagebox.showinfo("Notice", "Product is already in the Sold Folder")
-                    return
-            except FileNotFoundError:
-                pass  # If the file doesn't exist yet, the paths can't be the same
-            try:
-                shutil.move(self.product_name, os.path.join(self.sold_folder, os.path.basename(self.product_name)))
-                messagebox.showinfo("Success", "Moved product to Sold Folder")
-                if self.folder_list.curselection():
-                    self.folder_list.delete(self.folder_list.curselection())
-                self.display_folders(self.folder_to_scan)  # Refresh the folder list
-            except Exception as e:
-                messagebox.showerror("Error", f"Error moving file: {str(e)}")
+        # Get the product ID from the input, make sure it's a string, and strip whitespace.
+        product_id = self.product_id_var.get().strip()
         
-        # Add these lines
-        self.edit_mode = True
-        self.toggle_edit_mode()  # Reset edit mode
-        self.edit_button.grid(row=0, column=8, sticky='w', padx=235, pady=0)  # Make sure Edit button is visible
-
+        # Convert the Product ID to lowercase for a case-insensitive comparison, if necessary.
+        product_id = product_id.lower()
+        
+        # Ensure that the Excel file path and sheet name are set.
+        filepath, sheet_name = self.load_excel_settings()
+        
+        if not filepath or not sheet_name:
+            messagebox.showerror("Error", "Excel file path or sheet name is not set.")
+            return
+        
+        # Load the Excel data into the DataFrame.
+        self.excel_manager.load_data()
+        
+        # Find the row in the DataFrame that matches the Product ID.
+        # This is assuming that the Product ID column in Excel is formatted similarly to the input.
+        matching_row = self.excel_manager.data_frame[self.excel_manager.data_frame['Product ID'].str.lower() == product_id]
+        
+        if matching_row.empty:
+            messagebox.showinfo("Info", f"Product ID '{product_id}' not found in the Excel database.")
+            return
+        
+        # Assuming you found the matching row, get the index.
+        row_index = matching_row.index[0]
+        
+        # Collect the data from the form.
+        product_data = {
+            'Cancelled Order': 'YES' if self.cancelled_order_var.get() else 'NO',
+            'Damaged': 'YES' if self.damaged_var.get() else 'NO',
+            'Personal': 'YES' if self.personal_var.get() else 'NO',
+            'Reviewed': 'YES' if self.reviewed_var.get() else 'NO',
+            'Pictures Downloaded': 'YES' if self.pictures_downloaded_var.get() else 'NO',
+            'Uploaded to Site': 'YES' if self.uploaded_to_site_var.get() else 'NO',
+            'Sold': 'YES' if self.sold_var.get() else 'NO',
+            'ASIN': self.asin_var.get(),
+            'Product Folder': self.product_folder_var.get(),
+            'To Sell After': self.to_sell_after_var.get(),
+            'Product Name': self.product_name_var.get(),
+            'Fair Market Value': self.fair_market_value_var.get(),
+            'Order Details': self.order_details_var.get(),
+            'Order Link': self.order_link_var.get(),
+            'Sold Price': self.sold_price_var.get(),
+            'Payment Type': self.payment_type_var.get(),
+            # ... and so on for the rest of your form fields.
+        }
+        
+        # Update the DataFrame with the data collected from the form.
+        for key, value in product_data.items():
+            self.excel_manager.data_frame.at[row_index, key] = value
+        
+        # Save the updated DataFrame back to the Excel file.
+        try:
+            with pd.ExcelWriter(filepath, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                self.excel_manager.data_frame.to_excel(writer, sheet_name=sheet_name, index=False)
+            messagebox.showinfo("Success", "Product information updated successfully.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save changes to Excel file: {e}")
+        
+        # Reset the form and any state as necessary.
+        self.edit_mode = False
+        self.toggle_edit_mode()
         self.focus_search_entry()
+
 
     def get_folder_names_from_db(self):
         self.db_manager.cur.execute("SELECT Folder FROM folder_paths")
