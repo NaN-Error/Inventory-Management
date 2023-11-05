@@ -189,79 +189,84 @@ class Application(tk.Frame):
         self.product_name_entry = tk.Entry(self.product_frame, textvariable=self.product_name_var, state='disabled')
         self.product_name_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
 
-        self.order_date_var = tk.StringVar()
-        self.order_date_label = tk.Label(self.product_frame, text='Order Date')
-        self.order_date_label.grid(row=4, column=0, sticky='w', padx=0, pady=0)
-        self.order_date_entry = tk.Entry(self.product_frame, textvariable=self.order_date_var, state='disabled')
-        self.order_date_entry.grid(row=5, column=0, sticky='w', padx=0, pady=0)
-
-        self.to_sell_after_var = tk.StringVar()
-        self.to_sell_after_label = tk.Label(self.product_frame, text='To Sell After')
-        self.to_sell_after_label.grid(row=6, column=0, sticky='w', padx=0, pady=0)
-        self.to_sell_after_entry = tk.Entry(self.product_frame, textvariable=self.to_sell_after_var, state='disabled')
-        self.to_sell_after_entry.grid(row=7, column=0, sticky='w', padx=0, pady=0)
-
         self.order_link_var = tk.StringVar()
         self.order_link_label = tk.Label(self.product_frame, text='Order Link')
-        self.order_link_label.grid(row=10, column=0, sticky='w', padx=0, pady=0)
+        self.order_link_label.grid(row=4, column=0, sticky='w', padx=0, pady=0)
         self.order_link_entry = tk.Entry(self.product_frame, textvariable=self.order_link_var, state='disabled')
-        self.order_link_entry.grid(row=11, column=0, sticky='w', padx=0, pady=0)
+        self.order_link_entry.grid(row=5, column=0, sticky='w', padx=0, pady=0)
 
         self.asin_var = tk.StringVar()
         self.asin_label = tk.Label(self.product_frame, text='ASIN')
-        self.asin_label.grid(row=12, column=0, sticky='w', padx=0, pady=0)
+        self.asin_label.grid(row=6, column=0, sticky='w', padx=0, pady=0)
         self.asin_entry = tk.Entry(self.product_frame, textvariable=self.asin_var, state='disabled')
-        self.asin_entry.grid(row=13, column=0, sticky='w', padx=0, pady=0)
+        self.asin_entry.grid(row=7, column=0, sticky='w', padx=0, pady=0)
+
+        # Column 4 Widgets
+        # Assuming you want to create a spacer between column 0 and column 1
+        self.product_frame.grid_columnconfigure(2, minsize=20)  # This creates a 20-pixel-wide empty column as spacer
+        
+        self.order_date_var = tk.StringVar()
+        self.order_date_label = tk.Label(self.product_frame, text='Order Date')
+        self.order_date_label.grid(row=0, column=4, sticky='w', padx=0, pady=0)
+        self.order_date_entry = tk.Entry(self.product_frame, textvariable=self.order_date_var, state='disabled')
+        self.order_date_entry.grid(row=1, column=4, sticky='w', padx=0, pady=0)
+
+        self.to_sell_after_var = tk.StringVar()
+        self.to_sell_after_label = tk.Label(self.product_frame, text='To Sell After')
+        self.to_sell_after_label.grid(row=2, column=4, sticky='w', padx=0, pady=0)
+        self.to_sell_after_entry = tk.Entry(self.product_frame, textvariable=self.to_sell_after_var, state='disabled')
+        self.to_sell_after_entry.grid(row=3, column=4, sticky='w', padx=0, pady=0)
 
         # Column 8 Widgets
-        self.cancelled_order_var = tk.BooleanVar()
-        self.cancelled_order_checkbutton = tk.Checkbutton(self.product_frame, text='Cancelled Order', variable=self.cancelled_order_var, state='disabled')
-        self.cancelled_order_checkbutton.grid(row=0, column=8, sticky='w', padx=0, pady=0)
-
-        self.damaged_var = tk.BooleanVar()
-        self.damaged_checkbutton = tk.Checkbutton(self.product_frame, text='Damaged', variable=self.damaged_var, state='disabled')
-        self.damaged_checkbutton.grid(row=1, column=8, sticky='w', padx=0, pady=0)
-
-        self.personal_var = tk.BooleanVar()
-        self.personal_checkbutton = tk.Checkbutton(self.product_frame, text='Personal', variable=self.personal_var, state='disabled')
-        self.personal_checkbutton.grid(row=2, column=8, sticky='w', padx=0, pady=0)
-
-        self.reviewed_var = tk.BooleanVar()
-        self.reviewed_checkbutton = tk.Checkbutton(self.product_frame, text='Reviewed', variable=self.reviewed_var, state='disabled')
-        self.reviewed_checkbutton.grid(row=4, column=8, sticky='w', padx=0, pady=0)
-
-        self.pictures_downloaded_var = tk.BooleanVar()
-        self.pictures_downloaded_checkbutton = tk.Checkbutton(self.product_frame, text='Pictures Downloaded', variable=self.pictures_downloaded_var, state='disabled')
-        self.pictures_downloaded_checkbutton.grid(row=5, column=8, sticky='w', padx=0, pady=0)
-
-        self.uploaded_to_site_var = tk.BooleanVar()
-        self.uploaded_to_site_checkbutton = tk.Checkbutton(self.product_frame, text='Uploaded to Site', variable=self.uploaded_to_site_var, state='disabled')
-        self.uploaded_to_site_checkbutton.grid(row=6, column=8, sticky='w', padx=0, pady=0)
-
-        # Column 12 Widgets
+        self.product_frame.grid_columnconfigure(6, minsize=20)  # This creates a 20-pixel-wide empty column as spacer
         self.sold_var = tk.BooleanVar()
         self.sold_checkbutton = tk.Checkbutton(self.product_frame, text='Sold', variable=self.sold_var, state='disabled')
-        self.sold_checkbutton.grid(row=0, column=12, sticky='w', padx=0, pady=0)
+        self.sold_checkbutton.grid(row=0, column=8, sticky='w', padx=0, pady=0)
 
         self.fair_market_value_var = tk.StringVar()
         self.fair_market_value_label = tk.Label(self.product_frame, text='Fair Market Value')
-        self.fair_market_value_label.grid(row=1, column=12, sticky='w', padx=0, pady=0)
+        self.fair_market_value_label.grid(row=1, column=8, sticky='w', padx=0, pady=0)
         self.fair_market_value_entry = tk.Entry(self.product_frame, textvariable=self.fair_market_value_var, state='disabled')
-        self.fair_market_value_entry.grid(row=2, column=12, sticky='w', padx=0, pady=0)
+        self.fair_market_value_entry.grid(row=2, column=8, sticky='w', padx=0, pady=0)
         
         self.sold_price_var = tk.StringVar()
         self.sold_price_label = tk.Label(self.product_frame, text='Sold Price')
-        self.sold_price_label.grid(row=3, column=12, sticky='w', padx=0, pady=0)
+        self.sold_price_label.grid(row=3, column=8, sticky='w', padx=0, pady=0)
         self.sold_price_entry = tk.Entry(self.product_frame, textvariable=self.sold_price_var, state='disabled')
-        self.sold_price_entry.grid(row=4, column=12, sticky='w', padx=0, pady=0)
+        self.sold_price_entry.grid(row=4, column=8, sticky='w', padx=0, pady=0)
         
         self.payment_type_var = tk.StringVar()
         self.payment_type_label = tk.Label(self.product_frame, text='Payment Type')
-        self.payment_type_label.grid(row=5, column=12, sticky='w', padx=0, pady=0)
+        self.payment_type_label.grid(row=5, column=8, sticky='w', padx=0, pady=0)
         
         self.payment_type_combobox = ttk.Combobox(self.product_frame, textvariable=self.payment_type_var, state='disabled')
         self.payment_type_combobox['values'] = ('Cash', 'ATH Movil')
-        self.payment_type_combobox.grid(row=6, column=12, sticky='w', padx=0, pady=0)
+        self.payment_type_combobox.grid(row=6, column=8, sticky='w', padx=0, pady=0)
+        
+        
+
+        # Column 12 Widgets
+        self.product_frame.grid_columnconfigure(10, minsize=20)  # This creates a 20-pixel-wide empty column as spacer
+        self.cancelled_order_var = tk.BooleanVar()
+        self.cancelled_order_checkbutton = tk.Checkbutton(self.product_frame, text='Cancelled Order', variable=self.cancelled_order_var, state='disabled')
+        self.cancelled_order_checkbutton.grid(row=0, column=12, sticky='w', padx=0, pady=0)
+
+        self.damaged_var = tk.BooleanVar()
+        self.damaged_checkbutton = tk.Checkbutton(self.product_frame, text='Damaged', variable=self.damaged_var, state='disabled')
+        self.damaged_checkbutton.grid(row=1, column=12, sticky='w', padx=0, pady=0)
+
+        self.personal_var = tk.BooleanVar()
+        self.personal_checkbutton = tk.Checkbutton(self.product_frame, text='Personal', variable=self.personal_var, state='disabled')
+        self.personal_checkbutton.grid(row=2, column=12, sticky='w', padx=0, pady=0)
+
+        self.reviewed_var = tk.BooleanVar()
+        self.reviewed_checkbutton = tk.Checkbutton(self.product_frame, text='Reviewed', variable=self.reviewed_var, state='disabled')
+        self.reviewed_checkbutton.grid(row=4, column=12, sticky='w', padx=0, pady=0)
+
+        self.pictures_downloaded_var = tk.BooleanVar()
+        self.pictures_downloaded_checkbutton = tk.Checkbutton(self.product_frame, text='Pictures Downloaded', variable=self.pictures_downloaded_var, state='disabled')
+        self.pictures_downloaded_checkbutton.grid(row=5, column=12, sticky='w', padx=0, pady=0)
+
 
         
         # Load settings
@@ -413,7 +418,6 @@ class Application(tk.Frame):
             self.folder_list.insert(tk.END, folder)
 
 
-
     def choose_sold_folder(self):
         self.sold_folder = filedialog.askdirectory()
         if self.sold_folder:
@@ -489,7 +493,6 @@ class Application(tk.Frame):
                     self.personal_var.set(self.excel_value_to_bool(product_info.get('Personal')))
                     self.reviewed_var.set(self.excel_value_to_bool(product_info.get('Reviewed')))
                     self.pictures_downloaded_var.set(self.excel_value_to_bool(product_info.get('Pictures Downloaded')))
-                    self.uploaded_to_site_var.set(self.excel_value_to_bool(product_info.get('Uploaded to Site')))
                     self.sold_var.set(self.excel_value_to_bool(product_info.get('Sold')))
                     
                     # For each field, check if the value is NaN using pd.isnull and set it to an empty string if it is
@@ -531,7 +534,6 @@ class Application(tk.Frame):
                     self.personal_var.set(False)
                     self.reviewed_var.set(False)
                     self.pictures_downloaded_var.set(False)
-                    self.uploaded_to_site_var.set(False)
                     self.sold_var.set(False)
                     
                     # Populate the widgets with the matched data
@@ -576,8 +578,34 @@ class Application(tk.Frame):
 
                 to_sell_after = order_date + relativedelta(months=6)
                 self.to_sell_after_var.set(to_sell_after.strftime("%m/%d/%Y"))
+                self.update_to_sell_after_color()
             except ValueError as e:
                 messagebox.showerror("Error", f"Incorrect date format: {e}")
+
+    def update_to_sell_after_color(self):
+        # Get today's date
+        today = date.today()
+
+        # Get the date from the to_sell_after_var entry
+        to_sell_after_str = self.to_sell_after_var.get()
+        if to_sell_after_str:
+            try:
+                # Parse the date string to a date object
+                to_sell_after_date = datetime.strptime(to_sell_after_str, "%m/%d/%Y").date()
+
+                # If the to_sell_after date is today or has passed, change the entry's background color to green
+                if to_sell_after_date <= today:
+                    self.to_sell_after_entry.config({'readonlybackground': 'green'})
+                    self.to_sell_after_entry.config(state='readonly')
+                else:
+                    self.to_sell_after_entry.config({'readonlybackground': 'white'})
+                    self.to_sell_after_entry.config(state='readonly')
+            except ValueError:
+                # If there's a ValueError, it means the string was not in the expected format
+                # Handle incorrect date format or clear the background
+                self.to_sell_after_entry.config({'readonlybackground': 'white'})
+                self.to_sell_after_entry.config(state='readonly')
+
 
     def toggle_edit_mode(self):
         # Toggle the edit mode
@@ -591,7 +619,6 @@ class Application(tk.Frame):
         self.personal_checkbutton.config(state=state)
         self.reviewed_checkbutton.config(state=state)
         self.pictures_downloaded_checkbutton.config(state=state)
-        self.uploaded_to_site_checkbutton.config(state=state)
         self.order_date_entry.config(state='disabled')
         self.to_sell_after_entry.config(state='disabled')
         self.payment_type_combobox.config(state=state)
@@ -643,7 +670,6 @@ class Application(tk.Frame):
             'Personal': 'YES' if self.personal_var.get() else 'NO',
             'Reviewed': 'YES' if self.reviewed_var.get() else 'NO',
             'Pictures Downloaded': 'YES' if self.pictures_downloaded_var.get() else 'NO',
-            'Uploaded to Site': 'YES' if self.uploaded_to_site_var.get() else 'NO',
             'Sold': 'YES' if self.sold_var.get() else 'NO',
             'ASIN': self.asin_var.get(),
             'To Sell After': self.to_sell_after_var.get(),
