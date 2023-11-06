@@ -12,6 +12,8 @@ from tkinter import END
 from tkinter import Toplevel
 from openpyxl import load_workbook
 import re
+from tkcalendar import DateEntry
+
 
 # Prototyping (make it work, then make it pretty.)
 
@@ -280,27 +282,33 @@ class Application(tk.Frame):
         self.sold_checkbutton = tk.Checkbutton(self.product_frame, text='Sold', variable=self.sold_var, state='disabled')
         self.sold_checkbutton.grid(row=0, column=8, sticky='w', padx=0, pady=0)
 
+        self.sold_date_var = tk.StringVar()
+        self.sold_date_label = tk.Label(self.product_frame, text='Sold Date')
+        self.sold_date_label.grid(row=1, column=8, sticky='w', padx=0, pady=0)
+        self.sold_date_entry = DateEntry(self.product_frame, textvariable=self.sold_date_var, state='disabled', date_pattern='mm/dd/y')
+        self.sold_date_entry.grid(row=2, column=8, sticky='w', padx=0, pady=0)
+
+
         self.fair_market_value_var = tk.StringVar()
         self.fair_market_value_label = tk.Label(self.product_frame, text='Fair Market Value')
-        self.fair_market_value_label.grid(row=1, column=8, sticky='w', padx=0, pady=0)
+        self.fair_market_value_label.grid(row=3, column=8, sticky='w', padx=0, pady=0)
         self.fair_market_value_entry = tk.Entry(self.product_frame, textvariable=self.fair_market_value_var, state='disabled')
-        self.fair_market_value_entry.grid(row=2, column=8, sticky='w', padx=0, pady=0)
+        self.fair_market_value_entry.grid(row=4, column=8, sticky='w', padx=0, pady=0)
         
         self.sold_price_var = tk.StringVar()
         self.sold_price_label = tk.Label(self.product_frame, text='Sold Price')
-        self.sold_price_label.grid(row=3, column=8, sticky='w', padx=0, pady=0)
+        self.sold_price_label.grid(row=5, column=8, sticky='w', padx=0, pady=0)
         self.sold_price_entry = tk.Entry(self.product_frame, textvariable=self.sold_price_var, state='disabled')
-        self.sold_price_entry.grid(row=4, column=8, sticky='w', padx=0, pady=0)
+        self.sold_price_entry.grid(row=6, column=8, sticky='w', padx=0, pady=0)
         
         self.payment_type_var = tk.StringVar()
         self.payment_type_label = tk.Label(self.product_frame, text='Payment Type')
-        self.payment_type_label.grid(row=5, column=8, sticky='w', padx=0, pady=0)
+        self.payment_type_label.grid(row=7, column=8, sticky='w', padx=0, pady=0)
         
         self.payment_type_combobox = ttk.Combobox(self.product_frame, textvariable=self.payment_type_var, state='disabled')
         self.payment_type_combobox['values'] = ('Cash', 'ATH Movil')
-        self.payment_type_combobox.grid(row=6, column=8, sticky='w', padx=0, pady=0)
-
-
+        self.payment_type_combobox.grid(row=8, column=8, sticky='w', padx=0, pady=0)
+        
         # Column 12 Widgets
         self.product_frame.grid_columnconfigure(10, minsize=20)  # This creates a 20-pixel-wide empty column as spacer
         self.cancelled_order_var = tk.BooleanVar()
@@ -569,7 +577,6 @@ class Application(tk.Frame):
                     # When a product is selected and the order date is fetched
                     order_date = product_info.get('Order Date', '')
                     formatted_order_date = ''  # Default value
-
                     if isinstance(order_date, datetime):
                         formatted_order_date = order_date.strftime('%m/%d/%Y')
                         self.order_date_var.set(formatted_order_date)
@@ -586,10 +593,12 @@ class Application(tk.Frame):
                     else:
                         self.order_date_var.set('')
                     self.order_date_var.set(formatted_order_date)
+                    
                     self.fair_market_value_var.set('' if pd.isnull(product_info.get('Fair Market Value')) else product_info.get('Fair Market Value', ''))
                     self.order_link_var.set('' if pd.isnull(product_info.get('Order Link')) else product_info.get('Order Link', ''))
                     self.sold_price_var.set('' if pd.isnull(product_info.get('Sold Price')) else product_info.get('Sold Price', ''))
                     self.payment_type_var.set('' if pd.isnull(product_info.get('Payment Type')) else product_info.get('Payment Type', ''))
+                    self.sold_date_var.set('' if pd.isnull(product_info.get('Sold Date')) else product_info.get('Sold Date', ''))
                     # ... continue with other fields as needed ...
                     # Add code here to populate the Sold Date and other date-related fields, if applicable
                 else:
@@ -611,6 +620,7 @@ class Application(tk.Frame):
                     self.order_link_var.set('')
                     self.sold_price_var.set('')
                     self.payment_type_var.set('')
+                    self.sold_date_var.set('')
 
             except Exception as e:
                 messagebox.showerror("Error", f"An error occurred: {e}")
@@ -696,6 +706,7 @@ class Application(tk.Frame):
         self.reviewed_checkbutton.config(state=state)
         self.pictures_downloaded_checkbutton.config(state=state)
         self.order_date_entry.config(state='disabled')
+        self.sold_date_entry.config(state=state)
         self.to_sell_after_entry.config(state='disabled')
         self.payment_type_combobox.config(state=readonly_state)
         self.asin_entry.config(state=state)
@@ -746,9 +757,12 @@ class Application(tk.Frame):
             'Order Link': self.order_link_var.get(),
             'Sold Price': self.sold_price_var.get(),
             'Payment Type': self.payment_type_var.get(),
+            'Sold Date': self.sold_date_var.get(),
             # ... and so on for the rest of your form fields.
         }
-
+        # Check if 'Sold Date' is not empty, and if so, set 'Sold' to True.
+        if self.sold_date_var.get() != "":
+            self.sold_var.set(True)
         # Use the ExcelManager method to save the data.
         try:
             self.excel_manager.save_product_info(product_id, product_data)
