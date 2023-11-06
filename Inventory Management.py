@@ -368,7 +368,7 @@ class Application(tk.Frame):
         
         self.inventory_folder_button = tk.Button(self.inventory_folder_frame, text="Choose Inventory Folder", command=self.choose_inventory_folder)
         self.inventory_folder_button.grid(row=1, column=0, padx=(window_width//4, 0))  # Half the remaining space to the left
-        self.inventory_folder_label = tk.Label(self.inventory_folder_frame, text=self.inventory_folder if hasattr(self, 'inventory_folder') else "Not chosen")
+        self.inventory_folder_label = tk.Label(self.inventory_folder_frame, text=self.inventory_folder if self.inventory_folder else "Not chosen")
         self.inventory_folder_label.grid(row=1, column=1, padx=(0, window_width//4), sticky='ew')  # Half the remaining space to the right
 
         self.sold_folder_frame = tk.Frame(self.settings_window)
@@ -376,7 +376,7 @@ class Application(tk.Frame):
         
         self.sold_folder_button = tk.Button(self.sold_folder_frame, text="Choose Sold Inventory Folder", command=self.choose_sold_folder)
         self.sold_folder_button.grid(row=2, column=0, padx=(window_width//4, 0))
-        self.sold_folder_label = tk.Label(self.sold_folder_frame, text=self.sold_folder if hasattr(self, 'sold_folder') else "Not chosen")
+        self.sold_folder_label = tk.Label(self.sold_folder_frame, text=self.sold_folder  if self.sold_folder else "Not chosen")
         self.sold_folder_label.grid(row=2, column=1, padx=(0, window_width//4), sticky='ew')
 
         # Inside the open_settings method of Application class after existing setup code for other buttons
