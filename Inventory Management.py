@@ -13,7 +13,6 @@ from tkinter import END
 from tkinter import Toplevel
 from openpyxl import load_workbook
 import re
-from natsort import natsorted, ns
 
 class DatabaseManager: #DB practice(use txt to store folder paths when program finished for faster reads.)
 
@@ -137,9 +136,9 @@ class Application(tk.Frame):
         self.db_manager = DatabaseManager()
         self.excel_manager = ExcelManager()
         self.edit_mode = False  # Add this line to initialize the edit_mode attribute
-        self.folder_to_scan = None
+        self.inventory_folder = None
         self.sold_folder = None
-        self.products_to_sell_folder = None
+        self.to_sell_folder = None
         self.pack(fill='both', expand=True)
         
         # Make sure you call this before combining and displaying folders
@@ -154,9 +153,9 @@ class Application(tk.Frame):
         try:
             with open("folders_settings.txt", "r") as file:
                 lines = file.read().splitlines()
-                self.folder_to_scan = lines[0]
+                self.inventory_folder = lines[0]
                 self.sold_folder = lines[1]
-                self.products_to_sell_folder = lines[2] if len(lines) > 2 else None
+                self.to_sell_folder = lines[2] if len(lines) > 2 else None
                 # ... The rest of your settings loading code ...
         except FileNotFoundError:
             pass
@@ -167,7 +166,7 @@ class Application(tk.Frame):
         # Update the table with the new paths
         self.db_manager.cur.execute('''
             UPDATE folder_paths SET Path = ? WHERE Folder = 'Root Folder'
-        ''', (self.folder_to_scan,))
+        ''', (self.inventory_folder,))
         self.db_manager.cur.execute('''
             UPDATE folder_paths SET Path = ? WHERE Folder = 'Sold'
         ''', (self.sold_folder,))
@@ -175,7 +174,7 @@ class Application(tk.Frame):
 
     def check_and_update_product_list(self):
         if not self.search_entry.get():  # Check if the search entry is empty
-            folder_count = len(next(os.walk(self.folder_to_scan))[1])  # Count folders in the directory
+            folder_count = len(next(os.walk(self.inventory_folder))[1])  # Count folders in the directory
             list_count = self.folder_list.size()  # Count items in the Listbox
 
             if folder_count != list_count:
@@ -329,10 +328,10 @@ class Application(tk.Frame):
         try:
             with open("folders_settings.txt", "r") as file:
                 lines = file.read().splitlines()
-                self.folder_to_scan = lines[0]
+                self.inventory_folder = lines[0]
                 self.sold_folder = lines[1]
-                self.products_to_sell_folder = lines[2] if len(lines) > 2 else None
-                if self.folder_to_scan:  # Check if folder_to_scan is defined
+                self.to_sell_folder = lines[2] if len(lines) > 2 else None
+                if self.inventory_folder:  # Check if inventory_folder is defined
                     self.combine_and_display_folders()
         except FileNotFoundError:
             pass
@@ -351,25 +350,23 @@ class Application(tk.Frame):
         self.settings_window.title("Settings")
         self.settings_window.update()  # This updates the window and calculates sizes
         window_width = self.settings_window.winfo_width()  # Gets the width of the window
+        # Load settings
+        self.default_filepath, self.default_sheet = self.load_excel_settings()
         
-        # Configure the grid layout to not expand the button rows
-        self.settings_window.grid_rowconfigure(0, weight=0)
-        self.settings_window.grid_rowconfigure(1, weight=0)
-        self.settings_window.grid_rowconfigure(2, weight=0)  # Add this line for your new button row
-        self.settings_window.grid_rowconfigure(3, weight=1)  # This row will expand and push content to the top
-        
-        # Configure the grid columns (if necessary)
-        self.settings_window.grid_columnconfigure(0, weight=1)
+        # Configure the grid columns 
+        self.settings_window.grid_columnconfigure(3, weight=1)
 
-        self.folder_to_scan_frame = tk.Frame(self.settings_window)
-        self.folder_to_scan_frame.grid(row=0, column=0, sticky='w')
-        self.folder_to_scan_button = tk.Button(self.folder_to_scan_frame, text="Choose Root Inventory Folder", command=self.choose_folder_to_scan)
-        self.folder_to_scan_button.grid(row=1, column=0, padx=(window_width//4, 0))  # Half the remaining space to the left
-        self.folder_to_scan_label = tk.Label(self.folder_to_scan_frame, text=self.folder_to_scan if hasattr(self, 'folder_to_scan') else "Not chosen")
-        self.folder_to_scan_label.grid(row=1, column=1, padx=(0, window_width//4), sticky='ew')  # Half the remaining space to the right
+        self.inventory_folder_frame = tk.Frame(self.settings_window)
+        self.inventory_folder_frame.grid(row=0, column=0, sticky='w')
+        
+        self.inventory_folder_button = tk.Button(self.inventory_folder_frame, text="Choose Inventory Folder", command=self.choose_inventory_folder)
+        self.inventory_folder_button.grid(row=1, column=0, padx=(window_width//4, 0))  # Half the remaining space to the left
+        self.inventory_folder_label = tk.Label(self.inventory_folder_frame, text=self.inventory_folder if hasattr(self, 'inventory_folder') else "Not chosen")
+        self.inventory_folder_label.grid(row=1, column=1, padx=(0, window_width//4), sticky='ew')  # Half the remaining space to the right
 
         self.sold_folder_frame = tk.Frame(self.settings_window)
         self.sold_folder_frame.grid(row=1, column=0, sticky='w')
+        
         self.sold_folder_button = tk.Button(self.sold_folder_frame, text="Choose Sold Inventory Folder", command=self.choose_sold_folder)
         self.sold_folder_button.grid(row=2, column=0, padx=(window_width//4, 0))
         self.sold_folder_label = tk.Label(self.sold_folder_frame, text=self.sold_folder if hasattr(self, 'sold_folder') else "Not chosen")
@@ -378,37 +375,30 @@ class Application(tk.Frame):
         # Inside the open_settings method of Application class after existing setup code for other buttons
 
         # Choose Folder with Products to Sell Button and Label
-        self.products_to_sell_folder_frame = tk.Frame(self.settings_window)
-        self.products_to_sell_folder_frame.grid(row=3, column=0, sticky='w')  # Adjust the row index as needed
-        self.products_to_sell_folder_button = tk.Button(
-            self.products_to_sell_folder_frame,
-            text="Choose Folder with Products to Sell",
-            command=self.choose_products_to_sell_folder
-        )
-        self.products_to_sell_folder_button.grid(row=3, column=0, padx=(window_width // 4, 0))
-        self.products_to_sell_folder_label = tk.Label(
-            self.products_to_sell_folder_frame,
-            text=self.products_to_sell_folder if self.products_to_sell_folder else "Not chosen"
-        )
-        self.products_to_sell_folder_label.grid(row=3, column=1, padx=(0, window_width // 4), sticky='ew')
+        self.to_sell_folder_frame = tk.Frame(self.settings_window)
+        self.to_sell_folder_frame.grid(row=2, column=0, sticky='w')  # Adjust the row index as needed
+        
+        self.to_sell_folder_button = tk.Button(self.to_sell_folder_frame, text="Choose Folder with Products to Sell", command=self.choose_to_sell_folder)
+        self.to_sell_folder_button.grid(row=3, column=0, padx=(window_width//4, 0))
+        self.to_sell_folder_label = tk.Label(self.to_sell_folder_frame, text=self.to_sell_folder if self.to_sell_folder else "Not chosen")
+        self.to_sell_folder_label.grid(row=3, column=1, padx=(0, window_width//4), sticky='ew')
 
         # Add a new frame for the Excel database selection
-        # Load settings
-        self.default_filepath, self.default_sheet = self.load_excel_settings()
 
         # Excel Database Selection frame and button
         self.excel_db_frame = tk.Frame(self.settings_window)
-        self.excel_db_frame.grid(row=2, column=0, sticky='w')  # Adjust row as needed
+        self.excel_db_frame.grid(row=3, column=0, sticky='w')  # Adjust row as needed
+        
+        self.excel_db_button = tk.Button(self.excel_db_frame, text="Select Excel Database", command=self.select_excel_database)
+        self.excel_db_button.grid(row=4, column=0, padx=(window_width//4, 0))
+        
         excel_db_text = f"{self.default_filepath} - Sheet: {self.default_sheet}" if self.default_filepath and self.default_sheet else "Not chosen"
         self.excel_db_label = tk.Label(self.excel_db_frame, text=excel_db_text)
-        self.excel_db_button = tk.Button(self.excel_db_frame, text="Select Excel Database", command=self.select_excel_database)
-        self.excel_db_button.grid(row=3, column=0, padx=(window_width//4, 0))
-        self.excel_db_label.grid(row=3, column=1, padx=(0, window_width//4), sticky='ew')
+        self.excel_db_label.grid(row=4, column=1, padx=(0, window_width//4), sticky='ew')
         
         # Add a new button for "Correlate new data" functionality
-        self.correlate_button = tk.Button(self.settings_window, text="Create Word Files for Products", command=self.correlate_data)
-        # Adjust the row index accordingly to place the new button
-        self.correlate_button.grid(row=4, column=0, padx=(window_width//4, 0), sticky='w')
+        self.create_word_files = tk.Button(self.settings_window, text="Create Word Files for Products", command=self.correlate_data)
+        self.create_word_files.grid(row=5, column=0, padx=(window_width//4, 0), sticky='w')
 
 
         self.back_button = tk.Button(self.settings_window, text="<- Back", command=self.back_to_main)
@@ -435,11 +425,11 @@ class Application(tk.Frame):
         
         self.focus_search_entry()
 
-    def choose_folder_to_scan(self):
-        folder_to_scan = filedialog.askdirectory()
-        if folder_to_scan:
-            self.folder_to_scan = folder_to_scan
-            self.folder_to_scan_label.config(text=folder_to_scan)  # Update the label directly
+    def choose_inventory_folder(self):
+        inventory_folder = filedialog.askdirectory()
+        if inventory_folder:
+            self.inventory_folder = inventory_folder
+            self.inventory_folder_label.config(text=inventory_folder)  # Update the label directly
             self.save_settings()
             self.combine_and_display_folders()
 
@@ -463,7 +453,7 @@ class Application(tk.Frame):
         try:
             # Combine the folders from all three paths
             combined_folders = []
-            for folder_path in [self.folder_to_scan, self.sold_folder, self.products_to_sell_folder]:
+            for folder_path in [self.inventory_folder, self.sold_folder, self.to_sell_folder]:
                 if folder_path and os.path.exists(folder_path):
                     for root, dirs, files in os.walk(folder_path):
                         for dir_name in dirs:
@@ -498,24 +488,24 @@ class Application(tk.Frame):
 
         self.db_manager.conn.commit()
 
-    def choose_products_to_sell_folder(self):
-        self.products_to_sell_folder = filedialog.askdirectory()
-        if self.products_to_sell_folder:
-            self.products_to_sell_folder_label.config(text=self.products_to_sell_folder)
+    def choose_to_sell_folder(self):
+        self.to_sell_folder = filedialog.askdirectory()
+        if self.to_sell_folder:
+            self.to_sell_folder_label.config(text=self.to_sell_folder)
             self.save_settings()  # Save the settings including the new folder path
 
     def save_settings(self):
         # Here you will gather all the paths and write them to the settings.txt file
         with open("folders_settings.txt", "w") as file:
-            file.write(f"{self.folder_to_scan}\n{self.sold_folder}\n{self.products_to_sell_folder}")
+            file.write(f"{self.inventory_folder}\n{self.sold_folder}\n{self.to_sell_folder}")
 
     def search(self, event):
         search_terms = self.search_entry.get().split()  # Split the search string into words
         if search_terms:
             self.folder_list.delete(0, END)  # Clear the current list
 
-            # Walk the directory tree from the folder_to_scan path
-            for root, dirs, files in os.walk(self.folder_to_scan):
+            # Walk the directory tree from the inventory_folder path
+            for root, dirs, files in os.walk(self.inventory_folder):
                 # Check if 'dirs' is empty, meaning 'root' is a leaf directory
                 if not dirs:
                     folder_name = os.path.basename(root)  # Get the name of the leaf directory
@@ -776,9 +766,9 @@ class Application(tk.Frame):
                     to_sell_after_date = datetime.strptime(to_sell_after_str, "%m/%d/%Y").date()
                     today = date.today()
                     if to_sell_after_date <= today:
-                        target_folder_path = self.products_to_sell_folder
+                        target_folder_path = self.to_sell_folder
                     else:
-                        target_folder_path = self.folder_to_scan
+                        target_folder_path = self.inventory_folder
                 except ValueError as e:
                     messagebox.showerror("Error", f"Invalid 'To Sell After' date format: {e}")
                     return
@@ -853,9 +843,6 @@ class Application(tk.Frame):
         self.db_manager.cur.execute("SELECT Path FROM folder_paths WHERE Folder LIKE ?", (product_id + ' %',))
         result = self.db_manager.cur.fetchone()
         return result[0] if result else None
-
-    def __del__(self):
-        self.db_manager.conn.close()
 
     def select_excel_database(self):
         filepath = filedialog.askopenfilename(
@@ -1084,6 +1071,9 @@ class Application(tk.Frame):
             # If the Treeview is empty, close the 'Correlate Data' window and open the 'Settings' window
             self.correlate_window.destroy()
             self.open_settings()
+
+    def __del__(self):
+        self.db_manager.conn.close()
 
 def main():
 
