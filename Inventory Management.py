@@ -756,7 +756,7 @@ class Application(tk.Frame):
         
         # Folder movement logic
         current_folder_path = self.get_folder_path_from_db(product_id)
-        print(f"Current folder path: {current_folder_path}")
+        #print(f"Current folder path: {current_folder_path}")
 
         if not current_folder_path:
             messagebox.showerror("Error", f"No current folder path found for Product ID {product_id}")
@@ -780,9 +780,9 @@ class Application(tk.Frame):
                 except ValueError as e:
                     messagebox.showerror("Error", f"Invalid 'To Sell After' date format: {e}")
                     return
-        # Use print statements to debug the current and target folder paths
-        print(f"Current folder path: {current_folder_path}")
-        print(f"Target folder path: {target_folder_path}")
+        # Use #print statements to debug the current and target folder paths
+        #print(f"Current folder path: {current_folder_path}")
+        #print(f"Target folder path: {target_folder_path}")
         # Check if the target folder is determined and it's not the same as the current folder
         if target_folder_path and os.path.isdir(current_folder_path) and current_folder_path != target_folder_path:
             try:
@@ -799,7 +799,7 @@ class Application(tk.Frame):
                 self.db_manager.commit_changes()
                 
                 messagebox.showinfo("Folder Moved", f"Folder for '{product_id}' moved successfully to the new location.")
-                print(f"Folder for '{product_id}' moved from {current_folder_path} to {new_folder_path}")
+                #print(f"Folder for '{product_id}' moved from {current_folder_path} to {new_folder_path}")
                 self.refresh_and_select_product(product_id)
 
 
@@ -939,7 +939,7 @@ class Application(tk.Frame):
             return None, None
 
     def correlate_data(self):
-        ##print("Correlate button pressed")
+        #print("Correlate button pressed")
         
         filepath, sheet_name = self.load_excel_settings()
 
@@ -956,9 +956,9 @@ class Application(tk.Frame):
         try:
             # Load Excel data
             df = pd.read_excel(filepath, sheet_name=sheet_name)
-            ##print("Excel data loaded successfully.")
+            #print("Excel data loaded successfully.")
             product_ids = df['Product ID'].tolist()
-            ##print(f"Product IDs from Excel: {product_ids}")
+            #print(f"Product IDs from Excel: {product_ids}")
         except Exception as e:
             messagebox.showerror("Error", f"Unable to load Excel file: {str(e)}")
             return
@@ -969,21 +969,21 @@ class Application(tk.Frame):
 
         # Filter out nan values from the product_ids list
         product_ids = df_sorted['Product ID'].tolist()
-        ##print(f"Sorted and Filtered Product IDs from Excel: {product_ids}")
+        #print(f"Sorted and Filtered Product IDs from Excel: {product_ids}")
         
         missing_docs = []
         for product_id in product_ids:
             folder_path = self.get_folder_path_from_db(str(product_id))
-            ##print(f"Checking folder for Product ID {product_id}: {folder_path}")
+            #print(f"Checking folder for Product ID {product_id}: {folder_path}")
             if folder_path:
                 word_docs = [f for f in os.listdir(folder_path) if f.endswith('.docx')]
-                ##print(f"Word documents in folder: {word_docs}")
+                #print(f"Word documents in folder: {word_docs}")
                 if not word_docs:  # If there's no Word document
                     product_name = df.loc[df['Product ID'] == product_id, 'Product Name'].iloc[0]
                     missing_docs.append((os.path.basename(folder_path), product_id, product_name))
 
 
-        ##print(f"Missing documents: {missing_docs}")
+        #print(f"Missing documents: {missing_docs}")
         if missing_docs:
             self.prompt_correlation(missing_docs)
         else:
@@ -1036,7 +1036,7 @@ class Application(tk.Frame):
         self.create_word_doc(doc_data, item_id)  # show_message is True by default
 
     def create_all_word_docs(self):
-        ##print("Create all word docs function called")  # Debug ##print statement
+        #print("Create all word docs function called")  # Debug #print statement
         for iid in self.correlate_tree.get_children():
             item_values = self.correlate_tree.item(iid, 'values')
             doc_data = (item_values[0], item_values[1], item_values[2])
@@ -1046,7 +1046,7 @@ class Application(tk.Frame):
         self.open_settings()
 
     def create_word_doc(self, doc_data, iid, show_message=True):
-        ##print("Create word doc function called")  # Debug ##print statement
+        #print("Create word doc function called")  # Debug #print statement
         folder_name, product_id, product_name = doc_data
         folder_path = self.get_folder_path_from_db(str(product_id))
 
@@ -1074,7 +1074,7 @@ class Application(tk.Frame):
                     messagebox.showinfo("Document Created", f"Word document for '{product_id}' has been created successfully.")
                 self.correlate_tree.delete(iid)
             except Exception as e:
-                ##print(f"Error creating word doc: {e}")  # Debug ##print statement
+                #print(f"Error creating word doc: {e}")  # Debug #print statement
                 messagebox.showerror("Error", f"Failed to create document for Product ID {product_id}: {e}")
         else:
             messagebox.showerror("Error", f"No folder found for Product ID {product_id}")
