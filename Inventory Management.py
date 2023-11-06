@@ -350,6 +350,8 @@ class Application(tk.Frame):
         self.settings_window = tk.Toplevel(self)
         self.settings_window.title("Settings")
         
+        self.settings_window.state('zoomed')
+        
         # Bind the closing event to the on_settings_close function
         self.settings_window.protocol("WM_DELETE_WINDOW", self.on_settings_close)
 
@@ -410,6 +412,7 @@ class Application(tk.Frame):
         self.back_button.grid(row=0, column=0, sticky='nw')  # Change this line to place the back button in the fourth row
         
         self.combine_and_display_folders()
+        self.settings_window.protocol("WM_DELETE_WINDOW", lambda: on_close(self, self.master))
 
         self.master.withdraw()
         
@@ -1080,15 +1083,79 @@ class Application(tk.Frame):
             self.correlate_window.destroy()
             self.open_settings()
 
+    def backup_excel_database(self):
+        print("Starting the backup process.")
+        # Check if the Excel filepath is set
+        if not self.excel_manager.filepath:
+            print("No Excel filepath is set.")
+            return
+        
+        # Check if inventory folder exists
+        if not self.inventory_folder or not os.path.exists(self.inventory_folder):
+            print(f"Inventory folder is not set or does not exist: {self.inventory_folder}")
+            return
+        
+        # Define backup folder, which is alongside the inventory folder
+        # We obtain the parent directory of the inventory_folder using os.path.dirname
+        parent_dir = os.path.dirname(self.inventory_folder)
+        backup_folder = os.path.join(parent_dir, "Excel Backups")
+        
+        try:
+            # Create the backup folder if it doesn't exist
+            if not os.path.exists(backup_folder):
+                os.makedirs(backup_folder)
+                print(f"Backup folder '{backup_folder}' created.")
+            else:
+                print(f"Backup folder '{backup_folder}' already exists.")
+            
+            # Generate backup file name
+            date_time_str = datetime.now().strftime("%Y-%m-%d - %H-%M-%S")
+            backup_filename = f"Backup of {date_time_str}.xlsx"
+            backup_path = os.path.join(backup_folder, backup_filename)
+            
+            # Copy the Excel file to the backup location
+            shutil.copy2(self.excel_manager.filepath, backup_path)
+            print(f"Backup created at: {backup_path}")
+            
+            # Double check if the file was actually created
+            if not os.path.isfile(backup_path):
+                raise FileNotFoundError(f"Backup file not found after copy operation: {backup_path}")
+        except Exception as e:
+            print(f"Failed to create backup: {e}")
+            raise  # Reraise the exception to see the full traceback
+
+
     def __del__(self):
         self.db_manager.conn.close()
 
-def main():
+def on_close(app, root):
+    print("Closing the application and attempting to backup the database.")
+    if hasattr(app, 'excel_manager') and app.excel_manager.filepath:
+        print(f"Excel file path at time of backup: {app.excel_manager.filepath}")
+        try:
+            app.backup_excel_database()  # Perform the backup
+            print("Backup should now be complete.")
+        except Exception as e:
+            print(f"An error occurred during backup: {e}")
+    else:
+        print("Excel manager not set or no filepath available.")
+    root.destroy()  # Call the destroy method to close the application
 
+def exit_application(app, root):
+    on_close(app)  # Perform backup
+    root.destroy()  # Exit the application
+
+def main():
     root = tk.Tk()
     root.title("Improved Inventory Manager")
     app = Application(master=root)
     root.state('zoomed')
+    
+    app.excel_manager.filepath, _ = app.load_excel_settings()
+
+    # Use a lambda to pass 'app' and 'root' to the 'on_close' function
+    root.protocol("WM_DELETE_WINDOW", lambda: on_close(app, root))
+    
     app.mainloop()
 
 if __name__ == '__main__':
