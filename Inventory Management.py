@@ -15,9 +15,6 @@ from openpyxl import load_workbook
 import re
 from natsort import natsorted, ns
 
-
-
-
 class DatabaseManager: #DB practice(use txt to store folder paths when program finished for faster reads.)
 
     def __init__(self, db_name='inventory_management.db'):
@@ -81,7 +78,7 @@ class ExcelManager:
             if not query_result.empty:
                 return query_result.iloc[0].to_dict()
         return None
-    
+
     def save_product_info(self, product_id, product_data):
         if self.filepath:
             try:
@@ -120,8 +117,6 @@ class ExcelManager:
                 #print(f"Failed to save changes to Excel file: {e}")
                 raise
 
-
-
     @staticmethod
     def get_column_index_by_header(sheet, header_name):
         """
@@ -134,6 +129,7 @@ class ExcelManager:
             if header_name in col:
                 return col.index(header_name) + 1
         return None
+
 class Application(tk.Frame):
 
     def __init__(self, master=None):
@@ -439,7 +435,6 @@ class Application(tk.Frame):
         
         self.focus_search_entry()
 
-
     def choose_folder_to_scan(self):
         folder_to_scan = filedialog.askdirectory()
         if folder_to_scan:
@@ -447,7 +442,8 @@ class Application(tk.Frame):
             self.folder_to_scan_label.config(text=folder_to_scan)  # Update the label directly
             self.save_settings()
             self.combine_and_display_folders()
-    
+
+    @staticmethod
     def custom_sort_key(s):
         # A regular expression to match words in the folder name.
         # Words are defined as sequences of alphanumeric characters and underscores.
@@ -483,12 +479,11 @@ class Application(tk.Frame):
         unique_folders = list(set(combined_folders))
 
         # Sort using the custom sort key function
-        sorted_folders = sorted(unique_folders, key=Application.custom_sort_key)
+        sorted_folders = sorted(unique_folders, key=self.custom_sort_key)
 
         # Insert the sorted folders into the list widget
         for folder in sorted_folders:
             self.folder_list.insert(tk.END, folder)
-
 
     def choose_sold_folder(self):
         self.sold_folder = filedialog.askdirectory()
@@ -509,12 +504,10 @@ class Application(tk.Frame):
             self.products_to_sell_folder_label.config(text=self.products_to_sell_folder)
             self.save_settings()  # Save the settings including the new folder path
 
-
     def save_settings(self):
         # Here you will gather all the paths and write them to the settings.txt file
         with open("folders_settings.txt", "w") as file:
             file.write(f"{self.folder_to_scan}\n{self.sold_folder}\n{self.products_to_sell_folder}")
-
 
     def search(self, event):
         search_terms = self.search_entry.get().split()  # Split the search string into words
@@ -686,7 +679,6 @@ class Application(tk.Frame):
                 self.to_sell_after_entry.config({'readonlybackground': 'white'})
                 self.to_sell_after_entry.config(state='readonly')
 
-
     def toggle_edit_mode(self):
         # Toggle the edit mode
         self.edit_mode = not self.edit_mode
@@ -828,7 +820,7 @@ class Application(tk.Frame):
         # Additionally, you might want to re-bind the Enter key to the edit_button's command
         # if you want to be able to press Enter to switch to edit mode again
         self.master.bind('<Return>', lambda e: self.edit_button.invoke())
-        
+
     def refresh_and_select_product(self, product_id):
         # Refresh the list of products
         self.combine_and_display_folders()
@@ -851,8 +843,6 @@ class Application(tk.Frame):
             self.folder_list.event_generate("<<ListboxSelect>>")  # Trigger the event to display product details
         self.toggle_edit_mode()
         self.focus_search_entry()
-
-
 
     def get_folder_names_from_db(self):
         self.db_manager.cur.execute("SELECT Folder FROM folder_paths")
