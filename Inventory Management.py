@@ -12,7 +12,8 @@ import sqlite3
 from tkinter import END
 from tkinter import Toplevel
 from openpyxl import load_workbook
-
+import re
+from natsort import natsorted, ns
 
 
 
@@ -446,8 +447,16 @@ class Application(tk.Frame):
             self.folder_to_scan_label.config(text=folder_to_scan)  # Update the label directly
             self.save_settings()
             self.combine_and_display_folders()
-
-
+    
+    def custom_sort_key(s):
+        # A regular expression to match words in the folder name.
+        # Words are defined as sequences of alphanumeric characters and underscores.
+        words = re.findall(r'\w+', s.lower())
+        
+        # The key will be a tuple consisting of the length of the first word,
+        # the first word itself (for alphanumeric sorting), and then the rest of the words.
+        # Lowercase all words for case-insensitive comparison, numbers will sort naturally before letters.
+        return (len(words[0]),) + tuple(words)
 
     def combine_and_display_folders(self):
         # Clear the folder list first
@@ -470,12 +479,15 @@ class Application(tk.Frame):
         except Exception as e:
             self.db_manager.conn.rollback()  # Rollback if there was an error
             messagebox.showerror("Database Error", f"An error occurred while updating the folder paths: {e}")
-
-        # Deduplicate folder names and insert them into the list widget
+        # Deduplicate folder names
         unique_folders = list(set(combined_folders))
-        for folder in sorted(unique_folders):
-            self.folder_list.insert(tk.END, folder)
 
+        # Sort using the custom sort key function
+        sorted_folders = sorted(unique_folders, key=Application.custom_sort_key)
+
+        # Insert the sorted folders into the list widget
+        for folder in sorted_folders:
+            self.folder_list.insert(tk.END, folder)
 
 
     def choose_sold_folder(self):
@@ -483,8 +495,6 @@ class Application(tk.Frame):
         if self.sold_folder:
             self.sold_folder_label.config(text=self.sold_folder)  # Update the label directly
             self.save_settings()
-
-
         # Update the Sold Folder path
         self.db_manager.cur.execute('''
             INSERT INTO folder_paths (Folder, Path) VALUES ('Sold', ?)
