@@ -13,7 +13,8 @@ from tkinter import Toplevel
 from openpyxl import load_workbook
 import re
 from tkcalendar import DateEntry
-
+import subprocess
+import sys
 
 # Prototyping (make it work, then make it pretty.)
 
@@ -247,18 +248,24 @@ class Application(tk.Frame):
         self.product_name_label.grid(row=2, column=0, sticky='w', padx=0, pady=0)
         self.product_name_entry = tk.Entry(self.product_frame, textvariable=self.product_name_var, state='disabled')
         self.product_name_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
+        
+        self.product_folder_var = tk.StringVar()
+        self.product_folder_label = tk.Label(self.product_frame, text='Product Folder')
+        self.product_folder_label.grid(row=4, column=0, sticky='w', padx=0, pady=0)
+        self.product_folder_link = tk.Button(self.product_frame, textvariable=self.product_folder_var, fg="blue", text='No Folder')
+        self.product_folder_link.grid(row=5, column=0, sticky='w', padx=0, pady=0)
 
         self.order_link_var = tk.StringVar()
         self.order_link_label = tk.Label(self.product_frame, text='Order Link')
-        self.order_link_label.grid(row=4, column=0, sticky='w', padx=0, pady=0)
+        self.order_link_label.grid(row=6, column=0, sticky='w', padx=0, pady=0)
         self.order_link_entry = tk.Entry(self.product_frame, textvariable=self.order_link_var, state='disabled')
-        self.order_link_entry.grid(row=5, column=0, sticky='w', padx=0, pady=0)
+        self.order_link_entry.grid(row=7, column=0, sticky='w', padx=0, pady=0)
 
         self.asin_var = tk.StringVar()
         self.asin_label = tk.Label(self.product_frame, text='ASIN')
-        self.asin_label.grid(row=6, column=0, sticky='w', padx=0, pady=0)
+        self.asin_label.grid(row=8, column=0, sticky='w', padx=0, pady=0)
         self.asin_entry = tk.Entry(self.product_frame, textvariable=self.asin_var, state='disabled')
-        self.asin_entry.grid(row=7, column=0, sticky='w', padx=0, pady=0)
+        self.asin_entry.grid(row=9, column=0, sticky='w', padx=0, pady=0)
 
         # Column 4 Widgets
         # Assuming you want to create a spacer between column 0 and column 1
@@ -344,8 +351,6 @@ class Application(tk.Frame):
                     self.combine_and_display_folders()
         except FileNotFoundError:
             pass
-
-
         self.search_entry.focus_set()
 
     def focus_search_entry(self):
@@ -535,6 +540,7 @@ class Application(tk.Frame):
             self.combine_and_display_folders()  # If the search box is empty, display all folders
 
     def display_product_details(self, event):
+        
         if self.edit_mode:
             self.toggle_edit_mode()
         # Get the index of the selected item
@@ -601,6 +607,21 @@ class Application(tk.Frame):
                     self.sold_date_var.set('' if pd.isnull(product_info.get('Sold Date')) else product_info.get('Sold Date', ''))
                     # ... continue with other fields as needed ...
                     # Add code here to populate the Sold Date and other date-related fields, if applicable
+                    
+                    # Fetch the full folder path from the database using the product ID.
+                    folder_path = self.get_folder_path_from_db(selected_product_id)
+
+                    # Extract the name of the parent directory (where the product folder is located)
+                    parent_folder_name = os.path.basename(os.path.dirname(folder_path)) if folder_path else "No Folder"
+                    self.product_folder_var.set(parent_folder_name)
+
+                    # If the folder path exists, update the button to open the product folder when clicked
+                    if folder_path and os.path.exists(folder_path):
+                        self.product_folder_link.config(command=lambda: self.open_product_folder(folder_path), state='normal')
+                    else:
+                        self.product_folder_var.set("No Folder")
+                        self.product_folder_link.config(state='disabled')
+                    
                 else:
                     self.cancelled_order_var.set(False)
                     self.damaged_var.set(False)
@@ -628,7 +649,6 @@ class Application(tk.Frame):
         else:
             messagebox.showerror("Error", "Excel file path or sheet name is not set.")
 
-        
         # Unbind the Enter key from the save_button's command
         self.master.unbind('<Return>')
         
@@ -639,6 +659,14 @@ class Application(tk.Frame):
         # Now bind the Enter key to the edit_button's command
         self.edit_button.focus_set()  # Optional: set the focus on the edit button
         self.master.bind('<Return>', lambda e: self.edit_button.invoke())
+
+    def open_product_folder(self, folder_path):
+        if sys.platform == "win32":
+            os.startfile(folder_path)
+        elif sys.platform == "darwin":  # macOS
+            subprocess.run(["open", folder_path])
+        else:  # Linux variants
+            subprocess.run(["xdg-open", folder_path])
 
     def excel_value_to_bool(self, value):
         # Check for NaN explicitly and return False if found
