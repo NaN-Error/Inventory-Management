@@ -1,4 +1,3 @@
-
 import os
 import shutil
 import tkinter as tk
@@ -13,6 +12,8 @@ from tkinter import END
 from tkinter import Toplevel
 from openpyxl import load_workbook
 import re
+
+# Prototyping (make it work, then make it pretty.)
 
 class DatabaseManager: #DB practice(use txt to store folder paths when program finished for faster reads.)
 
@@ -151,7 +152,7 @@ class Application(tk.Frame):
     def load_settings(self):
         # Load settings
         try:
-            with open("folders_settings.txt", "r") as file:
+            with open("folders_paths.txt", "r") as file:
                 lines = file.read().splitlines()
                 self.inventory_folder = lines[0]
                 self.sold_folder = lines[1]
@@ -326,7 +327,7 @@ class Application(tk.Frame):
         
         # Load settings
         try:
-            with open("folders_settings.txt", "r") as file:
+            with open("folders_paths.txt", "r") as file:
                 lines = file.read().splitlines()
                 self.inventory_folder = lines[0]
                 self.sold_folder = lines[1]
@@ -348,6 +349,10 @@ class Application(tk.Frame):
             return
         self.settings_window = tk.Toplevel(self)
         self.settings_window.title("Settings")
+        
+        # Bind the closing event to the on_settings_close function
+        self.settings_window.protocol("WM_DELETE_WINDOW", self.on_settings_close)
+
         self.settings_window.update()  # This updates the window and calculates sizes
         window_width = self.settings_window.winfo_width()  # Gets the width of the window
         # Load settings
@@ -378,7 +383,7 @@ class Application(tk.Frame):
         self.to_sell_folder_frame = tk.Frame(self.settings_window)
         self.to_sell_folder_frame.grid(row=2, column=0, sticky='w')  # Adjust the row index as needed
         
-        self.to_sell_folder_button = tk.Button(self.to_sell_folder_frame, text="Choose Folder with Products to Sell", command=self.choose_to_sell_folder)
+        self.to_sell_folder_button = tk.Button(self.to_sell_folder_frame, text="Choose Products to Sell Folder", command=self.choose_to_sell_folder)
         self.to_sell_folder_button.grid(row=3, column=0, padx=(window_width//4, 0))
         self.to_sell_folder_label = tk.Label(self.to_sell_folder_frame, text=self.to_sell_folder if self.to_sell_folder else "Not chosen")
         self.to_sell_folder_label.grid(row=3, column=1, padx=(0, window_width//4), sticky='ew')
@@ -407,7 +412,10 @@ class Application(tk.Frame):
         self.combine_and_display_folders()
 
         self.master.withdraw()
-
+        
+    def on_settings_close(self):
+        self.master.destroy()
+    
     def exit_correlate_window(self):
         self.correlate_window.destroy()
         self.open_settings()
@@ -496,7 +504,7 @@ class Application(tk.Frame):
 
     def save_settings(self):
         # Here you will gather all the paths and write them to the settings.txt file
-        with open("folders_settings.txt", "w") as file:
+        with open("folders_paths.txt", "w") as file:
             file.write(f"{self.inventory_folder}\n{self.sold_folder}\n{self.to_sell_folder}")
 
     def search(self, event):
@@ -908,7 +916,7 @@ class Application(tk.Frame):
 
     def save_excel_settings(self, filepath, sheet_name):
         try:
-            with open('excel_db_settings.txt', 'w') as f:
+            with open('excel_and_sheet_path.txt', 'w') as f:
                 f.write(f"{filepath}\n{sheet_name}")
             self.update_excel_label()  # Update the label when settings are saved
         except Exception as e:
@@ -916,7 +924,7 @@ class Application(tk.Frame):
 
     def load_excel_settings(self):
         try:
-            with open('excel_db_settings.txt', 'r') as f:
+            with open('excel_and_sheet_path.txt', 'r') as f:
                 filepath, sheet_name = f.read().strip().split('\n', 1)
                 return filepath, sheet_name
         except FileNotFoundError:
