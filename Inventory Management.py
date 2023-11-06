@@ -15,6 +15,8 @@ from openpyxl import load_workbook
 
 
 
+
+
 class DatabaseManager: #DB practice(use txt to store folder paths when program finished for faster reads.)
 
     def __init__(self, db_name='inventory_management.db'):
@@ -50,7 +52,10 @@ class DatabaseManager: #DB practice(use txt to store folder paths when program f
     def delete_all_folders(self):
         self.cur.execute('DELETE FROM folder_paths')
         self.conn.commit()
-
+        
+    def commit_changes(self):
+        self.conn.commit()
+        
     def __del__(self):
         if hasattr(self, 'conn'):
             self.conn.close()
@@ -79,15 +84,15 @@ class ExcelManager:
     def save_product_info(self, product_id, product_data):
         if self.filepath:
             try:
-                print(f"Loading workbook from {self.filepath}")
+                #print(f"Loading workbook from {self.filepath}")
                 workbook = load_workbook(self.filepath)
-                print(f"Accessing sheet {self.sheet_name}")
+                #print(f"Accessing sheet {self.sheet_name}")
                 sheet = workbook[self.sheet_name]
 
                 # Start by finding the column index for product IDs
                 product_id_col_index = self.get_column_index_by_header(sheet, 'Product ID')
                 if not product_id_col_index:
-                    print("Product ID column not found")
+                    #print("Product ID column not found")
                     return
 
                 # Update product_data dictionary to convert boolean to YES/NO strings
@@ -98,7 +103,7 @@ class ExcelManager:
                 # Now iterate over the rows to find the matching product ID
                 for row in sheet.iter_rows(min_col=product_id_col_index, max_col=product_id_col_index):
                     cell = row[0]
-                    print(f"Checking cell {cell.coordinate} with value {cell.value}")
+                    #print(f"Checking cell {cell.coordinate} with value {cell.value}")
                     if cell.value and str(cell.value).strip().upper() == product_id.upper():
                         row_num = cell.row
                         for key, value in product_data.items():
@@ -109,8 +114,9 @@ class ExcelManager:
                         break
                 else:
                     print(f"Product ID {product_id} not found in the sheet.")
+                    
             except Exception as e:
-                print(f"Failed to save changes to Excel file: {e}")
+                #print(f"Failed to save changes to Excel file: {e}")
                 raise
 
 
@@ -176,7 +182,7 @@ class Application(tk.Frame):
             list_count = self.folder_list.size()  # Count items in the Listbox
 
             if folder_count != list_count:
-                self.display_folders(self.folder_to_scan)  # Update the list items with folder names
+                self.combine_and_display_folders()  # Update the list items with folder names
 
             # Schedule this method to be called again after 10000 milliseconds (10 seconds)
             self.after(10000, self.check_and_update_product_list)
@@ -296,8 +302,7 @@ class Application(tk.Frame):
         self.payment_type_combobox = ttk.Combobox(self.product_frame, textvariable=self.payment_type_var, state='disabled')
         self.payment_type_combobox['values'] = ('Cash', 'ATH Movil')
         self.payment_type_combobox.grid(row=6, column=8, sticky='w', padx=0, pady=0)
-        
-        
+
 
         # Column 12 Widgets
         self.product_frame.grid_columnconfigure(10, minsize=20)  # This creates a 20-pixel-wide empty column as spacer
@@ -331,7 +336,7 @@ class Application(tk.Frame):
                 self.sold_folder = lines[1]
                 self.products_to_sell_folder = lines[2] if len(lines) > 2 else None
                 if self.folder_to_scan:  # Check if folder_to_scan is defined
-                    self.display_folders(self.folder_to_scan)
+                    self.combine_and_display_folders()
         except FileNotFoundError:
             pass
 
@@ -440,36 +445,37 @@ class Application(tk.Frame):
             self.folder_to_scan = folder_to_scan
             self.folder_to_scan_label.config(text=folder_to_scan)  # Update the label directly
             self.save_settings()
-            self.display_folders(self.folder_to_scan)
+            self.combine_and_display_folders()
 
-    def display_folders(self, folder_to_scan):
-        self.folder_list.delete(0, END)
-        self.db_manager.cur.execute("DELETE FROM folder_paths")  # Use the cursor from db_manager
-        for root, dirs, files in os.walk(folder_to_scan):
-            if not dirs:
-                name = os.path.basename(root)
-                path = root
-                self.db_manager.cur.execute("INSERT OR REPLACE INTO folder_paths VALUES (?, ?)", (name, path))
-        self.db_manager.conn.commit()
-        for folder in sorted(self.get_folder_names_from_db()):
-            self.folder_list.insert(END, folder)
+
 
     def combine_and_display_folders(self):
         # Clear the folder list first
         self.folder_list.delete(0, tk.END)
-        
-        # Combine the folders from all three paths
-        combined_folders = []
-        for folder_path in [self.folder_to_scan, self.sold_folder, self.products_to_sell_folder]:
-            if folder_path and os.path.exists(folder_path):
-                combined_folders.extend(next(os.walk(folder_path))[1])  # Get the directory names
-        
-        # Deduplicate folder names
+
+        # Begin a transaction
+        self.db_manager.cur.execute("BEGIN")
+        try:
+            # Combine the folders from all three paths
+            combined_folders = []
+            for folder_path in [self.folder_to_scan, self.sold_folder, self.products_to_sell_folder]:
+                if folder_path and os.path.exists(folder_path):
+                    for root, dirs, files in os.walk(folder_path):
+                        for dir_name in dirs:
+                            combined_folders.append(dir_name)
+                            full_path = os.path.join(root, dir_name)
+                            # Update the database with the current folder paths
+                            self.db_manager.cur.execute("INSERT OR REPLACE INTO folder_paths (Folder, Path) VALUES (?, ?)", (dir_name, full_path))
+            self.db_manager.conn.commit()  # Commit the transaction if all is well
+        except Exception as e:
+            self.db_manager.conn.rollback()  # Rollback if there was an error
+            messagebox.showerror("Database Error", f"An error occurred while updating the folder paths: {e}")
+
+        # Deduplicate folder names and insert them into the list widget
         unique_folders = list(set(combined_folders))
-        
-        # Insert the unique folders into the list
         for folder in sorted(unique_folders):
             self.folder_list.insert(tk.END, folder)
+
 
 
     def choose_sold_folder(self):
@@ -514,7 +520,7 @@ class Application(tk.Frame):
                     if all(term.upper() in folder_name.upper() for term in search_terms):
                         self.folder_list.insert(END, folder_name)
         else:
-            self.display_folders(self.folder_to_scan)  # If the search box is empty, display all folders
+            self.combine_and_display_folders()  # If the search box is empty, display all folders
 
     def display_product_details(self, event):
         if self.edit_mode:
@@ -604,11 +610,21 @@ class Application(tk.Frame):
 
             except Exception as e:
                 messagebox.showerror("Error", f"An error occurred: {e}")
-                print(f"Error retrieving product details: {e}")
+                #print(f"Error retrieving product details: {e}")
         else:
             messagebox.showerror("Error", "Excel file path or sheet name is not set.")
+
         
+        # Unbind the Enter key from the save_button's command
+        self.master.unbind('<Return>')
+        
+        # Bind the Escape key to do nothing, which overrides the binding if in edit mode
+        self.master.bind('<Escape>', lambda e: None)
         # Any other code you want to execute when displaying product details, such as configuring widget states
+        
+        # Now bind the Enter key to the edit_button's command
+        self.edit_button.focus_set()  # Optional: set the focus on the edit button
+        self.master.bind('<Return>', lambda e: self.edit_button.invoke())
 
     def excel_value_to_bool(self, value):
         # Check for NaN explicitly and return False if found
@@ -664,7 +680,10 @@ class Application(tk.Frame):
     def toggle_edit_mode(self):
         # Toggle the edit mode
         self.edit_mode = not self.edit_mode
-        
+            # Set the state based on the new edit mode
+        state = 'normal' if self.edit_mode else 'disabled'
+        readonly_state = 'readonly' if self.edit_mode else 'disabled'  # Use 'readonly' when in edit mode, 'disabled' otherwise
+    
         # Set the state based on the new edit mode
         state = 'normal' if self.edit_mode else 'disabled'
         self.sold_checkbutton.config(state=state)
@@ -675,7 +694,7 @@ class Application(tk.Frame):
         self.pictures_downloaded_checkbutton.config(state=state)
         self.order_date_entry.config(state='disabled')
         self.to_sell_after_entry.config(state='disabled')
-        self.payment_type_combobox.config(state=state)
+        self.payment_type_combobox.config(state=readonly_state)
         self.asin_entry.config(state=state)
         self.product_id_entry.config(state='disabled')
         self.product_name_entry.config(state='disabled')
@@ -683,7 +702,21 @@ class Application(tk.Frame):
         self.order_link_entry.config(state=state)
         self.sold_price_entry.config(state=state)
         self.save_button.config(state=state)
+        if self.edit_mode:
 
+            self.save_button.focus_set()  # Optional: set the focus on the save button
+            # When in edit mode, bind the Enter key to the save_button's command
+            self.master.bind('<Return>', lambda e: self.save_button.invoke())
+            
+            # When in edit mode, bind the Escape key to the edit_button's command
+            self.master.bind('<Escape>', lambda e: self.edit_button.invoke())
+        else:
+            # When not in edit mode, unbind the Enter and Escape keys
+            self.master.unbind('<Return>')
+            self.master.unbind('<Escape>')
+            self.edit_button.focus_set()  # Optional: set the focus on the save button
+            # When in edit mode, bind the Enter key to the save_button's command
+            self.master.bind('<Return>', lambda e: self.edit_button.invoke())
 
     def save(self):
         product_id = self.product_id_var.get().strip().upper()
@@ -715,17 +748,99 @@ class Application(tk.Frame):
 
         # Use the ExcelManager method to save the data.
         try:
-            print(f"Attempting to save: {product_data}")  # Debug print
             self.excel_manager.save_product_info(product_id, product_data)
             messagebox.showinfo("Success", "Product information updated successfully.")
-            print(f"Save operation successful for Product ID: {product_id}")  # Confirm save
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save changes to Excel file: {e}")
-            print(f"Exception during save: {e}")  # Print any exception
+            return
+        
+        # Folder movement logic
+        current_folder_path = self.get_folder_path_from_db(product_id)
+        print(f"Current folder path: {current_folder_path}")
+
+        if not current_folder_path:
+            messagebox.showerror("Error", f"No current folder path found for Product ID {product_id}")
+            return
+        
+        target_folder_path = None
+
+        # Decide target folder based on the sold status and to sell after date
+        if self.sold_var.get():
+            target_folder_path = self.sold_folder
+        else:
+            to_sell_after_str = self.to_sell_after_var.get()
+            if to_sell_after_str:
+                try:
+                    to_sell_after_date = datetime.strptime(to_sell_after_str, "%m/%d/%Y").date()
+                    today = date.today()
+                    if to_sell_after_date <= today:
+                        target_folder_path = self.products_to_sell_folder
+                    else:
+                        target_folder_path = self.folder_to_scan
+                except ValueError as e:
+                    messagebox.showerror("Error", f"Invalid 'To Sell After' date format: {e}")
+                    return
+        # Use print statements to debug the current and target folder paths
+        print(f"Current folder path: {current_folder_path}")
+        print(f"Target folder path: {target_folder_path}")
+        # Check if the target folder is determined and it's not the same as the current folder
+        if target_folder_path and os.path.isdir(current_folder_path) and current_folder_path != target_folder_path:
+            try:
+                # Perform the move operation
+                new_folder_path = shutil.move(current_folder_path, target_folder_path)
+                
+                # Save the new folder path in the database
+                self.db_manager.save_folder_path(product_id, new_folder_path)
+                
+                # Refresh the product folder path attribute to the new path
+                self.product_folder_path = new_folder_path
+                
+                # Ensure that changes are committed to the database
+                self.db_manager.commit_changes()
+                
+                messagebox.showinfo("Folder Moved", f"Folder for '{product_id}' moved successfully to the new location.")
+                print(f"Folder for '{product_id}' moved from {current_folder_path} to {new_folder_path}")
+                self.refresh_and_select_product(product_id)
+
+
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to move the folder: {e}")
 
         self.toggle_edit_mode()
         self.focus_search_entry()
+        # Unbind the Enter and Escape keys
+        self.master.unbind('<Return>')
+        self.master.unbind('<Escape>')
+
+        # Optional: Reset focus to the product list or the edit button
+        self.edit_button.focus_set()
+    
+        # Additionally, you might want to re-bind the Enter key to the edit_button's command
+        # if you want to be able to press Enter to switch to edit mode again
+        self.master.bind('<Return>', lambda e: self.edit_button.invoke())
         
+    def refresh_and_select_product(self, product_id):
+        # Refresh the list of products
+        self.combine_and_display_folders()
+        
+        # Convert the product_id to uppercase for case-insensitive comparison
+        product_id_upper = product_id.upper()
+
+        # Find the index of the product that was just edited
+        product_index = None
+        for index, product_name in enumerate(self.folder_list.get(0, tk.END)):
+            # Use .split() to get the first part of the folder name and compare it in uppercase
+            if product_name.split()[0].upper() == product_id_upper:
+                product_index = index
+                break
+        
+        # If the product is found in the list, select it
+        if product_index is not None:
+            self.folder_list.selection_set(product_index)
+            self.folder_list.see(product_index)  # Ensure the product is visible in the list
+            self.folder_list.event_generate("<<ListboxSelect>>")  # Trigger the event to display product details
+        self.toggle_edit_mode()
+        self.focus_search_entry()
 
 
 
@@ -824,7 +939,7 @@ class Application(tk.Frame):
             return None, None
 
     def correlate_data(self):
-        #print("Correlate button pressed")
+        ##print("Correlate button pressed")
         
         filepath, sheet_name = self.load_excel_settings()
 
@@ -841,9 +956,9 @@ class Application(tk.Frame):
         try:
             # Load Excel data
             df = pd.read_excel(filepath, sheet_name=sheet_name)
-            #print("Excel data loaded successfully.")
+            ##print("Excel data loaded successfully.")
             product_ids = df['Product ID'].tolist()
-            #print(f"Product IDs from Excel: {product_ids}")
+            ##print(f"Product IDs from Excel: {product_ids}")
         except Exception as e:
             messagebox.showerror("Error", f"Unable to load Excel file: {str(e)}")
             return
@@ -854,21 +969,21 @@ class Application(tk.Frame):
 
         # Filter out nan values from the product_ids list
         product_ids = df_sorted['Product ID'].tolist()
-        #print(f"Sorted and Filtered Product IDs from Excel: {product_ids}")
+        ##print(f"Sorted and Filtered Product IDs from Excel: {product_ids}")
         
         missing_docs = []
         for product_id in product_ids:
             folder_path = self.get_folder_path_from_db(str(product_id))
-            #print(f"Checking folder for Product ID {product_id}: {folder_path}")
+            ##print(f"Checking folder for Product ID {product_id}: {folder_path}")
             if folder_path:
                 word_docs = [f for f in os.listdir(folder_path) if f.endswith('.docx')]
-                #print(f"Word documents in folder: {word_docs}")
+                ##print(f"Word documents in folder: {word_docs}")
                 if not word_docs:  # If there's no Word document
                     product_name = df.loc[df['Product ID'] == product_id, 'Product Name'].iloc[0]
                     missing_docs.append((os.path.basename(folder_path), product_id, product_name))
 
 
-        #print(f"Missing documents: {missing_docs}")
+        ##print(f"Missing documents: {missing_docs}")
         if missing_docs:
             self.prompt_correlation(missing_docs)
         else:
@@ -921,7 +1036,7 @@ class Application(tk.Frame):
         self.create_word_doc(doc_data, item_id)  # show_message is True by default
 
     def create_all_word_docs(self):
-        #print("Create all word docs function called")  # Debug #print statement
+        ##print("Create all word docs function called")  # Debug ##print statement
         for iid in self.correlate_tree.get_children():
             item_values = self.correlate_tree.item(iid, 'values')
             doc_data = (item_values[0], item_values[1], item_values[2])
@@ -931,7 +1046,7 @@ class Application(tk.Frame):
         self.open_settings()
 
     def create_word_doc(self, doc_data, iid, show_message=True):
-        #print("Create word doc function called")  # Debug #print statement
+        ##print("Create word doc function called")  # Debug ##print statement
         folder_name, product_id, product_name = doc_data
         folder_path = self.get_folder_path_from_db(str(product_id))
 
@@ -945,7 +1060,7 @@ class Application(tk.Frame):
                 else:
                     fair_market_value = "N/A"  # Default to "N/A" if the value is not found
             except Exception as e:
-                print(f"Error retrieving fair market value: {e}")  # Debugging print statement
+                #print(f"Error retrieving fair market value: {e}")  # Debugging #print statement
                 fair_market_value = "N/A"
 
             doc_path = os.path.join(folder_path, f"{product_id}.docx")
@@ -959,7 +1074,7 @@ class Application(tk.Frame):
                     messagebox.showinfo("Document Created", f"Word document for '{product_id}' has been created successfully.")
                 self.correlate_tree.delete(iid)
             except Exception as e:
-                #print(f"Error creating word doc: {e}")  # Debug #print statement
+                ##print(f"Error creating word doc: {e}")  # Debug ##print statement
                 messagebox.showerror("Error", f"Failed to create document for Product ID {product_id}: {e}")
         else:
             messagebox.showerror("Error", f"No folder found for Product ID {product_id}")
