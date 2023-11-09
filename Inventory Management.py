@@ -609,7 +609,6 @@ class Application(tk.Frame):
                     # For each field, check if the value is NaN using pd.isnull and set it to an empty string if it is
                     self.asin_var.set('' if pd.isnull(product_info.get('ASIN')) else product_info.get('ASIN', ''))
                     self.product_id_var.set('' if pd.isnull(product_info.get('Product ID')) else product_info.get('Product ID', ''))
-                    self.to_sell_after_var.set('' if pd.isnull(product_info.get('To Sell After')) else product_info.get('To Sell After', ''))
                     # ... handle the product image ...
                     self.product_name_var.set('' if pd.isnull(product_info.get('Product Name')) else product_info.get('Product Name', ''))
                     
@@ -619,20 +618,40 @@ class Application(tk.Frame):
                     if isinstance(order_date, datetime):
                         formatted_order_date = order_date.strftime('%m/%d/%Y')
                         self.order_date_var.set(formatted_order_date)
-                        self.update_to_sell_after()  # Call this function to set 'To Sell After' date
                     elif isinstance(order_date, str) and order_date:
                         try:
                             # If the date is in the format 'mm/dd/yy', such as '2/15/23'
                             order_date = datetime.strptime(order_date, "%m/%d/%Y")
                             formatted_order_date = order_date.strftime('%m/%d/%Y')
                             self.order_date_var.set(formatted_order_date)
-                            self.update_to_sell_after()  # Call this function to set 'To Sell After' date
                         except ValueError as e:
                             messagebox.showerror("Error", f"Incorrect date format: {e}")
                     else:
                         self.order_date_var.set('')
+                        
+                        
                     self.order_date_var.set(formatted_order_date)
                     
+                    # When a product is selected and the order date is fetched
+                    to_sell_after = product_info.get('To Sell After', '')
+                    formatted_to_sell_after = ''  # Default value
+                    if isinstance(to_sell_after, datetime):
+                        formatted_to_sell_after = to_sell_after.strftime('%m/%d/%Y')
+                        self.to_sell_after_var.set(formatted_to_sell_after)
+                    elif isinstance(to_sell_after, str) and to_sell_after:
+                        try:
+                            # If the date is in the format 'mm/dd/yy', such as '2/15/23'
+                            to_sell_after = datetime.strptime(to_sell_after, "%m/%d/%Y")
+                            formatted_to_sell_after = to_sell_after.strftime('%m/%d/%Y')
+                            self.to_sell_after_var.set(formatted_to_sell_after)
+                        except ValueError as e:
+                            messagebox.showerror("Error", f"Incorrect date format: {e}")
+                    else:
+                        self.to_sell_after_var.set('')
+                        
+                    self.to_sell_after_var.set(formatted_to_sell_after)
+                    self.update_to_sell_after_color()
+
                     self.fair_market_value_var.set('' if pd.isnull(product_info.get('Fair Market Value')) else product_info.get('Fair Market Value', ''))
                     self.order_link_text.delete(1.0, "end")
                     hyperlink = product_info.get('Order Link', '')
@@ -717,22 +736,6 @@ class Application(tk.Frame):
             return bool(value)
         return False
 
-    def update_to_sell_after(self, *args):
-        order_date_str = self.order_date_var.get()
-        if order_date_str:
-            try:
-                # If the date is in the format 'mm/dd/yy', such as '2/15/23'
-                if len(order_date_str.split('/')[-1]) == 2:  # If the year is two digits
-                    order_date = datetime.strptime(order_date_str, "%m/%d/%y")
-                else:  # If the year is four digits
-                    order_date = datetime.strptime(order_date_str, "%m/%d/%Y")
-
-                to_sell_after = order_date + relativedelta(months=6)
-                self.to_sell_after_var.set(to_sell_after.strftime("%m/%d/%Y"))
-                self.update_to_sell_after_color()
-            except ValueError as e:
-                messagebox.showerror("Error", f"Incorrect date format: {e}")
-
     def update_to_sell_after_color(self):
         # Get today's date
         today = date.today()
@@ -780,7 +783,7 @@ class Application(tk.Frame):
         self.product_id_entry.config(state='disabled')
         self.product_name_entry.config(state='disabled')
         self.fair_market_value_entry.config(state=state)
-        self.order_link_entry.config(state=state)
+        self.order_link_text.config(state=state)
         self.sold_price_entry.config(state=state)
         self.save_button.config(state=state)
         if self.edit_mode:
