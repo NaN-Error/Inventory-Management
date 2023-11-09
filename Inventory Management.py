@@ -16,6 +16,7 @@ from tkcalendar import DateEntry
 import subprocess
 import sys
 import openpyxl
+import webbrowser
 
 
 
@@ -265,8 +266,12 @@ class Application(tk.Frame):
         self.order_link_var = tk.StringVar()
         self.order_link_label = tk.Label(self.product_frame, text='Order Link')
         self.order_link_label.grid(row=6, column=0, sticky='w', padx=0, pady=0)
-        self.order_link_entry = tk.Entry(self.product_frame, textvariable=self.order_link_var, state='disabled')
-        self.order_link_entry.grid(row=7, column=0, sticky='w', padx=0, pady=0)
+        
+        # Replace the Entry with a Text widget for clickable links
+        self.order_link_text = tk.Text(self.product_frame, height=1, width=30, font="TkDefaultFont")
+        self.order_link_text.grid(row=7, column=0, sticky='w', padx=0, pady=0)
+        self.order_link_text.tag_configure("hyperlink", foreground="blue", underline=True)
+        self.order_link_text.bind("<Button-1>", self.open_hyperlink)
 
         self.asin_var = tk.StringVar()
         self.asin_label = tk.Label(self.product_frame, text='ASIN')
@@ -362,6 +367,18 @@ class Application(tk.Frame):
 
     def focus_search_entry(self):
         self.search_entry.focus_set()
+
+    def open_hyperlink(self, event):
+        try:
+            start_index = self.order_link_text.index("@%s,%s" % (event.x, event.y))
+            tag_indices = list(self.order_link_text.tag_ranges('hyperlink'))
+            for start, end in zip(tag_indices[0::2], tag_indices[1::2]):
+                if self.order_link_text.compare(start_index, ">=", start) and self.order_link_text.compare(start_index, "<=", end):
+                    url = self.order_link_text.get(start, end)
+                    webbrowser.open(url)
+                    return "break"
+        except Exception as e:
+            print(f"Error when opening hyperlink: {e}")
 
     def open_settings_window(self):
         if hasattr(self, 'settings_window') and self.settings_window.winfo_exists():
@@ -617,7 +634,11 @@ class Application(tk.Frame):
                     self.order_date_var.set(formatted_order_date)
                     
                     self.fair_market_value_var.set('' if pd.isnull(product_info.get('Fair Market Value')) else product_info.get('Fair Market Value', ''))
-                    self.order_link_var.set('' if pd.isnull(product_info.get('Order Link')) else product_info.get('Order Link', ''))
+                    self.order_link_text.delete(1.0, "end")
+                    hyperlink = product_info.get('Order Link', '')
+                    if hyperlink:
+                        self.order_link_text.insert("insert", hyperlink, "hyperlink")
+                        self.order_link_text.tag_add("hyperlink", "1.0", "end")
                     self.sold_price_var.set('' if pd.isnull(product_info.get('Sold Price')) else product_info.get('Sold Price', ''))
                     self.payment_type_var.set('' if pd.isnull(product_info.get('Payment Type')) else product_info.get('Payment Type', ''))
                     self.sold_date_var.set('' if pd.isnull(product_info.get('Sold Date')) else product_info.get('Sold Date', ''))
@@ -654,7 +675,7 @@ class Application(tk.Frame):
                     self.product_name_var.set('Product not found in Excel.')
                     self.order_date_var.set('')
                     self.fair_market_value_var.set('')
-                    self.order_link_var.set('')
+                    self.order_link_text.delete(1.0, "end")
                     self.sold_price_var.set('')
                     self.payment_type_var.set('')
                     self.sold_date_var.set('')
