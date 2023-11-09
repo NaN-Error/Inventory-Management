@@ -635,20 +635,15 @@ class Application(tk.Frame):
                     # When a product is selected and the order date is fetched
                     to_sell_after = product_info.get('To Sell After', '')
                     formatted_to_sell_after = ''  # Default value
-                    if isinstance(to_sell_after, datetime):
-                        formatted_to_sell_after = to_sell_after.strftime('%m/%d/%Y')
-                        self.to_sell_after_var.set(formatted_to_sell_after)
-                    elif isinstance(to_sell_after, str) and to_sell_after:
+                    if pd.notnull(to_sell_after):  # Check if 'To Sell After' is not null
                         try:
-                            # If the date is in the format 'mm/dd/yy', such as '2/15/23'
-                            to_sell_after = datetime.strptime(to_sell_after, "%m/%d/%Y")
-                            formatted_to_sell_after = to_sell_after.strftime('%m/%d/%Y')
-                            self.to_sell_after_var.set(formatted_to_sell_after)
+                            if isinstance(to_sell_after, datetime):
+                                formatted_to_sell_after = to_sell_after.strftime('%m/%d/%Y')
+                            elif isinstance(to_sell_after, str) and to_sell_after:
+                                to_sell_after = datetime.strptime(to_sell_after, "%m/%d/%Y")
+                                formatted_to_sell_after = to_sell_after.strftime('%m/%d/%Y')
                         except ValueError as e:
                             messagebox.showerror("Error", f"Incorrect date format: {e}")
-                    else:
-                        self.to_sell_after_var.set('')
-                        
                     self.to_sell_after_var.set(formatted_to_sell_after)
                     self.update_to_sell_after_color()
 
