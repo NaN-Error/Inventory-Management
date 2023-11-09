@@ -17,6 +17,7 @@ import subprocess
 import sys
 import openpyxl
 import webbrowser
+from pathlib import Path
 
 
 
@@ -441,13 +442,13 @@ class Application(tk.Frame):
         self.excel_db_label.grid(row=4, column=1, padx=(0, window_width//4), sticky='ew')
         
         # Add a new button for creating new word documents
-        self.create_word_files = tk.Button(self.settings_window, text="Create Word Files for Products", command=self.correlate_data)
-        self.create_word_files.grid(row=5, column=0, padx=(window_width//4, 0), sticky='w')
+        self.create_word_files_button = tk.Button(self.settings_window, text="Create Word Files for Products", command=self.correlate_data)
+        self.create_word_files_button.grid(row=5, column=0, padx=(window_width//4, 0), sticky='w')
         
         self.autofill_links_asin_tosellafter_data_button = tk.Button(self.settings_window, text="Autofill Excel Data(link, asin, tosellafter)", command=self.update_links_in_excel)
         self.autofill_links_asin_tosellafter_data_button.grid(row=6, column=0, padx=(window_width//4, 0), sticky='w')
         
-        self.update_foldersnames_folderpaths_button = tk.Button(self.settings_window, text="Update folder names and paths")
+        self.update_foldersnames_folderpaths_button = tk.Button(self.settings_window, text="Update folder names and paths", command=self.update_folder_names)
         self.update_foldersnames_folderpaths_button.grid(row=7, column=0, padx=(window_width//4, 0), sticky='w')
         
         self.products_to_sell_list_button = tk.Button(self.settings_window, text="Show list of products available to sell")
@@ -1194,6 +1195,91 @@ class Application(tk.Frame):
         except Exception as e:
             print(f"An error occurred while updating To Sell After dates: {e}")  # Debug print
             messagebox.showerror("Error", f"An error occurred while updating To Sell After dates: {e}")
+
+    def update_folder_names(self):
+        # Load folder paths from folders_paths.txt
+        with open("folders_paths.txt", "r") as file:
+            lines = file.read().splitlines()
+            self.inventory_folder = lines[0]
+            self.sold_folder = lines[1]
+            self.to_sell_folder = lines[2] if len(lines) > 2 else None
+        
+        # Load Excel path and sheet name from excel_and_sheet_path.txt
+        with open('excel_and_sheet_path.txt', 'r') as f:
+            excel_path, sheet_name = f.read().strip().split('\n', 1)
+        
+        # Load Excel data
+        df = pd.read_excel(excel_path, sheet_name)
+
+        print("Starting the folder renaming process...")
+
+        # Iterate over each folder in the inventory, sold, and to sell folders
+        for folder_path in [self.inventory_folder, self.sold_folder, self.to_sell_folder]:
+            if folder_path and os.path.exists(folder_path):
+                # Instead of comparing folder names directly, create a set for more efficient checks
+                current_folder_names = set(os.listdir(folder_path))
+
+                for item in os.listdir(folder_path):
+                    item_path = os.path.join(folder_path, item)
+                    if os.path.isdir(item_path):
+                        # Extract the presumed product_id from the folder name
+                        presumed_product_id = item.split(' ')[0]
+
+                        # Find the matching product_id in the DataFrame
+                        product_info = df[df['Product ID'].str.upper() == presumed_product_id.upper()]
+                        if not product_info.empty:
+                            # Extract the actual product_id and product_name
+                            product_id = product_info['Product ID'].iloc[0]
+                            product_name = product_info['Product Name'].iloc[0]
+                            
+                            # Generate the new folder name and sanitize it
+                            new_folder_name = self.replace_invalid_chars(f"{product_id} - {product_name}")
+                            new_full_path = self.shorten_path(product_id, product_name, folder_path)
+                            new_folder_name_from_path = os.path.basename(new_full_path)
+
+                            # Convert both names to a comparable format
+                            comparable_item = self.replace_invalid_chars(item).lower().strip()
+                            comparable_new_name = new_folder_name_from_path.lower().strip()
+
+                            # Check if the current folder name is already in the correct format
+                            if comparable_item == comparable_new_name:
+                                print((f"Folder '{item}' already contains the product name.").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
+                                continue
+
+                            # Check if the new full path length is within the limit
+                            if len(new_full_path) < 260:
+                                try:
+                                    os.rename(item_path, new_full_path)
+                                    print((f"Renamed '{item}' to '{new_folder_name}'").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
+                                except OSError as e:
+                                    print((f"Error renaming {item_path} to {new_full_path}: {e}").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
+                            else:
+                                print((f"Skipped renaming {item_path} due to path length restrictions.").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
+                        else:
+                            print((f"No matching product info found for folder: {item}").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
+
+    def replace_invalid_chars(self, filename):
+        # Windows filename invalid characters
+        invalid_chars = '<>:"/\\|?*'
+        for ch in invalid_chars:
+            if ch in filename:
+                filename = filename.replace(ch, "x")
+        return filename
+
+    def shorten_path(self, product_id, product_name, base_path):
+        # Windows MAX_PATH is 260 characters
+        MAX_PATH = 260
+        # Account for the path separator and a typical file extension length
+        max_name_length = MAX_PATH - len(base_path) - len(product_id) - len(" - ") - len(".ext")
+
+        # Truncate product name to fit
+        if len(product_name) > max_name_length:
+            product_name = product_name[:max_name_length]
+        
+        new_folder_name = f"{product_id} - {product_name}"
+        new_full_path = os.path.join(base_path, new_folder_name)
+
+        return new_full_path
 
     def prompt_correlation(self, missing_docs):
         self.correlate_window = Toplevel(self)
