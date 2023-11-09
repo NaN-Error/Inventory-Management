@@ -15,6 +15,10 @@ import re
 from tkcalendar import DateEntry
 import subprocess
 import sys
+import openpyxl
+
+
+
 
 # Prototyping (make it work, then make it pretty.)
 
@@ -132,6 +136,9 @@ class ExcelManager:
             if header_name in col:
                 return col.index(header_name) + 1
         return None
+    
+    
+    
 
 class Application(tk.Frame):
 
@@ -191,7 +198,7 @@ class Application(tk.Frame):
         self.top_frame = tk.Frame(self)
         self.top_frame.pack(fill='x')
 
-        self.settings_button = tk.Button(self.top_frame, text='Settings', command=self.open_settings)
+        self.settings_button = tk.Button(self.top_frame, text='Settings', command=self.open_settings_window)
         self.settings_button.pack(side='right')
 
         self.search_frame = tk.Frame(self)
@@ -356,7 +363,7 @@ class Application(tk.Frame):
     def focus_search_entry(self):
         self.search_entry.focus_set()
 
-    def open_settings(self):
+    def open_settings_window(self):
         if hasattr(self, 'settings_window') and self.settings_window.winfo_exists():
             self.settings_window.lift()
             return
@@ -416,9 +423,18 @@ class Application(tk.Frame):
         self.excel_db_label = tk.Label(self.excel_db_frame, text=excel_db_text)
         self.excel_db_label.grid(row=4, column=1, padx=(0, window_width//4), sticky='ew')
         
-        # Add a new button for "Correlate new data" functionality
+        # Add a new button for creating new word documents
         self.create_word_files = tk.Button(self.settings_window, text="Create Word Files for Products", command=self.correlate_data)
         self.create_word_files.grid(row=5, column=0, padx=(window_width//4, 0), sticky='w')
+        
+        self.autofill_links_asin_tosellafter_data_button = tk.Button(self.settings_window, text="Autofill Excel Data(link, asin, tosellafter)", command=self.update_links_in_excel)
+        self.autofill_links_asin_tosellafter_data_button.grid(row=6, column=0, padx=(window_width//4, 0), sticky='w')
+        
+        self.update_foldersnames_folderpaths_button = tk.Button(self.settings_window, text="Update folder names and paths")
+        self.update_foldersnames_folderpaths_button.grid(row=7, column=0, padx=(window_width//4, 0), sticky='w')
+        
+        self.products_to_sell_list_button = tk.Button(self.settings_window, text="Show list of products available to sell")
+        self.products_to_sell_list_button.grid(row=8, column=0, padx=(window_width//4, 0), sticky='w')
 
 
         self.back_button = tk.Button(self.settings_window, text="<- Back", command=self.back_to_main)
@@ -434,7 +450,7 @@ class Application(tk.Frame):
     
     def exit_correlate_window(self):
         self.correlate_window.destroy()
-        self.open_settings()
+        self.open_settings_window()
 
     def back_to_main(self):
         self.settings_window.destroy()
@@ -642,6 +658,8 @@ class Application(tk.Frame):
                     self.sold_price_var.set('')
                     self.payment_type_var.set('')
                     self.sold_date_var.set('')
+                    self.product_folder_var.set("No Folder")
+                    self.product_folder_link.config(state='disabled')
 
             except Exception as e:
                 messagebox.showerror("Error", f"An error occurred: {e}")
@@ -1030,6 +1048,134 @@ class Application(tk.Frame):
             messagebox.showinfo("Check complete", "No missing Word documents found.")
         # Filter out nan values from the product_ids list
 
+    def update_links_in_excel(self):
+        try:
+            with open('excel_and_sheet_path.txt', 'r') as file:
+                lines = file.readlines()
+                excel_path = lines[0].strip()
+                sheet_name = lines[1].strip()
+
+            workbook = openpyxl.load_workbook(excel_path)
+            sheet = workbook[sheet_name]
+
+            # Find the index of the columns
+            header_row = sheet[1]
+            product_name_col_index = None
+            order_link_col_index = None
+
+            for index, cell in enumerate(header_row):
+                if cell.value == 'Product Name':
+                    product_name_col_index = index + 1
+                elif cell.value == 'Order Link':
+                    order_link_col_index = index + 1
+
+            if product_name_col_index is None or order_link_col_index is None:
+                messagebox.showerror("Error", "Necessary columns not found.")
+                return
+
+            # Iterate through all the rows and update hyperlinks in 'Order Link' column
+            for row in sheet.iter_rows(min_row=2, max_row=sheet.max_row, max_col=product_name_col_index):
+                product_name_cell = row[product_name_col_index - 1]
+                order_link_cell = sheet.cell(row=product_name_cell.row, column=order_link_col_index)
+                # Copy only the hyperlink URL
+                if product_name_cell.hyperlink:
+                    order_link_cell.hyperlink = product_name_cell.hyperlink
+                    order_link_cell.value = product_name_cell.hyperlink.target  # Set the cell value to the hyperlink URL
+
+            workbook.save(excel_path)
+            messagebox.showinfo("Success", "Links have been updated in the Excel file.")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"An error occurred while updating links: {e}")
+        self.update_asin_in_excel()
+
+    def update_asin_in_excel(self):
+        try:
+            with open('excel_and_sheet_path.txt', 'r') as file:
+                lines = file.readlines()
+                excel_path = lines[0].strip()
+                sheet_name = lines[1].strip()
+
+            workbook = openpyxl.load_workbook(excel_path)
+            sheet = workbook[sheet_name]
+
+            # Find the index of the columns
+            header_row = sheet[1]
+            order_link_col_index = None
+            asin_col_index = None
+
+            for index, cell in enumerate(header_row):
+                if cell.value == 'Order Link':
+                    order_link_col_index = index + 1
+                elif cell.value == 'ASIN':
+                    asin_col_index = index + 1
+
+            if order_link_col_index is None or asin_col_index is None:
+                print("Order Link or ASIN columns not found.")  # Debug print
+                messagebox.showerror("Error", "Order Link or ASIN columns not found.")
+                return
+
+            # Iterate through all the rows and update ASIN based on 'Order Link'
+            for row in sheet.iter_rows(min_row=2, max_row=sheet.max_row, max_col=order_link_col_index):
+                order_link_cell = row[order_link_col_index - 1]
+                if order_link_cell.value and '/' in order_link_cell.value:
+                    asin_value = order_link_cell.value.split('/')[-1]
+                    asin_cell = sheet.cell(row=order_link_cell.row, column=asin_col_index)
+                    asin_cell.value = asin_value
+                    print(f"Updated ASIN for row {order_link_cell.row}: {asin_value}")  # Debug print
+
+            workbook.save(excel_path)
+            print("Excel file saved with updated ASINs.")  # Debug print
+            messagebox.showinfo("Success", "ASINs have been updated in the Excel file.")
+
+        except Exception as e:
+            print(f"An error occurred while updating ASINs: {e}")  # Debug print
+            messagebox.showerror("Error", f"An error occurred while updating ASINs: {e}")
+        self.update_to_sell_after_in_excel()
+
+    def update_to_sell_after_in_excel(self):
+        try:
+            with open('excel_and_sheet_path.txt', 'r') as file:
+                lines = file.readlines()
+                excel_path = lines[0].strip()
+                sheet_name = lines[1].strip()
+
+            workbook = openpyxl.load_workbook(excel_path)
+            sheet = workbook[sheet_name]
+
+            # Find the index of the columns
+            header_row = sheet[1]
+            order_date_col_index = None
+            to_sell_after_col_index = None
+
+            for index, cell in enumerate(header_row):
+                if cell.value == 'Order Date':
+                    order_date_col_index = index + 1
+                elif cell.value == 'To Sell After':
+                    to_sell_after_col_index = index + 1
+
+            if order_date_col_index is None or to_sell_after_col_index is None:
+                print("Order Date or To Sell After columns not found.")  # Debug print
+                messagebox.showerror("Error", "Order Date or To Sell After columns not found.")
+                return
+
+            # Iterate through all the rows and update 'To Sell After' based on 'Order Date'
+            for row in sheet.iter_rows(min_row=2, max_row=sheet.max_row, max_col=order_date_col_index):
+                order_date_cell = row[order_date_col_index - 1]
+                if order_date_cell.value and isinstance(order_date_cell.value, datetime):
+                    to_sell_after_date = order_date_cell.value + relativedelta(months=+6)
+                    to_sell_after_cell = sheet.cell(row=order_date_cell.row, column=to_sell_after_col_index)
+                    to_sell_after_cell.value = to_sell_after_date
+                    print(f"Updated To Sell After for row {order_date_cell.row}: {to_sell_after_date}")  # Debug print
+
+            workbook.save(excel_path)
+            print("Excel file saved with updated To Sell After dates.")  # Debug print
+            messagebox.showinfo("Success", "To Sell After dates have been updated in the Excel file.")
+
+        except Exception as e:
+            print(f"An error occurred while updating To Sell After dates: {e}")  # Debug print
+            messagebox.showerror("Error", f"An error occurred while updating To Sell After dates: {e}")
+
     def prompt_correlation(self, missing_docs):
         self.correlate_window = Toplevel(self)
         self.correlate_window.title("Correlate Data")
@@ -1083,7 +1229,7 @@ class Application(tk.Frame):
             self.create_word_doc(doc_data, iid, show_message=False)
         messagebox.showinfo("Success", "All Word documents have been created.")
         self.correlate_window.destroy()
-        self.open_settings()
+        self.open_settings_window()
 
     def create_word_doc(self, doc_data, iid, show_message=True):
         #print("Create word doc function called")  # Debug #print statement
@@ -1123,7 +1269,7 @@ class Application(tk.Frame):
         if not self.correlate_tree.get_children():
             # If the Treeview is empty, close the 'Correlate Data' window and open the 'Settings' window
             self.correlate_window.destroy()
-            self.open_settings()
+            self.open_settings_window()
 
     def backup_excel_database(self):
         print("Starting the backup process.")
@@ -1165,7 +1311,6 @@ class Application(tk.Frame):
         except Exception as e:
             print(f"Failed to create backup: {e}")
             raise  # Reraise the exception to see the full traceback
-
 
     def __del__(self):
         self.db_manager.conn.close()
