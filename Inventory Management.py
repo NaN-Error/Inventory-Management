@@ -91,39 +91,35 @@ class ExcelManager:
     def save_product_info(self, product_id, product_data):
         if self.filepath:
             try:
-                #print(f"Loading workbook from {self.filepath}")
                 workbook = load_workbook(self.filepath)
-                #print(f"Accessing sheet {self.sheet_name}")
                 sheet = workbook[self.sheet_name]
 
-                # Start by finding the column index for product IDs
+                # Find the row with the matching product ID
                 product_id_col_index = self.get_column_index_by_header(sheet, 'Product ID')
                 if not product_id_col_index:
-                    #print("Product ID column not found")
                     return
 
-                # Update product_data dictionary to convert boolean to YES/NO strings
-                for key, value in product_data.items():
-                    if isinstance(value, bool):
-                        product_data[key] = 'YES' if value else 'NO'
-
-                # Now iterate over the rows to find the matching product ID
+                row_num = None
                 for row in sheet.iter_rows(min_col=product_id_col_index, max_col=product_id_col_index):
                     cell = row[0]
-                    #print(f"Checking cell {cell.coordinate} with value {cell.value}")
                     if cell.value and str(cell.value).strip().upper() == product_id.upper():
                         row_num = cell.row
-                        for key, value in product_data.items():
-                            col_index = self.get_column_index_by_header(sheet, key)
-                            if col_index:
-                                sheet.cell(row=row_num, column=col_index, value=value)
-                        workbook.save(self.filepath)
                         break
-                else:
-                    #print(f"Product ID {product_id} not found in the sheet.")
-                    pass
+                
+                if not row_num:
+                    return  # Product ID not found
+
+                # Update the row with new data
+                for key, value in product_data.items():
+                    col_index = self.get_column_index_by_header(sheet, key)
+                    if col_index:
+                        # Format date fields
+                        if key in ['Order Date', 'Sold Date', 'To Sell After'] and isinstance(value, datetime):
+                            value = value.strftime('%m/%d/%Y')
+                        sheet.cell(row=row_num, column=col_index, value=value)
+
+                workbook.save(self.filepath)
             except Exception as e:
-                #print(f"Failed to save changes to Excel file: {e}")
                 raise
 
     @staticmethod
@@ -1217,7 +1213,6 @@ class Application(tk.Frame):
         for folder_path in [self.inventory_folder, self.sold_folder, self.to_sell_folder]:
             if folder_path and os.path.exists(folder_path):
                 # Instead of comparing folder names directly, create a set for more efficient checks
-                current_folder_names = set(os.listdir(folder_path))
 
                 for item in os.listdir(folder_path):
                     item_path = os.path.join(folder_path, item)
@@ -1280,6 +1275,8 @@ class Application(tk.Frame):
         new_full_path = os.path.join(base_path, new_folder_name)
 
         return new_full_path
+
+
 
     def prompt_correlation(self, missing_docs):
         self.correlate_window = Toplevel(self)
