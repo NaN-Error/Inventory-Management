@@ -22,6 +22,8 @@ from pathlib import Path
 
 
 
+
+
 # Prototyping (make it work, then make it pretty.)
 
 class DatabaseManager: #DB practice(use txt to store folder paths when program finished for faster reads.)
@@ -140,9 +142,7 @@ class ExcelManager:
             if header_name in col:
                 return col.index(header_name) + 1
         return None
-    
-    
-    
+
 
 class Application(tk.Frame):
 
@@ -450,7 +450,7 @@ class Application(tk.Frame):
         self.autofill_links_asin_tosellafter_data_button = tk.Button(self.settings_window, text="Autofill Excel Data(link, asin, tosellafter)", command=self.update_links_in_excel)
         self.autofill_links_asin_tosellafter_data_button.grid(row=6, column=0, padx=(window_width//4, 0), sticky='w')
         
-        self.update_foldersnames_folderpaths_button = tk.Button(self.settings_window, text="Update folder names and paths", command=self.update_folder_names)
+        self.update_foldersnames_folderpaths_button = tk.Button(self.settings_window, text="Update folder names and paths", command=self.update_folders_paths)
         self.update_foldersnames_folderpaths_button.grid(row=7, column=0, padx=(window_width//4, 0), sticky='w')
         
         self.products_to_sell_list_button = tk.Button(self.settings_window, text="Show list of products available to sell")
@@ -1264,7 +1264,9 @@ class Application(tk.Frame):
                                 print((f"Skipped renaming {item_path} due to path length restrictions.").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
                         else:
                             print((f"No matching product info found for folder: {item}").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
-
+        self.db_manager.delete_all_folders()
+        self.db_manager.setup_database()
+        
     def replace_invalid_chars(self, filename):
         # Windows filename invalid characters
         invalid_chars = '<>:"/\\|?*'
@@ -1276,19 +1278,100 @@ class Application(tk.Frame):
     def shorten_path(self, product_id, product_name, base_path):
         # Windows MAX_PATH is 260 characters
         MAX_PATH = 260
-        # Account for the path separator and a typical file extension length
-        max_name_length = MAX_PATH - len(base_path) - len(product_id) - len(" - ") - len(".ext")
+        # Initial maximum length for the product name
+        max_name_length = 60
 
-        # Truncate product name to fit
-        if len(product_name) > max_name_length:
-            product_name = product_name[:max_name_length]
-        
-        new_folder_name = f"{product_id} - {product_name}"
-        new_full_path = os.path.join(base_path, new_folder_name)
+        while max_name_length > 0:
+            # Truncate product name to fit
+            truncated_product_name = product_name[:max_name_length]
 
-        return new_full_path
+            new_folder_name = f"{product_id} - {truncated_product_name}"
+            new_full_path = os.path.join(base_path, new_folder_name)
 
+            # Check if the full path length is within the limit
+            if len(new_full_path) <= MAX_PATH:
+                return new_full_path
+            else:
+                # Decrement the maximum name length for the next iteration
+                max_name_length -= 1
 
+        # If the loop ends without finding a suitable length, return None or handle appropriately
+        print("Unable to shorten the product name sufficiently.")
+        return None
+
+    def update_folders_paths(self):
+        print("Updating folder paths based on Excel data...")
+
+        # Ensure the Excel file path and sheet name are set
+        filepath, sheet_name = self.load_excel_settings()
+        if not filepath or not sheet_name:
+            print("Excel file path or sheet name is not set.")
+            return
+
+        # Load the Excel data
+        self.excel_manager.filepath = filepath
+        self.excel_manager.sheet_name = sheet_name
+        self.excel_manager.load_data()
+
+        # Iterate through Inventory folders
+        if self.inventory_folder and os.path.exists(self.inventory_folder):
+            for root, dirs, _ in os.walk(self.inventory_folder):
+                for dir_name in dirs:
+                    product_id = dir_name.split(' ')[0]  # Assuming Product ID is the first part of the name
+                    product_info = self.excel_manager.get_product_info(product_id)
+
+                    if product_info:
+                        sold_status = product_info.get('Sold')
+                        to_sell_after = product_info.get('To Sell After')
+
+                        if sold_status and sold_status.upper() == 'YES':
+                            self.move_product_folder(root, dir_name, self.sold_folder)
+                        elif sold_status.upper() == 'NO' and self.is_date_today_or_before(to_sell_after):
+                            self.move_product_folder(root, dir_name, self.to_sell_folder)
+        else:
+            print(f"Inventory folder not found: {self.inventory_folder}")
+        self.db_manager.delete_all_folders()
+        self.db_manager.setup_database()
+        self.update_folder_names()
+
+    def move_product_folder(self, current_path, folder_name, target_folder):
+        if target_folder and os.path.exists(target_folder):
+            full_path = os.path.join(current_path, folder_name)
+
+            # Extracting the part of the folder name before the first '-' and keeping the hyphen
+            new_folder_name = folder_name.split('-', 1)[0].strip() + ' -'
+            new_full_path = os.path.join(target_folder, new_folder_name)
+
+            try:
+                # Check if a folder with the new name already exists in the target directory
+                if os.path.exists(new_full_path):
+                    print(f"Folder with name '{new_folder_name}' already exists in the target directory.")
+                    return
+
+                # Rename and move the folder
+                os.rename(full_path, new_full_path)
+                print(f"Moved and renamed folder '{folder_name}' to '{new_folder_name}' in '{target_folder}'")
+            except Exception as e:
+                print(f"Error moving folder '{folder_name}': {e}")
+        else:
+            print(f"Target folder not found: {target_folder}")
+
+    def is_date_today_or_before(self, date_str):
+        if pd.isnull(date_str):
+            return False
+
+        # If date_str is a Timestamp, convert it to a datetime object
+        if isinstance(date_str, pd.Timestamp):
+            to_sell_date = date_str.to_pydatetime().date()
+        else:
+            try:
+                # Assuming date_str is a string in the format "%m/%d/%Y"
+                to_sell_date = datetime.strptime(date_str, "%m/%d/%Y").date()
+            except ValueError:
+                print(f"Invalid date format: {date_str}")
+                return False
+
+        return to_sell_date <= datetime.today().date()
 
     def prompt_correlation(self, missing_docs):
         self.correlate_window = Toplevel(self)
