@@ -110,12 +110,14 @@ class ExcelManager:
                 # Now iterate over the rows to find the matching product ID
                 for row in sheet.iter_rows(min_col=product_id_col_index, max_col=product_id_col_index):
                     cell = row[0]
-                    #print(f"Checking cell {cell.coordinate} with value {cell.value}")
                     if cell.value and str(cell.value).strip().upper() == product_id.upper():
                         row_num = cell.row
                         for key, value in product_data.items():
                             col_index = self.get_column_index_by_header(sheet, key)
                             if col_index:
+                                # Special handling for 'To Sell After' date
+                                if key == 'To Sell After' and isinstance(value, datetime):
+                                    value = value.strftime('%m/%d/%Y')  # Format the date
                                 sheet.cell(row=row_num, column=col_index, value=value)
                         workbook.save(self.filepath)
                         break
