@@ -813,6 +813,10 @@ class Application(tk.Frame):
         # Check if 'Sold Date' is not empty, and if so, set 'Sold' to True.
         if self.sold_date_var.get() != "":
             self.sold_var.set(True)
+        else:
+            self.sold_var.set(False)
+
+        
             
         # Collect the data from the form.
         product_data = {
