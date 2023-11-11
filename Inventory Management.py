@@ -12,12 +12,13 @@ from tkinter import END
 from tkinter import Toplevel
 from openpyxl import load_workbook
 import re
-from tkcalendar import DateEntry
 import subprocess
 import sys
 import openpyxl
 import webbrowser
 from pathlib import Path
+from tkcalendar import Calendar
+import tkinter.font as tkFont
 
 
 
@@ -307,9 +308,13 @@ class Application(tk.Frame):
         self.sold_date_var = tk.StringVar()
         self.sold_date_label = tk.Label(self.product_frame, text='Sold Date')
         self.sold_date_label.grid(row=1, column=8, sticky='w', padx=0, pady=0)
-        self.sold_date_entry = DateEntry(self.product_frame, textvariable=self.sold_date_var, state='disabled', date_pattern='mm/dd/y')
+        
+        self.sold_date_entry = tk.Entry(self.product_frame, textvariable=self.sold_date_var, state='disabled')
         self.sold_date_entry.grid(row=2, column=8, sticky='w', padx=0, pady=0)
 
+        small_font = tkFont.Font(size=5)  # You can adjust the size as needed
+        self.sold_date_button = tk.Button(self.product_frame, text="Pick \nDate", command=self.pick_date, state='disabled', font=small_font)
+        self.sold_date_button.grid(row=2, column=8, sticky='e', padx=0, pady=0)
 
         self.fair_market_value_var = tk.StringVar()
         self.fair_market_value_label = tk.Label(self.product_frame, text='Fair Market Value')
@@ -328,7 +333,7 @@ class Application(tk.Frame):
         self.payment_type_label.grid(row=7, column=8, sticky='w', padx=0, pady=0)
         
         self.payment_type_combobox = ttk.Combobox(self.product_frame, textvariable=self.payment_type_var, state='disabled')
-        self.payment_type_combobox['values'] = ('Cash', 'ATH Movil')
+        self.payment_type_combobox['values'] = ('', 'Cash', 'ATH Movil')
         self.payment_type_combobox.grid(row=8, column=8, sticky='w', padx=0, pady=0)
         
         # Column 12 Widgets
@@ -353,8 +358,6 @@ class Application(tk.Frame):
         self.pictures_downloaded_checkbutton = tk.Checkbutton(self.product_frame, text='Pictures Downloaded', variable=self.pictures_downloaded_var, state='disabled')
         self.pictures_downloaded_checkbutton.grid(row=5, column=12, sticky='w', padx=0, pady=0)
 
-
-        
         # Load settings
         try:
             with open("folders_paths.txt", "r") as file:
@@ -367,6 +370,22 @@ class Application(tk.Frame):
         except FileNotFoundError:
             pass
         self.search_entry.focus_set()
+
+    def pick_date(self):
+        def grab_date():
+            self.sold_date_entry.delete(0, tk.END)  # Clear the entry field
+            self.sold_date_entry.insert(0, cal.get_date())  # Insert the selected date
+            top.destroy()  # Close the Toplevel window
+        def select_today_and_close(event):
+            cal.selection_set(datetime.today())  # Set selection to today's date
+            grab_date()  # Then grab the date and close
+        top = tk.Toplevel(self)
+        today = datetime.today()
+        cal = Calendar(top, selectmode='day', year=today.year, month=today.month, day=today.day)
+        cal.pack(pady=20)    # Set focus to the Toplevel window and bind the Enter key
+        top.focus_set()
+        top.bind('<Return>', select_today_and_close)
+        cal.bind("<<CalendarSelected>>", lambda event: grab_date())
 
     def focus_search_entry(self):
         self.search_entry.focus_set()
@@ -576,17 +595,16 @@ class Application(tk.Frame):
             self.combine_and_display_folders()  # If the search box is empty, display all folders
 
     def display_product_details(self, event):
-        
-        if self.edit_mode:
-            self.toggle_edit_mode()
-        # Get the index of the selected item
+
         selection = self.folder_list.curselection()
+        # Get the index of the selected item
         if not selection:
             return  # No item selected
         index = selection[0]
         selected_folder_name = self.folder_list.get(index)
         selected_product_id = selected_folder_name.split(' ')[0].upper()  # Assuming the product ID is at the beginning
-
+        if self.edit_mode:
+            self.toggle_edit_mode()
         # Ensure that the Excel file path and sheet name are set
         filepath, sheet_name = self.load_excel_settings()
         if filepath and sheet_name:
@@ -760,6 +778,7 @@ class Application(tk.Frame):
 
     def toggle_edit_mode(self):
         # Toggle the edit mode
+        print("toggling edit mode")
         self.edit_mode = not self.edit_mode
             # Set the state based on the new edit mode
         state = 'normal' if self.edit_mode else 'disabled'
@@ -767,7 +786,7 @@ class Application(tk.Frame):
     
         # Set the state based on the new edit mode
         state = 'normal' if self.edit_mode else 'disabled'
-        self.sold_checkbutton.config(state=state)
+        self.sold_checkbutton.config(state='disabled')
         self.cancelled_order_checkbutton.config(state=state)
         self.damaged_checkbutton.config(state=state)
         self.personal_checkbutton.config(state=state)
@@ -775,6 +794,7 @@ class Application(tk.Frame):
         self.pictures_downloaded_checkbutton.config(state=state)
         self.order_date_entry.config(state='disabled')
         self.sold_date_entry.config(state=state)
+        self.sold_date_button.config(state=state)
         self.to_sell_after_entry.config(state='disabled')
         self.payment_type_combobox.config(state=readonly_state)
         self.asin_entry.config(state=state)
@@ -801,6 +821,13 @@ class Application(tk.Frame):
             self.master.bind('<Return>', lambda e: self.edit_button.invoke())
 
     def save(self):
+        # Update the 'Sold' checkbox based on the 'Sold Date' entry
+        if self.sold_date_var.get():
+            # If 'Sold Date' is not empty, check 'Sold'
+            self.sold_var.set(True)
+        else:
+            # If 'Sold Date' is empty, uncheck 'Sold'
+            self.sold_var.set(False)
         product_id = self.product_id_var.get().strip().upper()
 
         # Ensure that the Excel file path and sheet name are set.
@@ -810,13 +837,8 @@ class Application(tk.Frame):
             messagebox.showerror("Error", "Excel file path or sheet name is not set.")
             return
         
-        # Check if 'Sold Date' is not empty, and if so, set 'Sold' to True.
-        if self.sold_date_var.get() != "":
-            self.sold_var.set(True)
-        else:
-            self.sold_var.set(False)
 
-        
+
             
         # Collect the data from the form.
         product_data = {
@@ -896,6 +918,9 @@ class Application(tk.Frame):
 
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to move the folder: {e}")
+                
+        doc_data = (product_id, product_id, self.product_name_var.get())  # Construct the doc_data tuple
+        self.create_word_doc(doc_data, iid="dummy", show_message=True)  # Call create_word_doc with dummy iid
 
         self.toggle_edit_mode()
         self.focus_search_entry()
@@ -932,6 +957,8 @@ class Application(tk.Frame):
             self.folder_list.event_generate("<<ListboxSelect>>")  # Trigger the event to display product details
         self.toggle_edit_mode()
         self.focus_search_entry()
+
+
 
     def get_folder_names_from_db(self):
         self.db_manager.cur.execute("SELECT Folder FROM folder_paths")
@@ -1266,6 +1293,7 @@ class Application(tk.Frame):
                             print((f"No matching product info found for folder: {item}").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
         self.db_manager.delete_all_folders()
         self.db_manager.setup_database()
+        messagebox.showinfo("Done", "Moved and renamed folders")
         
     def replace_invalid_chars(self, filename):
         # Windows filename invalid characters
@@ -1455,18 +1483,16 @@ class Application(tk.Frame):
                 doc.save(doc_path)
                 if show_message:
                     messagebox.showinfo("Document Created", f"Word document for '{product_id}' has been created successfully.")
-                self.correlate_tree.delete(iid)
+                # Check if the correlate_tree attribute exists and if there are any items left
+                if hasattr(self, 'correlate_tree') and not self.correlate_tree.get_children():
+                    self.correlate_window.destroy()
+                    self.open_settings_window()
             except Exception as e:
                 #print(f"Error creating word doc: {e}")  # Debug #print statement
                 messagebox.showerror("Error", f"Failed to create document for Product ID {product_id}: {e}")
         else:
             messagebox.showerror("Error", f"No folder found for Product ID {product_id}")
-        
-        # After creating the document, check if there are any items left
-        if not self.correlate_tree.get_children():
-            # If the Treeview is empty, close the 'Correlate Data' window and open the 'Settings' window
-            self.correlate_window.destroy()
-            self.open_settings_window()
+
 
     def backup_excel_database(self):
         print("Starting the backup process.")
@@ -1534,7 +1560,7 @@ def main():
     root.title("Improved Inventory Manager")
     app = Application(master=root)
     root.state('zoomed')
-    
+    messagebox.showinfo("Reminder", "Remember to always update excel data and folder names and paths at the beginning of the program")#temporary reminder until incorporated on program run
     app.excel_manager.filepath, _ = app.load_excel_settings()
 
     # Use a lambda to pass 'app' and 'root' to the 'on_close' function
