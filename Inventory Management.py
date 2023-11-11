@@ -1,3 +1,36 @@
+"""
+Inventory Management System
+
+This program provides a comprehensive solution for managing product information, 
+including interfacing with Excel files, managing folders, and handling database operations. 
+It features a graphical user interface (GUI) built with tkinter, offering user-friendly interaction 
+with the system. The main functionalities include reading and writing Excel data, automatic folder 
+renaming and moving, database management, and generating Word documents for product details.
+
+Classes:
+    DatabaseManager: Manages SQLite database operations, handling folder paths.
+    ExcelManager: Handles reading and writing operations to Excel files.
+    Application(tk.Frame): Main application class with GUI components and business logic.
+
+Key Functionalities:
+    - Creates a user-friendly GUI for interaction.
+    - Reads and writes data to Excel files, managing product information.
+    - Automatically renames folders to include product names.
+    - Moves folders based on product status (e.g., to a 'To Sell' folder).
+    - Allows viewing and editing of detailed product information.
+    - Automatically updates Excel fields, like product links or selling dates.
+    - Creates backups of Excel files to prevent data loss.
+    - Generates Word documents with product details.
+    - Correlates missing data in the Excel database.
+    - Offers customizable settings for folder and file paths.
+    - Provides features to sort, filter, and periodically refresh data.
+    - Incorporates error handling to enhance reliability and user experience.
+
+Usage:
+    The system can be used in commercial or personal settings where product management is essential. 
+    It simplifies data handling, folder organization, and document management related to inventory tracking.
+"""
+
 import os
 import shutil
 import tkinter as tk
@@ -22,9 +55,6 @@ import tkinter.font as tkFont
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.styles import Alignment
-
-
-
 
 
 
