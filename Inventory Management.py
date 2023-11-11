@@ -692,8 +692,6 @@ class Application(tk.Frame):
             self.combine_and_display_folders()  # If the search box is empty, display all folders
 
     def display_product_details(self, event):
-        self.edit_button.config(state="normal")
-        self.order_link_text.config(state='normal')
         selection = self.folder_list.curselection()
         # Get the index of the selected item
         if not selection:
@@ -718,6 +716,8 @@ class Application(tk.Frame):
 
                 if product_info:
 
+                    self.edit_button.config(state="normal")
+                    self.order_link_text.config(state='normal')
                     self.cancelled_order_var.set(self.excel_value_to_bool(product_info.get('Cancelled Order')))
                     self.damaged_var.set(self.excel_value_to_bool(product_info.get('Damaged')))
                     self.personal_var.set(self.excel_value_to_bool(product_info.get('Personal')))
