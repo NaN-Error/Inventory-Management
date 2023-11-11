@@ -373,8 +373,10 @@ class Application(tk.Frame):
 
     def pick_date(self):
         def grab_date():
+            selected_date = cal.selection_get()  # Get the selected date
+            formatted_date = selected_date.strftime('%m/%d/%Y')  # Format the date
             self.sold_date_entry.delete(0, tk.END)  # Clear the entry field
-            self.sold_date_entry.insert(0, cal.get_date())  # Insert the selected date
+            self.sold_date_entry.insert(0, formatted_date)  # Insert the formatted date
             top.destroy()  # Close the Toplevel window
         def select_today_and_close(event):
             cal.selection_set(datetime.today())  # Set selection to today's date
@@ -649,8 +651,6 @@ class Application(tk.Frame):
                             messagebox.showerror("Error", f"Incorrect date format: {e}")
                     else:
                         self.order_date_var.set('')
-                        
-                        
                     self.order_date_var.set(formatted_order_date)
                     
                     # When a product is selected and the order date is fetched
@@ -667,6 +667,24 @@ class Application(tk.Frame):
                             messagebox.showerror("Error", f"Incorrect date format: {e}")
                     self.to_sell_after_var.set(formatted_to_sell_after)
                     self.update_to_sell_after_color()
+                    
+                    sold_date = product_info.get('Sold Date', '')
+                    formatted_sold_date = ''  # Default value
+
+                    if pd.notnull(sold_date):  # Check if 'Sold Date' is not null
+                        try:
+                            if isinstance(sold_date, datetime):
+                                formatted_sold_date = sold_date.strftime('%m/%d/%Y')
+                            elif isinstance(sold_date, str) and sold_date:
+                                # Parse the date string to a date object and format it
+                                sold_date = datetime.strptime(sold_date, "%m/%d/%Y").date()
+                                formatted_sold_date = sold_date.strftime('%m/%d/%Y')
+                        except ValueError as e:
+                            messagebox.showerror("Error", f"Incorrect date format: {e}")
+                    else:
+                        formatted_sold_date = ''
+
+                    self.sold_date_var.set(formatted_sold_date)
 
                     self.fair_market_value_var.set('' if pd.isnull(product_info.get('Fair Market Value')) else product_info.get('Fair Market Value', ''))
                     self.order_link_text.delete(1.0, "end")
@@ -676,7 +694,6 @@ class Application(tk.Frame):
                         self.order_link_text.tag_add("hyperlink", "1.0", "end")
                     self.sold_price_var.set('' if pd.isnull(product_info.get('Sold Price')) else product_info.get('Sold Price', ''))
                     self.payment_type_var.set('' if pd.isnull(product_info.get('Payment Type')) else product_info.get('Payment Type', ''))
-                    self.sold_date_var.set('' if pd.isnull(product_info.get('Sold Date')) else product_info.get('Sold Date', ''))
                     # ... continue with other fields as needed ...
                     # Add code here to populate the Sold Date and other date-related fields, if applicable
                     
