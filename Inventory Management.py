@@ -780,29 +780,32 @@ class Application(tk.Frame):
                 # Parse the date string to a date object
                 to_sell_after_date = datetime.strptime(to_sell_after_str, "%m/%d/%Y").date()
 
-                # If the to_sell_after date is today or has passed, change the entry's background color to green
+                # If the to_sell_after date is today or has passed, change the label's background color to green
                 if to_sell_after_date <= today:
-                    self.to_sell_after_entry.config({'readonlybackground': 'green'})
-                    self.to_sell_after_entry.config(state='readonly')
+                    self.to_sell_after_label.config(background='green')
                 else:
-                    self.to_sell_after_entry.config({'readonlybackground': 'white'})
-                    self.to_sell_after_entry.config(state='readonly')
+                    self.to_sell_after_label.config(background='white')
             except ValueError:
                 # If there's a ValueError, it means the string was not in the expected format
                 # Handle incorrect date format or clear the background
-                self.to_sell_after_entry.config({'readonlybackground': 'white'})
-                self.to_sell_after_entry.config(state='readonly')
+                self.to_sell_after_label.config(background='white')
 
     def toggle_edit_mode(self):
         # Toggle the edit mode
         print("toggling edit mode")
+        
+        # Toggle the edit mode state. Switch self.edit_mode to True if it's currently False, and vice versa. 
+        # This line essentially switches between edit and view modes for the application.
         self.edit_mode = not self.edit_mode
-            # Set the state based on the new edit mode
-        state = 'normal' if self.edit_mode else 'disabled'
+        # Set the state variable depending on self.edit_mode. 
+        # When in edit mode (self.edit_mode is True), state is set to 'normal', enabling interaction and editing of widgets. 
+        # When not in edit mode (self.edit_mode is False), state is set to 'disabled', making widgets non-interactive and uneditable.
+        state = 'normal' if self.edit_mode else 'disabled' 
+        # Set the readonly_state variable based on self.edit_mode. 
+        # Use 'readonly' for specific widgets when in edit mode to allow viewing but restrict modification. 
+        # Set to 'disabled' when not in edit mode to make these widgets non-interactive.
         readonly_state = 'readonly' if self.edit_mode else 'disabled'  # Use 'readonly' when in edit mode, 'disabled' otherwise
-    
-        # Set the state based on the new edit mode
-        state = 'normal' if self.edit_mode else 'disabled'
+        
         self.sold_checkbutton.config(state='disabled')
         self.cancelled_order_checkbutton.config(state=state)
         self.damaged_checkbutton.config(state=state)
