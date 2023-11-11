@@ -157,11 +157,17 @@ class Application(tk.Frame):
         self.to_sell_folder = None
         self.pack(fill='both', expand=True)
         
+        
         # Make sure you call this before combining and displaying folders
         self.Main_Window_Widgets() 
         
         # Now it's safe to load settings and combine folders since the list widget is created
         self.load_settings()
+        
+        # Call the methods associated with the settings buttons
+        self.update_links_in_excel()  # This corresponds to 'Autofill Excel Data(link, asin, tosellafter)'
+        self.update_folders_paths()   # This corresponds to 'Update folder names and paths'
+        
         self.combine_and_display_folders()
 
     def load_settings(self):
@@ -1575,8 +1581,8 @@ def main():
     root.title("Improved Inventory Manager")
     app = Application(master=root)
     root.state('zoomed')
-    messagebox.showinfo("Reminder", "Remember to always update excel data and folder names and paths at the beginning of the program")#temporary reminder until incorporated on program run
     app.excel_manager.filepath, _ = app.load_excel_settings()
+
 
     # Use a lambda to pass 'app' and 'root' to the 'on_close' function
     root.protocol("WM_DELETE_WINDOW", lambda: on_close(app, root))
