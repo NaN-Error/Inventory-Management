@@ -582,9 +582,6 @@ class Application(tk.Frame):
         else:  # Linux variants
             subprocess.run(["xdg-open", copy_path])
 
-
-
-    
     def exit_correlate_window(self):
         self.correlate_window.destroy()
         self.open_settings_window()
@@ -1068,8 +1065,6 @@ class Application(tk.Frame):
             self.folder_list.event_generate("<<ListboxSelect>>")  # Trigger the event to display product details
         self.toggle_edit_mode()
         self.focus_search_entry()
-
-
 
     def get_folder_names_from_db(self):
         self.db_manager.cur.execute("SELECT Folder FROM folder_paths")
@@ -1581,16 +1576,23 @@ class Application(tk.Frame):
                     fair_market_value = fair_market_value_series.iloc[0]
                 else:
                     fair_market_value = "N/A"  # Default to "N/A" if the value is not found
+                    
+                # Retrieving the product link
+                order_link_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Order Link']
+                if not order_link_series.empty:
+                    order_link = order_link_series.iloc[0]
+                else:
+                    order_link = "N/A"  # Default to "N/A" if the link is not found
             except Exception as e:
-                #print(f"Error retrieving fair market value: {e}")  # Debugging #print statement
-                fair_market_value = "N/A"
+                print(f"Error retrieving data: {e}")  # Debugging #print statement
 
             doc_path = os.path.join(folder_path, f"{product_id}.docx")
             try:
                 doc = Document()
                 doc.add_paragraph(f"Product ID: {product_id}")
                 doc.add_paragraph(f"Product Name: {product_name}")
-                doc.add_paragraph(f"Fair Market Value: {fair_market_value}")
+                doc.add_paragraph(f"Fair Market Value: ${fair_market_value}")
+                doc.add_paragraph(f"Product Link(to get the product description, if needed): {order_link}")
                 doc.save(doc_path)
                 if show_message:
                     messagebox.showinfo("Document Created", f"Word document for '{product_id}' has been created successfully.")
@@ -1603,7 +1605,6 @@ class Application(tk.Frame):
                 messagebox.showerror("Error", f"Failed to create document for Product ID {product_id}: {e}")
         else:
             messagebox.showerror("Error", f"No folder found for Product ID {product_id}")
-
 
     def backup_excel_database(self):
         print("Starting the backup process.")
