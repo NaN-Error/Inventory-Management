@@ -821,7 +821,6 @@ class Application(tk.Frame):
         self.product_id_entry.config(state='disabled')
         self.product_name_entry.config(state='disabled')
         self.fair_market_value_entry.config(state=state)
-        self.order_link_text.config(state=state)
         self.sold_price_entry.config(state=state)
         self.save_button.config(state=state)
         if self.edit_mode:
@@ -856,9 +855,6 @@ class Application(tk.Frame):
         if not filepath or not sheet_name:
             messagebox.showerror("Error", "Excel file path or sheet name is not set.")
             return
-        
-
-
             
         # Collect the data from the form.
         product_data = {
@@ -868,11 +864,9 @@ class Application(tk.Frame):
             'Reviewed': self.reviewed_var.get(),
             'Pictures Downloaded': self.pictures_downloaded_var.get(),
             'Sold': self.sold_var.get(),
-            'ASIN': self.asin_var.get(),
             'To Sell After': self.to_sell_after_var.get(),
             'Product Name': self.product_name_var.get(),
             'Fair Market Value': self.fair_market_value_var.get(),
-            'Order Link': self.order_link_var.get(),
             'Sold Price': self.sold_price_var.get(),
             'Payment Type': self.payment_type_var.get(),
             'Sold Date': self.sold_date_var.get(),
@@ -938,6 +932,7 @@ class Application(tk.Frame):
 
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to move the folder: {e}")
+                self.refresh_and_select_product(product_id)
                 
         doc_data = (product_id, product_id, self.product_name_var.get())  # Construct the doc_data tuple
         self.create_word_doc(doc_data, iid="dummy", show_message=True)  # Call create_word_doc with dummy iid
