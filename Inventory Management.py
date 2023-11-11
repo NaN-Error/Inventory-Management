@@ -252,7 +252,7 @@ class Application(tk.Frame):
         self.save_button = tk.Button(self.product_frame, text='Save', command=self.save, state='disabled')
         self.save_button.grid(row=0, column=20, sticky='w', padx=200, pady=0)
 
-        self.edit_button = tk.Button(self.product_frame, text="Edit", command=self.toggle_edit_mode)
+        self.edit_button = tk.Button(self.product_frame, text="Edit", command=self.toggle_edit_mode, state='disabled')
         self.edit_button.grid(row=0, column=20, sticky='w', padx=235, pady=0)
         
         
@@ -284,6 +284,8 @@ class Application(tk.Frame):
         self.order_link_text.grid(row=7, column=0, sticky='w', padx=0, pady=0)
         self.order_link_text.tag_configure("hyperlink", foreground="blue", underline=True)
         self.order_link_text.bind("<Button-1>", self.open_hyperlink)
+        self.order_link_text.config(state='disabled')
+
 
         self.asin_var = tk.StringVar()
         self.asin_label = tk.Label(self.product_frame, text='ASIN')
@@ -690,7 +692,8 @@ class Application(tk.Frame):
             self.combine_and_display_folders()  # If the search box is empty, display all folders
 
     def display_product_details(self, event):
-
+        self.edit_button.config(state="normal")
+        self.order_link_text.config(state='normal')
         selection = self.folder_list.curselection()
         # Get the index of the selected item
         if not selection:
@@ -805,6 +808,7 @@ class Application(tk.Frame):
                         self.product_folder_link.config(state='disabled')
                     
                 else:
+                    self.edit_button.config(state='disabled')
                     self.cancelled_order_var.set(False)
                     self.damaged_var.set(False)
                     self.personal_var.set(False)
@@ -826,6 +830,7 @@ class Application(tk.Frame):
                     self.sold_date_var.set('')
                     self.product_folder_var.set("No Folder")
                     self.product_folder_link.config(state='disabled')
+                    self.order_link_text.config(state='disabled')
 
             except Exception as e:
                 messagebox.showerror("Error", f"An error occurred: {e}")
