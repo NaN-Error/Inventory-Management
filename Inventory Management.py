@@ -19,6 +19,9 @@ import webbrowser
 from pathlib import Path
 from tkcalendar import Calendar
 import tkinter.font as tkFont
+from openpyxl.utils.dataframe import dataframe_to_rows
+from openpyxl.worksheet.table import Table, TableStyleInfo
+from openpyxl.styles import Alignment
 
 
 
@@ -163,12 +166,11 @@ class Application(tk.Frame):
         
         # Now it's safe to load settings and combine folders since the list widget is created
         self.load_settings()
+        self.combine_and_display_folders()
         
         # Call the methods associated with the settings buttons
         self.update_links_in_excel()  # This corresponds to 'Autofill Excel Data(link, asin, tosellafter)'
         self.update_folders_paths()   # This corresponds to 'Update folder names and paths'
-        
-        self.combine_and_display_folders()
 
     def load_settings(self):
         # Load settings
@@ -480,7 +482,7 @@ class Application(tk.Frame):
         self.update_foldersnames_folderpaths_button = tk.Button(self.settings_window, text="Update folder names and paths", command=self.update_folders_paths)
         self.update_foldersnames_folderpaths_button.grid(row=7, column=0, padx=(window_width//4, 0), sticky='w')
         
-        self.products_to_sell_list_button = tk.Button(self.settings_window, text="Show list of products available to sell")
+        self.products_to_sell_list_button = tk.Button(self.settings_window, text="Show list of products available to sell", command=self.products_to_sell_report)
         self.products_to_sell_list_button.grid(row=8, column=0, padx=(window_width//4, 0), sticky='w')
 
 
@@ -494,6 +496,94 @@ class Application(tk.Frame):
         
     def on_settings_close(self):
         self.master.destroy()
+    
+    def products_to_sell_report(self):
+        # Ensure the Excel file path and sheet name are set
+        filepath, sheet_name = self.load_excel_settings()
+        if not filepath or not sheet_name:
+            messagebox.showerror("Error", "Excel file path or sheet name is not set.")
+            return
+
+        # Define the Backup folder path (next to the inventory folder)
+        backup_folder = Path(self.inventory_folder).parent / "Excel Backups"
+        backup_folder.mkdir(exist_ok=True)
+
+        # Create a copy of the Excel file in the backup folder
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        copy_path = backup_folder / f"Products To Sell - {today_str}.xlsx"
+        shutil.copy2(filepath, copy_path)
+
+        # Load the workbook and get the sheet
+        workbook = load_workbook(copy_path)
+        original_sheet = workbook[sheet_name]
+
+        # Create a DataFrame from the sheet data
+        data = original_sheet.values
+        columns = next(data)[0:]
+        df = pd.DataFrame(data, columns=columns)
+
+        # Keep only necessary columns
+        df = df[['Product ID', 'To Sell After', 'Product Name', 'Fair Market Value']]
+
+        # Convert 'To Sell After' column to datetime and filter rows
+        df['To Sell After'] = pd.to_datetime(df['To Sell After'], errors='coerce')
+        today = pd.to_datetime('today').normalize()
+        df = df.dropna(subset=['To Sell After'])  # Remove rows with empty 'To Sell After'
+        filtered_df = df[df['To Sell After'] <= today]
+
+        # Sort the filtered DataFrame by 'To Sell After' in descending order
+        sorted_df = filtered_df.sort_values(by='To Sell After', ascending=False)
+
+        # Delete the original sheet and create a new one
+        del workbook[sheet_name]
+        new_sheet = workbook.create_sheet(sheet_name)
+
+        # Write the sorted DataFrame back to the new sheet
+        for r_idx, row in enumerate(dataframe_to_rows(sorted_df, index=False, header=True), start=1):
+            for c_idx, value in enumerate(row, start=1):
+                cell = new_sheet.cell(row=r_idx, column=c_idx, value=value)
+                # Apply date format to 'To Sell After' column (assuming it's the second column)
+                if c_idx == 2 and r_idx > 1:  # Skip header row
+                    cell.number_format = 'MM/DD/YYYY'
+                # Apply currency format to 'Fair Market Value' column (assuming it's the fourth column)
+                if c_idx == 4 and r_idx > 1:  # Skip header row
+                    cell.number_format = '"$"#,##0.00'
+                # Apply middle and center alignment to all cells
+                if c_idx == 3:  # 'Product Name' column
+                    cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                else:
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+
+        # Define the table dimensions
+        table_ref = f"A1:{chr(65 + sorted_df.shape[1] - 1)}{sorted_df.shape[0] + 1}"
+
+        # Create a table
+        table = Table(displayName="ProductsToSellTable", ref=table_ref)
+        style = TableStyleInfo(name="TableStyleMedium9", showFirstColumn=False,
+                            showLastColumn=False, showRowStripes=True, showColumnStripes=True)
+        table.tableStyleInfo = style
+        new_sheet.add_table(table)
+
+        # Adjust column widths
+        new_sheet.column_dimensions['A'].width = 120 / 7  # Width for 'Product ID'
+        new_sheet.column_dimensions['B'].width = 120 / 7  # Width for 'To Sell After'
+        new_sheet.column_dimensions['C'].width = 700 / 7  # Width for 'Product Name'
+        new_sheet.column_dimensions['D'].width = 120 / 7  # Width for 'Fair Market Value'
+
+        # Save the changes to the workbook
+        workbook.save(copy_path)
+
+
+        # Open the modified Excel file
+        if sys.platform == "win32":
+            os.startfile(copy_path)
+        elif sys.platform == "darwin":  # macOS
+            subprocess.run(["open", copy_path])
+        else:  # Linux variants
+            subprocess.run(["xdg-open", copy_path])
+
+
+
     
     def exit_correlate_window(self):
         self.correlate_window.destroy()
