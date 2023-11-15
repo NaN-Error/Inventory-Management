@@ -1,36 +1,3 @@
-"""
-Inventory Management System
-
-This program provides a comprehensive solution for managing product information, 
-including interfacing with Excel files, managing folders, and handling database operations. 
-It features a graphical user interface (GUI) built with tkinter, offering user-friendly interaction 
-with the system. The main functionalities include reading and writing Excel data, automatic folder 
-renaming and moving, database management, and generating Word documents for product details.
-
-Classes:
-    DatabaseManager: Manages SQLite database operations, handling folder paths.
-    ExcelManager: Handles reading and writing operations to Excel files.
-    Application(tk.Frame): Main application class with GUI components and business logic.
-
-Key Functionalities:
-    - Creates a user-friendly GUI for interaction.
-    - Reads and writes data to Excel files, managing product information.
-    - Automatically renames folders to include product names.
-    - Moves folders based on product status (e.g., to a 'To Sell' folder).
-    - Allows viewing and editing of detailed product information.
-    - Automatically updates Excel fields, like product links or selling dates.
-    - Creates backups of Excel files to prevent data loss.
-    - Generates Word documents with product details.
-    - Correlates missing data in the Excel database.
-    - Offers customizable settings for folder and file paths.
-    - Provides features to sort, filter, and periodically refresh data.
-    - Incorporates error handling to enhance reliability and user experience.
-
-Usage:
-    The system can be used in commercial or personal settings where product management is essential. 
-    It simplifies data handling, folder organization, and document management related to inventory tracking.
-"""
-
 import os
 import shutil
 import tkinter as tk
@@ -154,7 +121,16 @@ class ExcelManager:
                                 # Special handling for 'To Sell After' date
                                 if key == 'To Sell After' and isinstance(value, datetime):
                                     value = value.strftime('%m/%d/%Y')  # Format the date
-                                sheet.cell(row=row_num, column=col_index, value=value)
+                                    sheet.cell(row=row_num, column=col_index, value=value)
+                                elif key == 'Fair Market Value':
+                                    # Convert value to float if it's not None or empty
+                                    value = float(value) if value else 0
+                                    # Set the cell value
+                                    cell = sheet.cell(row=row_num, column=col_index, value=value)
+                                    # Set the number format for currency
+                                    cell.number_format = '"$"#,##0.00'
+                                else:
+                                    sheet.cell(row=row_num, column=col_index, value=value)
                         workbook.save(self.filepath)
                         break
                 else:
@@ -241,7 +217,7 @@ class Application(tk.Frame):
         self.top_frame = tk.Frame(self)
         self.top_frame.pack(fill='x')
 
-        self.settings_button = tk.Button(self.top_frame, text='Settings', command=self.open_settings_window)
+        self.settings_button = tk.Button(self.top_frame, text='Settings', command=self.Settings_Window_Start)
         self.settings_button.pack(side='right')
 
         self.search_frame = tk.Frame(self)
@@ -444,7 +420,7 @@ class Application(tk.Frame):
         except Exception as e:
             print(f"Error when opening hyperlink: {e}")
 
-    def open_settings_window(self):
+    def Settings_Window_Start(self):
         if hasattr(self, 'settings_window') and self.settings_window.winfo_exists():
             self.settings_window.lift()
             return
@@ -536,13 +512,15 @@ class Application(tk.Frame):
             messagebox.showerror("Error", "Excel file path or sheet name is not set.")
             return
 
-        # Define the Backup folder path (next to the inventory folder)
-        backup_folder = Path(self.inventory_folder).parent / "Excel Backups"
-        backup_folder.mkdir(exist_ok=True)
+        # Define the To Sell folder path (instead of Backup folder)
+        to_sell_folder = self.to_sell_folder
+        if not os.path.exists(to_sell_folder):
+            messagebox.showerror("Error", "To Sell folder path is not set or does not exist.")
+            return
 
-        # Create a copy of the Excel file in the backup folder
+        # Create a copy of the Excel file in the To Sell folder
         today_str = datetime.now().strftime("%Y-%m-%d")
-        copy_path = backup_folder / f"Products To Sell - {today_str}.xlsx"
+        copy_path = os.path.join(to_sell_folder, f"Products To Sell - {today_str}.xlsx")
         shutil.copy2(filepath, copy_path)
 
         # Load the workbook and get the sheet
@@ -553,6 +531,9 @@ class Application(tk.Frame):
         data = original_sheet.values
         columns = next(data)[0:]
         df = pd.DataFrame(data, columns=columns)
+        
+        # Filter out products marked as Damaged, Cancelled Order, or Personal
+        df = df[(df['Damaged'] != 'YES') & (df['Cancelled Order'] != 'YES') & (df['Personal'] != 'YES')]
 
         # Keep only necessary columns
         df = df[['Product ID', 'To Sell After', 'Product Name', 'Fair Market Value']]
@@ -616,7 +597,7 @@ class Application(tk.Frame):
 
     def exit_correlate_window(self):
         self.correlate_window.destroy()
-        self.open_settings_window()
+        self.Settings_Window_Start()
 
     def back_to_main(self):
         self.settings_window.destroy()
@@ -1595,7 +1576,7 @@ class Application(tk.Frame):
             self.create_word_doc(doc_data, iid, show_message=False)
         messagebox.showinfo("Success", "All Word documents have been created.")
         self.correlate_window.destroy()
-        self.open_settings_window()
+        self.Settings_Window_Start()
 
     def create_word_doc(self, doc_data, iid, show_message=True):
         #print("Create word doc function called")  # Debug #print statement
@@ -1627,14 +1608,14 @@ class Application(tk.Frame):
                 doc.add_paragraph(f"Product ID: {product_id}")
                 doc.add_paragraph(f"Product Name: {product_name}")
                 doc.add_paragraph(f"Fair Market Value: ${fair_market_value}")
-                doc.add_paragraph(f"Product Link(to get the product description, if needed): {order_link}")
+                doc.add_paragraph(f"Product Link(to get the product description and pictures, if needed): {order_link}")
                 doc.save(doc_path)
                 if show_message:
                     messagebox.showinfo("Document Created", f"Word document for '{product_id}' has been created successfully.")
                 # Check if the correlate_tree attribute exists and if there are any items left
                 if hasattr(self, 'correlate_tree') and not self.correlate_tree.get_children():
                     self.correlate_window.destroy()
-                    self.open_settings_window()
+                    self.Settings_Window_Start()
             except Exception as e:
                 #print(f"Error creating word doc: {e}")  # Debug #print statement
                 messagebox.showerror("Error", f"Failed to create document for Product ID {product_id}: {e}")
