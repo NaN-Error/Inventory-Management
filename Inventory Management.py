@@ -636,12 +636,23 @@ class Application(tk.Frame):
         # Clear the folder list first
         self.folder_list.delete(0, tk.END)
 
+        # Initialize additional folders based on the inventory folder
+        if self.inventory_folder:
+            parent_dir = os.path.dirname(self.inventory_folder)
+            self.damaged_folder = os.path.join(parent_dir, "Damaged")
+            self.personal_folder = os.path.join(parent_dir, "Personal")
+
+            # Create additional folders if they don't exist
+            for folder in [self.damaged_folder, self.personal_folder]:
+                if not os.path.exists(folder):
+                    os.makedirs(folder)
+
         # Begin a transaction
         self.db_manager.cur.execute("BEGIN")
         try:
-            # Combine the folders from all three paths
+            # Combine the folders from all paths including damaged and personal folders
             combined_folders = []
-            for folder_path in [self.inventory_folder, self.sold_folder, self.to_sell_folder]:
+            for folder_path in [self.inventory_folder, self.sold_folder, self.to_sell_folder, self.damaged_folder, self.personal_folder]:
                 if folder_path and os.path.exists(folder_path):
                     for root, dirs, files in os.walk(folder_path):
                         for dir_name in dirs:
@@ -957,6 +968,7 @@ class Application(tk.Frame):
         else:
             # If 'Sold Date' is empty, uncheck 'Sold'
             self.sold_var.set(False)
+            
         product_id = self.product_id_var.get().strip().upper()
 
         # Ensure that the Excel file path and sheet name are set.
@@ -993,30 +1005,39 @@ class Application(tk.Frame):
         
         # Folder movement logic
         current_folder_path = self.get_folder_path_from_db(product_id)
-        #print(f"Current folder path: {current_folder_path}")
-
         if not current_folder_path:
             messagebox.showerror("Error", f"No current folder path found for Product ID {product_id}")
             return
         
-        target_folder_path = None
+        # Initialize variables for folder paths
+        damaged_folder_path = os.path.join(os.path.dirname(self.inventory_folder), "Damaged")
+        personal_folder_path = os.path.join(os.path.dirname(self.inventory_folder), "Personal")
 
-        # Decide target folder based on the sold status and to sell after date
-        if self.sold_var.get():
+        # Create Damaged and Personal folders if they do not exist
+        for folder in [damaged_folder_path, personal_folder_path]:
+            if not os.path.exists(folder):
+                os.makedirs(folder)
+
+        # Decide target folder based on checkbox statuses and other conditions
+        if self.damaged_var.get():
+            target_folder_path = damaged_folder_path
+        elif self.personal_var.get():
+            target_folder_path = personal_folder_path
+        elif self.sold_var.get():
             target_folder_path = self.sold_folder
         else:
             to_sell_after_str = self.to_sell_after_var.get()
-            if to_sell_after_str:
-                try:
-                    to_sell_after_date = datetime.strptime(to_sell_after_str, "%m/%d/%Y").date()
-                    today = date.today()
-                    if to_sell_after_date <= today:
-                        target_folder_path = self.to_sell_folder
-                    else:
-                        target_folder_path = self.inventory_folder
-                except ValueError as e:
-                    messagebox.showerror("Error", f"Invalid 'To Sell After' date format: {e}")
-                    return
+            try:
+                to_sell_after_date = datetime.strptime(to_sell_after_str, "%m/%d/%Y").date() if to_sell_after_str else None
+            except ValueError as e:
+                messagebox.showerror("Error", f"Invalid 'To Sell After' date format: {e}")
+                return
+
+            today = date.today()
+            if to_sell_after_date and to_sell_after_date <= today:
+                target_folder_path = self.to_sell_folder
+            else:
+                target_folder_path = self.inventory_folder
         # Use #print statements to debug the current and target folder paths
         #print(f"Current folder path: {current_folder_path}")
         #print(f"Target folder path: {target_folder_path}")
@@ -1038,7 +1059,6 @@ class Application(tk.Frame):
                 messagebox.showinfo("Folder Moved", f"Folder for '{product_id}' moved successfully to the new location.")
                 #print(f"Folder for '{product_id}' moved from {current_folder_path} to {new_folder_path}")
                 self.refresh_and_select_product(product_id)
-
 
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to move the folder: {e}")
@@ -1267,6 +1287,9 @@ class Application(tk.Frame):
 
         except Exception as e:
             messagebox.showerror("Error", f"An error occurred while updating links: {e}")
+        
+        self.db_manager.delete_all_folders()
+        self.db_manager.setup_database()
         self.update_asin_in_excel()
 
     def update_asin_in_excel(self):
@@ -1313,7 +1336,10 @@ class Application(tk.Frame):
         except Exception as e:
             print(f"An error occurred while updating ASINs: {e}")  # Debug print
             messagebox.showerror("Error", f"An error occurred while updating ASINs: {e}")
+        self.db_manager.delete_all_folders()
+        self.db_manager.setup_database()
         self.update_to_sell_after_in_excel()
+
 
     def update_to_sell_after_in_excel(self):
         try:
@@ -1361,6 +1387,9 @@ class Application(tk.Frame):
             print(f"An error occurred while updating To Sell After dates: {e}")  # Debug print
             messagebox.showerror("Error", f"An error occurred while updating To Sell After dates: {e}")
 
+        self.db_manager.delete_all_folders()
+        self.db_manager.setup_database()
+
     def update_folder_names(self):
         # Load folder paths from folders_paths.txt
         with open("folders_paths.txt", "r") as file:
@@ -1368,6 +1397,11 @@ class Application(tk.Frame):
             self.inventory_folder = lines[0]
             self.sold_folder = lines[1]
             self.to_sell_folder = lines[2] if len(lines) > 2 else None
+        
+        # Ensure the paths for Damaged and Personal folders are set
+        parent_dir = os.path.dirname(self.inventory_folder)
+        self.damaged_folder = os.path.join(parent_dir, "Damaged")
+        self.personal_folder = os.path.join(parent_dir, "Personal")
         
         # Load Excel path and sheet name from excel_and_sheet_path.txt
         with open('excel_and_sheet_path.txt', 'r') as f:
@@ -1379,7 +1413,7 @@ class Application(tk.Frame):
         print("Starting the folder renaming process...")
 
         # Iterate over each folder in the inventory, sold, and to sell folders
-        for folder_path in [self.inventory_folder, self.sold_folder, self.to_sell_folder]:
+        for folder_path in [self.inventory_folder, self.sold_folder, self.to_sell_folder, self.damaged_folder, self.personal_folder]:
             if folder_path and os.path.exists(folder_path):
                 # Instead of comparing folder names directly, create a set for more efficient checks
 
@@ -1421,9 +1455,10 @@ class Application(tk.Frame):
                                 print((f"Skipped renaming {item_path} due to path length restrictions.").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
                         else:
                             print((f"No matching product info found for folder: {item}").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
+        messagebox.showinfo("Done", "Moved and renamed folders")
         self.db_manager.delete_all_folders()
         self.db_manager.setup_database()
-        messagebox.showinfo("Done", "Moved and renamed folders")
+        self.combine_and_display_folders()
         
     def replace_invalid_chars(self, filename):
         # Windows filename invalid characters
@@ -1471,6 +1506,17 @@ class Application(tk.Frame):
         self.excel_manager.sheet_name = sheet_name
         self.excel_manager.load_data()
 
+        # Create and define paths for Damaged and Personal folders
+        parent_dir = os.path.dirname(self.inventory_folder)
+        damaged_folder = os.path.join(parent_dir, "Damaged")
+        personal_folder = os.path.join(parent_dir, "Personal")
+
+        # Ensure Damaged and Personal folders exist
+        for folder in [damaged_folder, personal_folder]:
+            if not os.path.exists(folder):
+                os.makedirs(folder)
+                print(f"Created folder: {folder}")
+
         # Iterate through Inventory folders
         if self.inventory_folder and os.path.exists(self.inventory_folder):
             for root, dirs, _ in os.walk(self.inventory_folder):
@@ -1480,12 +1526,21 @@ class Application(tk.Frame):
 
                     if product_info:
                         sold_status = product_info.get('Sold')
+                        damaged_status = product_info.get('Damaged')
+                        personal_status = product_info.get('Personal')
                         to_sell_after = product_info.get('To Sell After')
 
                         if sold_status and sold_status.upper() == 'YES':
                             self.move_product_folder(root, dir_name, self.sold_folder)
-                        elif sold_status.upper() == 'NO' and self.is_date_today_or_before(to_sell_after):
+                        elif damaged_status and damaged_status.upper() == 'YES':
+                            self.move_product_folder(root, dir_name, damaged_folder)
+                        elif personal_status and personal_status.upper() == 'YES':
+                            self.move_product_folder(root, dir_name, personal_folder)
+                        elif self.is_date_today_or_before(to_sell_after):
                             self.move_product_folder(root, dir_name, self.to_sell_folder)
+                        else:
+                            print(f"Keeping {dir_name} in Inventory")
+
         else:
             print(f"Inventory folder not found: {self.inventory_folder}")
         self.db_manager.delete_all_folders()
@@ -1514,19 +1569,19 @@ class Application(tk.Frame):
         else:
             print(f"Target folder not found: {target_folder}")
 
-    def is_date_today_or_before(self, date_str):
-        if pd.isnull(date_str):
+    def is_date_today_or_before(self, date_input):
+        if pd.isnull(date_input):
             return False
 
-        # If date_str is a Timestamp, convert it to a datetime object
-        if isinstance(date_str, pd.Timestamp):
-            to_sell_date = date_str.to_pydatetime().date()
+        # Check if the input is already a datetime object
+        if isinstance(date_input, datetime):
+            to_sell_date = date_input.date()
         else:
             try:
-                # Assuming date_str is a string in the format "%m/%d/%Y"
-                to_sell_date = datetime.strptime(date_str, "%m/%d/%Y").date()
+                # If it's a string, parse it into a datetime object
+                to_sell_date = datetime.strptime(date_input, "%m/%d/%Y").date()
             except ValueError:
-                print(f"Invalid date format: {date_str}")
+                print(f"Invalid date format: {date_input}")
                 return False
 
         return to_sell_date <= datetime.today().date()
