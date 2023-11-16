@@ -532,8 +532,9 @@ class Application(tk.Frame):
         columns = next(data)[0:]
         df = pd.DataFrame(data, columns=columns)
         
-        # Filter out products marked as Damaged, Cancelled Order, or Personal
-        df = df[(df['Damaged'] != 'YES') & (df['Cancelled Order'] != 'YES') & (df['Personal'] != 'YES')]
+        # Filter out products marked as Damaged, Cancelled Order, Personal, or Sold
+        df = df[(df['Damaged'] != 'YES') & (df['Cancelled Order'] != 'YES') & (df['Personal'] != 'YES') & (df['Sold'] != 'YES') & (~pd.isna(df['Product ID']))]
+
 
         # Keep only necessary columns
         df = df[['Product ID', 'To Sell After', 'Product Name', 'Fair Market Value']]
