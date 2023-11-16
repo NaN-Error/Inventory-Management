@@ -1255,10 +1255,12 @@ class Application(tk.Frame):
             for row in sheet.iter_rows(min_row=2, max_row=sheet.max_row, max_col=product_name_col_index):
                 product_name_cell = row[product_name_col_index - 1]
                 order_link_cell = sheet.cell(row=product_name_cell.row, column=order_link_col_index)
-                # Copy only the hyperlink URL
-                if product_name_cell.hyperlink:
-                    order_link_cell.hyperlink = product_name_cell.hyperlink
-                    order_link_cell.value = product_name_cell.hyperlink.target  # Set the cell value to the hyperlink URL
+                # Add condition here to check if the 'Order Link' cell already has a hyperlink
+                if not order_link_cell.hyperlink:  # Only update if the 'Order Link' cell is empty
+                    # Copy only the hyperlink URL
+                    if product_name_cell.hyperlink:
+                        order_link_cell.hyperlink = product_name_cell.hyperlink
+                        order_link_cell.value = product_name_cell.hyperlink.target  # Set the cell value to the hyperlink URL
 
             workbook.save(excel_path)
             messagebox.showinfo("Success", "Links have been updated in the Excel file.")
@@ -1299,8 +1301,10 @@ class Application(tk.Frame):
                 if order_link_cell.value and '/' in order_link_cell.value:
                     asin_value = order_link_cell.value.split('/')[-1]
                     asin_cell = sheet.cell(row=order_link_cell.row, column=asin_col_index)
-                    asin_cell.value = asin_value
-                    print(f"Updated ASIN for row {order_link_cell.row}: {asin_value}")  # Debug print
+                    # Add condition here to check if the ASIN cell is empty
+                    if not asin_cell.value:  # Only update if the ASIN cell is empty
+                        asin_cell.value = asin_value
+                        print(f"Updated ASIN for row {order_link_cell.row}: {asin_value}")  # Debug print
 
             workbook.save(excel_path)
             print("Excel file saved with updated ASINs.")  # Debug print
@@ -1343,8 +1347,11 @@ class Application(tk.Frame):
                 if order_date_cell.value and isinstance(order_date_cell.value, datetime):
                     to_sell_after_date = order_date_cell.value + relativedelta(months=+6)
                     to_sell_after_cell = sheet.cell(row=order_date_cell.row, column=to_sell_after_col_index)
-                    to_sell_after_cell.value = to_sell_after_date
-                    print(f"Updated To Sell After for row {order_date_cell.row}: {to_sell_after_date}")  # Debug print
+                    
+                    # Add condition here to check if the 'To Sell After' cell is empty
+                    if not to_sell_after_cell.value:  # Only update if the 'To Sell After' cell is empty
+                        to_sell_after_cell.value = to_sell_after_date
+                        print(f"Updated To Sell After for row {order_date_cell.row}: {to_sell_after_date}")  # Debug print
 
             workbook.save(excel_path)
             print("Excel file saved with updated To Sell After dates.")  # Debug print
