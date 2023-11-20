@@ -264,7 +264,7 @@ class Application(tk.Frame):
 
         # Create a custom font with a larger size
         link_font = Font(family="Helvetica", size=10)  # Adjust the size as per your requirement
-        product_name_font = Font(family="Helvetica", size=9)  # Adjust the size as per your requirement
+        product_name_font = Font(family="Helvetica", size=11)  # Adjust the size as per your requirement
 
         self.product_frame = tk.Frame(self.bottom_frame, bg='light gray')
         self.product_frame.pack(side='right', fill='both', expand=True) #change pack to grid later
@@ -288,15 +288,15 @@ class Application(tk.Frame):
         self.product_name_label = ttk.Label(self.column0_frame, text='Product Name')
         self.product_name_label.grid(row=3, column=0, sticky='w', padx=0, pady=0)
 
+
         # Create the Text widget with the desired background color inside the border frame
         self.product_name_text = tk.Text(self.column0_frame, height=8, width=50, bg="#eff0f1", fg="#000000", wrap="word", bd=0, highlightthickness=1, highlightcolor="#94cfeb", font=product_name_font)
         self.product_name_text.grid(row=4, column=0, sticky='w', padx=0, pady=1)
         
-        # Disable the widget initially if needed
-        self.product_name_text.config(state='disabled')
-        
         # Bind the mouse click event to an empty lambda function
         self.product_name_text.bind("<Button-1>", lambda e: "break")
+        
+        
         
         self.column0_frame.grid_rowconfigure(5, minsize=2)  # Adjust 'minsize' for desired space
         
@@ -826,7 +826,7 @@ class Application(tk.Frame):
                     if product_name:
                         self.product_name_text.insert("insert", product_name) 
                     self.product_name_text.configure(state='disabled')
-                    
+
                     # When a product is selected and the order date is fetched
                     order_date = product_info.get('Order Date', '')
                     formatted_order_date = ''  # Default value
@@ -1102,12 +1102,12 @@ class Application(tk.Frame):
                 os.makedirs(folder)
 
         # Decide target folder based on checkbox statuses and other conditions
-        if self.damaged_var.get():
-            target_folder_path = damaged_folder_path
+        if self.sold_var.get():
+            target_folder_path = self.sold_folder
         elif self.personal_var.get():
             target_folder_path = personal_folder_path
-        elif self.sold_var.get():
-            target_folder_path = self.sold_folder
+        elif self.damaged_var.get():
+            target_folder_path = damaged_folder_path
         else:
             to_sell_after_str = self.to_sell_after_var.get()
             try:
@@ -1614,10 +1614,10 @@ class Application(tk.Frame):
 
                         if sold_status and sold_status.upper() == 'YES':
                             self.move_product_folder(root, dir_name, self.sold_folder)
-                        elif damaged_status and damaged_status.upper() == 'YES':
-                            self.move_product_folder(root, dir_name, damaged_folder)
                         elif personal_status and personal_status.upper() == 'YES':
                             self.move_product_folder(root, dir_name, personal_folder)
+                        elif damaged_status and damaged_status.upper() == 'YES':
+                            self.move_product_folder(root, dir_name, damaged_folder)
                         elif self.is_date_today_or_before(to_sell_after):
                             self.move_product_folder(root, dir_name, self.to_sell_folder)
                         else:
