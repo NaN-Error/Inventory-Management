@@ -270,11 +270,40 @@ class Application(tk.Frame):
         self.product_frame.pack(side='right', fill='both', expand=True) #change pack to grid later
 
 
+        # Row 0 Widgets
+        self.column6_frame = tk.Frame(self.product_frame, bg='light gray')
+        self.column6_frame.grid(row=0, column=5, sticky='ne', padx=50, pady=0)
+    
+        self.save_button = ttk.Button(self.column6_frame, text='Save', command=self.save, state='disabled')
+        self.save_button.grid(row=0, column=0, sticky='w', padx=0, pady=0)
+
+        self.edit_button = ttk.Button(self.column6_frame, text="Edit", command=self.toggle_edit_mode, state='disabled')
+        self.edit_button.grid(row=0, column=1, sticky='w', padx=0, pady=0)
+
+
+        # Row 1 Widgets
+        self.column2_frame = tk.Frame(self.product_frame, bg='light gray')
+        self.column2_frame.grid(row=1, column=0, sticky='nw', padx=5, pady=5)
+        
+        self.order_date_var = tk.StringVar()
+        self.order_date_label = ttk.Label(self.column2_frame, text='Order Date')
+        self.order_date_label.grid(row=0, column=0, sticky='w', padx=0, pady=0)
+        self.order_date_entry = ttk.Entry(self.column2_frame, textvariable=self.order_date_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.order_date_entry.grid(row=1, column=0, sticky='w', padx=0, pady=0)
+
+        self.to_sell_after_var = tk.StringVar()
+        self.to_sell_after_label = ttk.Label(self.column2_frame, text='To Sell After')
+        self.to_sell_after_label.grid(row=2, column=0, sticky='w', padx=0, pady=0)
+        self.to_sell_after_entry = ttk.Entry(self.column2_frame, textvariable=self.to_sell_after_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.to_sell_after_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
+
+
+        # Row 2 Widgets
         # Column 0 Widgets
         
         # Create a new frame for the column 0 widgets
         self.column0_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.column0_frame.grid(row=0, column=0, sticky='nw', padx=5, pady=5)
+        self.column0_frame.grid(row=2, column=0, sticky='nw', padx=25, pady=25)
         
         self.product_id_var = tk.StringVar()
         self.product_id_label = ttk.Label(self.column0_frame, text='Product ID')
@@ -288,15 +317,12 @@ class Application(tk.Frame):
         self.product_name_label = ttk.Label(self.column0_frame, text='Product Name')
         self.product_name_label.grid(row=3, column=0, sticky='w', padx=0, pady=0)
 
-
         # Create the Text widget with the desired background color inside the border frame
         self.product_name_text = tk.Text(self.column0_frame, height=8, width=50, bg="#eff0f1", fg="#000000", wrap="word", bd=0, highlightthickness=1, highlightcolor="#94cfeb", font=product_name_font)
         self.product_name_text.grid(row=4, column=0, sticky='w', padx=0, pady=1)
         
         # Bind the mouse click event to an empty lambda function
         self.product_name_text.bind("<Button-1>", lambda e: "break")
-        
-        
         
         self.column0_frame.grid_rowconfigure(5, minsize=2)  # Adjust 'minsize' for desired space
         
@@ -308,7 +334,6 @@ class Application(tk.Frame):
         self.product_folder_link = ttk.Button(self.column0_frame, textvariable=self.product_folder_var, style='Blue.TButton')
 
         self.product_folder_link.grid(row=7, column=0, sticky='w', padx=0, pady=0)
-
 
         self.column0_frame.grid_rowconfigure(8, minsize=2)  # Adjust 'minsize' for desired space
 
@@ -331,113 +356,128 @@ class Application(tk.Frame):
         self.asin_entry = ttk.Entry(self.column0_frame, textvariable=self.asin_var, state='disabled', style='BlackOnDisabled.TEntry')
         self.asin_entry.grid(row=13, column=0, sticky='w', padx=0, pady=0)
 
-        self.product_frame.grid_columnconfigure(1, minsize=20)  # This creates a 20-pixel-wide empty column as spacer
 
+        # Row 2 Widgets
+        # Column 1 Widgets
 
-        # Column 2 Widgets
-        self.column2_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.column2_frame.grid(row=0, column=2, sticky='nw', padx=5, pady=5)
-        
-        self.order_date_var = tk.StringVar()
-        self.order_date_label = ttk.Label(self.column2_frame, text='Order Date')
-        self.order_date_label.grid(row=0, column=0, sticky='w', padx=0, pady=0)
-        self.order_date_entry = ttk.Entry(self.column2_frame, textvariable=self.order_date_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.order_date_entry.grid(row=1, column=0, sticky='w', padx=0, pady=0)
-
-        self.to_sell_after_var = tk.StringVar()
-        self.to_sell_after_label = ttk.Label(self.column2_frame, text='To Sell After')
-        self.to_sell_after_label.grid(row=2, column=0, sticky='w', padx=0, pady=0)
-        self.to_sell_after_entry = ttk.Entry(self.column2_frame, textvariable=self.to_sell_after_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.to_sell_after_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
-
-        self.product_frame.grid_columnconfigure(3, minsize=20)  # This creates a 20-pixel-wide empty column as spacer
-
-
-        # Column 4 Widgets
-        self.column4_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.column4_frame.grid(row=0, column=4, sticky='nw', padx=5, pady=5)
+        self.r2column1_frame = tk.Frame(self.product_frame, bg='light gray')
+        self.r2column1_frame.grid(row=2, column=1, sticky='nw', padx=5, pady=5)
         custom_font = Font(family="Helvetica", size=7)
         style.configure('SmallFont.TButton', font=custom_font, padding=1)
         
-        self.sold_date_var = tk.StringVar()
-        self.sold_date_label = ttk.Label(self.column4_frame, text='Sold Date')
-        self.sold_date_label.grid(row=0, column=0, sticky='w', padx=0, pady=0)
-        
-        self.sold_date_entry = ttk.Entry(self.column4_frame, textvariable=self.sold_date_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.sold_date_entry.grid(row=1, column=0, sticky='w', padx=0, pady=0)
-        
-        self.sold_date_button = ttk.Button(self.column4_frame, text="Pick\nDate", style='SmallFont.TButton', command=self.pick_date, state='disabled', width=5)
-        self.sold_date_button.grid(row=1, column=0, sticky='e', padx=0, pady=0)
-
+        self.r2column1_frame.grid_rowconfigure(0, minsize=75)  # Adjust 'minsize' for desired space
         self.fair_market_value_var = tk.StringVar()
-        self.fair_market_value_label = ttk.Label(self.column4_frame, text='Fair Market Value')
+        self.fair_market_value_label = ttk.Label(self.r2column1_frame, text='Fair Market Value')
         self.fair_market_value_label.grid(row=2, column=0, sticky='w', padx=0, pady=0)
-        self.fair_market_value_entry = ttk.Entry(self.column4_frame, textvariable=self.fair_market_value_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.fair_market_value_entry = ttk.Entry(self.r2column1_frame, textvariable=self.fair_market_value_var, state='disabled', style='BlackOnDisabled.TEntry')
         self.fair_market_value_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
         
-        self.sold_price_var = tk.StringVar()
-        self.sold_price_label = ttk.Label(self.column4_frame, text='Sold Price')
-        self.sold_price_label.grid(row=4, column=0, sticky='w', padx=0, pady=0)
-        self.sold_price_entry = ttk.Entry(self.column4_frame, textvariable=self.sold_price_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.sold_price_entry.grid(row=5, column=0, sticky='w', padx=0, pady=0)
+        self.product_price_var = tk.StringVar()
+        self.product_price_label = ttk.Label(self.r2column1_frame, text='Product Price')
+        self.product_price_label.grid(row=4, column=0, sticky='w', padx=0, pady=0)
+        self.product_price_entry = ttk.Entry(self.r2column1_frame, textvariable=self.product_price_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.product_price_entry.grid(row=5, column=0, sticky='w', padx=0, pady=0)
         
+        self.ivu_tax_var = tk.StringVar()
+        self.ivu_tax_label = ttk.Label(self.r2column1_frame, text='IVU Tax')
+        self.ivu_tax_label.grid(row=6, column=0, sticky='w', padx=0, pady=0)
+        self.ivu_tax_entry = ttk.Entry(self.r2column1_frame, textvariable=self.ivu_tax_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.ivu_tax_entry.grid(row=7, column=0, sticky='w', padx=0, pady=0)
+        
+        self.sale_price_var = tk.StringVar()
+        self.sale_price_label = ttk.Label(self.r2column1_frame, text='Product Price (including IVU)')
+        self.sale_price_label.grid(row=8, column=0, sticky='w', padx=0, pady=0)
+        self.sale_price_entry = ttk.Entry(self.r2column1_frame, textvariable=self.sale_price_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.sale_price_entry.grid(row=9, column=0, sticky='w', padx=0, pady=0)
+
+        # Row 2 Widgets
+        # Column 2 Widgets
+        self.column4_frame = tk.Frame(self.product_frame, bg='light gray')
+        self.column4_frame.grid(row=2, column=2, sticky='nw', padx=5, pady=5)
+        custom_font = Font(family="Helvetica", size=7)
+        style.configure('SmallFont.TButton', font=custom_font, padding=1)
+        
+        self.column4_frame.grid_rowconfigure(0, minsize=75)  # Adjust 'minsize' for desired space
+
+
+        self.sold_date_var = tk.StringVar()
+        self.sold_date_label = ttk.Label(self.column4_frame, text='Sold Date')
+        self.sold_date_label.grid(row=2, column=0, sticky='w', padx=0, pady=0)
+        
+        self.sold_date_entry = ttk.Entry(self.column4_frame, textvariable=self.sold_date_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.sold_date_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
+        
+        self.sold_date_button = ttk.Button(self.column4_frame, text="Pick\nDate", style='SmallFont.TButton', command=self.pick_date, state='disabled', width=5)
+        self.sold_date_button.grid(row=3, column=0, sticky='e', padx=0, pady=0)
+
         self.payment_type_var = tk.StringVar()
         self.payment_type_label = ttk.Label(self.column4_frame, text='Payment Type')
-        self.payment_type_label.grid(row=6, column=0, sticky='w', padx=0, pady=0)
+        self.payment_type_label.grid(row=4, column=0, sticky='w', padx=0, pady=0)
         
         self.payment_type_combobox = ttk.Combobox(self.column4_frame, textvariable=self.payment_type_var, state='disabled', style='BlackOnDisabled.TEntry')
         self.payment_type_combobox['values'] = ('', 'Cash', 'ATH Movil')
-        self.payment_type_combobox.grid(row=7, column=0, sticky='w', padx=0, pady=0)
+        self.payment_type_combobox.grid(row=5, column=0, sticky='w', padx=0, pady=0)
+
+        self.discount_var = tk.StringVar()
+        self.discount_label = ttk.Label(self.column4_frame, text='Discount')
+        self.discount_label.grid(row=6, column=0, sticky='w', padx=0, pady=0)
+        self.discount_entry = ttk.Entry(self.column4_frame, textvariable=self.discount_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.discount_entry.grid(row=7, column=0, sticky='w', padx=0, pady=0)
         
-        self.product_frame.grid_columnconfigure(5, minsize=20)  # This creates a 20-pixel-wide empty column as spacer
+        self.sold_price_var = tk.StringVar()
+        self.sold_price_label = ttk.Label(self.column4_frame, text='Sold Price')
+        self.sold_price_label.grid(row=8, column=0, sticky='w', padx=0, pady=0)
+        self.sold_price_entry = ttk.Entry(self.column4_frame, textvariable=self.sold_price_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.sold_price_entry.grid(row=9, column=0, sticky='w', padx=0, pady=0)
+        
+        
 
-
-        # Column 6 Widgets
+        # Row 2 Widgets
+        # Column 3 Widgets
         # Creating a new frame for checkboxes within the product frame
         self.checkbox_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.checkbox_frame.grid(row=0, column=6, rowspan=8, sticky='nw', padx=5, pady=5)
+        self.checkbox_frame.grid(row=2, column=3, rowspan=8, sticky='nw', padx=5, pady=5)
+        self.checkbox_frame.grid_rowconfigure(0, minsize=75)  # Adjust 'minsize' for desired space
 
         self.sold_var = tk.BooleanVar()
         self.sold_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Sold', variable=self.sold_var)
-        self.sold_checkbutton.grid(row=0, column=0, sticky='w', padx=0, pady=0)
+        self.sold_checkbutton.grid(row=1, column=0, sticky='w', padx=0, pady=0)
         
-        self.checkbox_frame.grid_rowconfigure(1, minsize=20)  # This creates a 20-pixel-high empty row as a spacer
+        self.checkbox_frame.grid_rowconfigure(2, minsize=20)  # This creates a 20-pixel-high empty row as a spacer
         
         self.cancelled_order_var = tk.BooleanVar()
         self.cancelled_order_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Cancelled Order', variable=self.cancelled_order_var)
-        self.cancelled_order_checkbutton.grid(row=2, column=0, sticky='w', padx=0, pady=0)
+        self.cancelled_order_checkbutton.grid(row=3, column=0, sticky='w', padx=0, pady=0)
 
         self.damaged_var = tk.BooleanVar()
         self.damaged_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Damaged', variable=self.damaged_var)
-        self.damaged_checkbutton.grid(row=3, column=0, sticky='w', padx=0, pady=0)
+        self.damaged_checkbutton.grid(row=4, column=0, sticky='w', padx=0, pady=0)
 
         self.personal_var = tk.BooleanVar()
         self.personal_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Personal', variable=self.personal_var)
-        self.personal_checkbutton.grid(row=4, column=0, sticky='w', padx=0, pady=0)
+        self.personal_checkbutton.grid(row=5, column=0, sticky='w', padx=0, pady=0)
 
-
-        self.checkbox_frame.grid_rowconfigure(5, minsize=20)  # This creates a 20-pixel-high empty row as a spacer
+        self.checkbox_frame.grid_rowconfigure(6, minsize=20)  # This creates a 20-pixel-high empty row as a spacer
 
         self.reviewed_var = tk.BooleanVar()
         self.reviewed_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Reviewed', variable=self.reviewed_var)
-        self.reviewed_checkbutton.grid(row=6, column=0, sticky='w', padx=0, pady=0)
+        self.reviewed_checkbutton.grid(row=7, column=0, sticky='w', padx=0, pady=0)
 
         self.pictures_downloaded_var = tk.BooleanVar()
         self.pictures_downloaded_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Pictures Downloaded', variable=self.pictures_downloaded_var)
-        self.pictures_downloaded_checkbutton.grid(row=7, column=0, sticky='w', padx=0, pady=0)
-        
-        self.product_frame.grid_columnconfigure(7, minsize=600)  # spacer
+        self.pictures_downloaded_checkbutton.grid(row=8, column=0, sticky='w', padx=0, pady=0)
 
 
-        # Column 8 Widgets
-        self.column6_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.column6_frame.grid(row=0, column=8, sticky='ne', padx=0, pady=0)
-    
-        self.save_button = ttk.Button(self.column6_frame, text='Save', command=self.save, state='disabled')
-        self.save_button.grid(row=0, column=0, sticky='w', padx=0, pady=0)
+        self.product_frame.grid_rowconfigure(3, minsize=60)  # This creates a 20-pixel-high empty row as a spacer
 
-        self.edit_button = ttk.Button(self.column6_frame, text="Edit", command=self.toggle_edit_mode, state='disabled')
-        self.edit_button.grid(row=0, column=1, sticky='w', padx=0, pady=0)
+        # Row 4 Widgets
+        # Column 0 Widgets
+        # Creating a new frame for checkboxes within the product frame
+        self.comments_frame = tk.Frame(self.product_frame, bg='light gray')
+        self.comments_frame.grid(row=4, column=0, columnspan=3, sticky='nw', padx=25, pady=5)
+
+        self.comments_text = tk.Text(self.comments_frame, height=8, width=150, bg="#eff0f1", fg="#000000", wrap="word", bd=0, highlightthickness=1, highlightcolor="#94cfeb", font=product_name_font)
+        self.comments_text.grid(row=4, column=0, sticky='w', padx=0, pady=1)
 
 
         # Bind the new checkbox click control function to the checkboxes
@@ -1021,6 +1061,10 @@ class Application(tk.Frame):
         self.product_id_entry.config(state='disabled')
         self.product_name_text.config(state='disabled')
         self.fair_market_value_entry.config(state=state)
+        self.product_price_entry.config(state=state)
+        self.ivu_tax_entry.config(state=state)
+        self.sale_price_entry.config(state=state)
+        self.discount_entry.config(state=state)
         self.sold_price_entry.config(state=state)
         self.save_button.config(state=state)
         if self.edit_mode:
