@@ -554,8 +554,7 @@ class Application(tk.Frame):
         self.settings_window.protocol("WM_DELETE_WINDOW", lambda: on_close(self, self.master))
 
         self.master.withdraw()
-
-        
+   
     def on_settings_close(self):
         self.master.destroy()
     
@@ -1612,16 +1611,17 @@ class Application(tk.Frame):
                         personal_status = product_info.get('Personal')
                         to_sell_after = product_info.get('To Sell After')
 
-                        if sold_status and sold_status.upper() == 'YES':
+                        if sold_status and isinstance(sold_status, str) and sold_status.upper() == 'YES':
                             self.move_product_folder(root, dir_name, self.sold_folder)
-                        elif personal_status and personal_status.upper() == 'YES':
+                        elif personal_status and isinstance(personal_status, str) and personal_status.upper() == 'YES':
                             self.move_product_folder(root, dir_name, personal_folder)
-                        elif damaged_status and damaged_status.upper() == 'YES':
+                        elif damaged_status and isinstance(damaged_status, str) and damaged_status.upper() == 'YES':
                             self.move_product_folder(root, dir_name, damaged_folder)
                         elif self.is_date_today_or_before(to_sell_after):
                             self.move_product_folder(root, dir_name, self.to_sell_folder)
                         else:
                             print(f"Keeping {dir_name} in Inventory")
+
 
         else:
             print(f"Inventory folder not found: {self.inventory_folder}")
