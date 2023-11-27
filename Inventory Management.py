@@ -361,7 +361,7 @@ class Application(tk.Frame):
         # Column 1 Widgets
 
         self.r2column1_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.r2column1_frame.grid(row=2, column=1, sticky='nw', padx=5, pady=5)
+        self.r2column1_frame.grid(row=2, column=1, sticky='nw', padx=0, pady=5)
         custom_font = Font(family="Helvetica", size=7)
         style.configure('SmallFont.TButton', font=custom_font, padding=1)
         
@@ -393,7 +393,7 @@ class Application(tk.Frame):
         # Row 2 Widgets
         # Column 2 Widgets
         self.column4_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.column4_frame.grid(row=2, column=2, sticky='nw', padx=5, pady=5)
+        self.column4_frame.grid(row=2, column=2, sticky='nw', padx=0, pady=5)
         custom_font = Font(family="Helvetica", size=7)
         style.configure('SmallFont.TButton', font=custom_font, padding=1)
         
@@ -436,7 +436,7 @@ class Application(tk.Frame):
         # Column 3 Widgets
         # Creating a new frame for checkboxes within the product frame
         self.checkbox_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.checkbox_frame.grid(row=2, column=3, rowspan=8, sticky='nw', padx=5, pady=5)
+        self.checkbox_frame.grid(row=2, column=3, rowspan=8, sticky='nw', padx=0, pady=5)
         self.checkbox_frame.grid_rowconfigure(0, minsize=75)  # Adjust 'minsize' for desired space
 
         self.sold_var = tk.BooleanVar()
@@ -1875,8 +1875,8 @@ def exit_application(app, root):
 def main():
     root = ThemedTk(theme="breeze")  # Use any available theme, e.g., "arc"
     root.title("Improved Inventory Manager")
-    app = Application(master=root)
     root.state('zoomed')
+    app = Application(master=root)
     
     app.excel_manager.filepath, _ = app.load_excel_settings()
 
