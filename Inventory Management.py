@@ -23,6 +23,8 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.styles import Alignment
 from ttkthemes import ThemedTk
+from openpyxl import Workbook
+
 
 
 
@@ -176,8 +178,8 @@ class Application(tk.Frame):
         self.combine_and_display_folders()
         
         # Call the methods associated with the settings buttons
-        self.update_links_in_excel()  # This corresponds to 'Autofill Excel Data(link, asin, tosellafter)'
-        self.update_folders_paths()   # This corresponds to 'Update folder names and paths'
+        #self.update_links_in_excel()  # This corresponds to 'Autofill Excel Data(link, asin, tosellafter)'
+        #self.update_folders_paths()   # This corresponds to 'Update folder names and paths'
 
     def load_settings(self):
         # Load settings
@@ -271,30 +273,30 @@ class Application(tk.Frame):
 
 
         # Row 0 Widgets
-        self.column6_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.column6_frame.grid(row=0, column=5, sticky='ne', padx=50, pady=0)
+        self.row0_frame = tk.Frame(self.product_frame, bg='light gray')
+        self.row0_frame.grid(row=0, column=5, sticky='ne', padx=50, pady=0)
     
-        self.save_button = ttk.Button(self.column6_frame, text='Save', command=self.save, state='disabled')
+        self.save_button = ttk.Button(self.row0_frame, text='Save', command=self.save, state='disabled')
         self.save_button.grid(row=0, column=0, sticky='w', padx=0, pady=0)
 
-        self.edit_button = ttk.Button(self.column6_frame, text="Edit", command=self.toggle_edit_mode, state='disabled')
+        self.edit_button = ttk.Button(self.row0_frame, text="Edit", command=self.toggle_edit_mode, state='disabled')
         self.edit_button.grid(row=0, column=1, sticky='w', padx=0, pady=0)
 
 
         # Row 1 Widgets
-        self.column2_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.column2_frame.grid(row=1, column=0, sticky='nw', padx=5, pady=5)
+        self.row1_frame = tk.Frame(self.product_frame, bg='light gray')
+        self.row1_frame.grid(row=1, column=0, sticky='nw', padx=5, pady=5)
         
         self.order_date_var = tk.StringVar()
-        self.order_date_label = ttk.Label(self.column2_frame, text='Order Date')
+        self.order_date_label = ttk.Label(self.row1_frame, text='Order Date')
         self.order_date_label.grid(row=0, column=0, sticky='w', padx=0, pady=0)
-        self.order_date_entry = ttk.Entry(self.column2_frame, textvariable=self.order_date_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.order_date_entry = ttk.Entry(self.row1_frame, textvariable=self.order_date_var, state='disabled', style='BlackOnDisabled.TEntry')
         self.order_date_entry.grid(row=1, column=0, sticky='w', padx=0, pady=0)
 
         self.to_sell_after_var = tk.StringVar()
-        self.to_sell_after_label = ttk.Label(self.column2_frame, text='To Sell After')
+        self.to_sell_after_label = ttk.Label(self.row1_frame, text='To Sell After')
         self.to_sell_after_label.grid(row=2, column=0, sticky='w', padx=0, pady=0)
-        self.to_sell_after_entry = ttk.Entry(self.column2_frame, textvariable=self.to_sell_after_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.to_sell_after_entry = ttk.Entry(self.row1_frame, textvariable=self.to_sell_after_var, state='disabled', style='BlackOnDisabled.TEntry')
         self.to_sell_after_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
 
 
@@ -302,58 +304,58 @@ class Application(tk.Frame):
         # Column 0 Widgets
         
         # Create a new frame for the column 0 widgets
-        self.column0_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.column0_frame.grid(row=2, column=0, sticky='nw', padx=25, pady=25)
+        self.r2column0_frame = tk.Frame(self.product_frame, bg='light gray')
+        self.r2column0_frame.grid(row=2, column=0, sticky='nw', padx=25, pady=25)
         
         self.product_id_var = tk.StringVar()
-        self.product_id_label = ttk.Label(self.column0_frame, text='Product ID')
+        self.product_id_label = ttk.Label(self.r2column0_frame, text='Product ID')
         self.product_id_label.grid(row=0, column=0, sticky='w', padx=0, pady=0)
-        self.product_id_entry = ttk.Entry(self.column0_frame, textvariable=self.product_id_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.product_id_entry = ttk.Entry(self.r2column0_frame, textvariable=self.product_id_var, state='disabled', style='BlackOnDisabled.TEntry')
         self.product_id_entry.grid(row=1, column=0, sticky='w', padx=0, pady=0)
 
-        self.column0_frame.grid_rowconfigure(2, minsize=2)  # Adjust 'minsize' for desired space
+        self.r2column0_frame.grid_rowconfigure(2, minsize=2)  # Adjust 'minsize' for desired space
 
         self.product_name_var = tk.StringVar()
-        self.product_name_label = ttk.Label(self.column0_frame, text='Product Name')
+        self.product_name_label = ttk.Label(self.r2column0_frame, text='Product Name')
         self.product_name_label.grid(row=3, column=0, sticky='w', padx=0, pady=0)
 
         # Create the Text widget with the desired background color inside the border frame
-        self.product_name_text = tk.Text(self.column0_frame, height=8, width=50, bg="#eff0f1", fg="#000000", wrap="word", bd=0, highlightthickness=1, highlightcolor="#94cfeb", font=product_name_font)
+        self.product_name_text = tk.Text(self.r2column0_frame, height=8, width=50, bg="#eff0f1", fg="#000000", wrap="word", bd=0, highlightthickness=1, highlightcolor="#94cfeb", font=product_name_font)
         self.product_name_text.grid(row=4, column=0, sticky='w', padx=0, pady=1)
         
         # Bind the mouse click event to an empty lambda function
         self.product_name_text.bind("<Button-1>", lambda e: "break")
         
-        self.column0_frame.grid_rowconfigure(5, minsize=2)  # Adjust 'minsize' for desired space
+        self.r2column0_frame.grid_rowconfigure(5, minsize=2)  # Adjust 'minsize' for desired space
         
         self.product_folder_var = tk.StringVar()
-        self.product_folder_label = ttk.Label(self.column0_frame, text='Product Folder')
+        self.product_folder_label = ttk.Label(self.r2column0_frame, text='Product Folder')
         self.product_folder_label.grid(row=6, column=0, sticky='w', padx=0, pady=2)
 
         # Now use this style when creating your button
-        self.product_folder_link = ttk.Button(self.column0_frame, textvariable=self.product_folder_var, style='Blue.TButton')
+        self.product_folder_link = ttk.Button(self.r2column0_frame, textvariable=self.product_folder_var, style='Blue.TButton')
 
         self.product_folder_link.grid(row=7, column=0, sticky='w', padx=0, pady=0)
 
-        self.column0_frame.grid_rowconfigure(8, minsize=2)  # Adjust 'minsize' for desired space
+        self.r2column0_frame.grid_rowconfigure(8, minsize=2)  # Adjust 'minsize' for desired space
 
         self.order_link_var = tk.StringVar()
-        self.order_link_label = ttk.Label(self.column0_frame, text='Order Link')
+        self.order_link_label = ttk.Label(self.r2column0_frame, text='Order Link')
         self.order_link_label.grid(row=9, column=0, sticky='w', padx=0, pady=0)
         
         # Replace the Entry with a Text widget for clickable links
-        self.order_link_text = tk.Text(self.column0_frame, height=1, width=40, bg="#eff0f1", fg="#000000", wrap=tk.NONE, bd=0, font=link_font)
+        self.order_link_text = tk.Text(self.r2column0_frame, height=1, width=40, bg="#eff0f1", fg="#000000", wrap=tk.NONE, bd=0, font=link_font)
         self.order_link_text.grid(row=10, column=0, sticky='w', padx=0, pady=1)
         self.order_link_text.tag_configure("hyperlink", foreground="blue", underline=True)
         self.order_link_text.bind("<Button-1>", self.open_hyperlink)
         self.order_link_text.config(state='disabled')
 
-        self.column0_frame.grid_rowconfigure(11, minsize=2)  # Adjust 'minsize' for desired space
+        self.r2column0_frame.grid_rowconfigure(11, minsize=2)  # Adjust 'minsize' for desired space
 
         self.asin_var = tk.StringVar()
-        self.asin_label = ttk.Label(self.column0_frame, text='ASIN')
+        self.asin_label = ttk.Label(self.r2column0_frame, text='ASIN')
         self.asin_label.grid(row=12, column=0, sticky='w', padx=0, pady=0)
-        self.asin_entry = ttk.Entry(self.column0_frame, textvariable=self.asin_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.asin_entry = ttk.Entry(self.r2column0_frame, textvariable=self.asin_var, state='disabled', style='BlackOnDisabled.TEntry')
         self.asin_entry.grid(row=13, column=0, sticky='w', padx=0, pady=0)
 
 
@@ -392,42 +394,42 @@ class Application(tk.Frame):
 
         # Row 2 Widgets
         # Column 2 Widgets
-        self.column4_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.column4_frame.grid(row=2, column=2, sticky='nw', padx=0, pady=5)
+        self.r2column2_frame = tk.Frame(self.product_frame, bg='light gray')
+        self.r2column2_frame.grid(row=2, column=2, sticky='nw', padx=0, pady=5)
         custom_font = Font(family="Helvetica", size=7)
         style.configure('SmallFont.TButton', font=custom_font, padding=1)
         
-        self.column4_frame.grid_rowconfigure(0, minsize=75)  # Adjust 'minsize' for desired space
+        self.r2column2_frame.grid_rowconfigure(0, minsize=75)  # Adjust 'minsize' for desired space
 
 
         self.sold_date_var = tk.StringVar()
-        self.sold_date_label = ttk.Label(self.column4_frame, text='Sold Date')
+        self.sold_date_label = ttk.Label(self.r2column2_frame, text='Sold Date')
         self.sold_date_label.grid(row=2, column=0, sticky='w', padx=0, pady=0)
         
-        self.sold_date_entry = ttk.Entry(self.column4_frame, textvariable=self.sold_date_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.sold_date_entry = ttk.Entry(self.r2column2_frame, textvariable=self.sold_date_var, state='disabled', style='BlackOnDisabled.TEntry')
         self.sold_date_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
         
-        self.sold_date_button = ttk.Button(self.column4_frame, text="Pick\nDate", style='SmallFont.TButton', command=self.pick_date, state='disabled', width=5)
+        self.sold_date_button = ttk.Button(self.r2column2_frame, text="Pick\nDate", style='SmallFont.TButton', command=self.pick_date, state='disabled', width=5)
         self.sold_date_button.grid(row=3, column=0, sticky='e', padx=0, pady=0)
 
         self.payment_type_var = tk.StringVar()
-        self.payment_type_label = ttk.Label(self.column4_frame, text='Payment Type')
+        self.payment_type_label = ttk.Label(self.r2column2_frame, text='Payment Type')
         self.payment_type_label.grid(row=4, column=0, sticky='w', padx=0, pady=0)
         
-        self.payment_type_combobox = ttk.Combobox(self.column4_frame, textvariable=self.payment_type_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.payment_type_combobox = ttk.Combobox(self.r2column2_frame, textvariable=self.payment_type_var, state='disabled', style='BlackOnDisabled.TEntry')
         self.payment_type_combobox['values'] = ('', 'Cash', 'ATH Movil')
         self.payment_type_combobox.grid(row=5, column=0, sticky='w', padx=0, pady=0)
 
         self.discount_var = tk.StringVar()
-        self.discount_label = ttk.Label(self.column4_frame, text='Discount')
+        self.discount_label = ttk.Label(self.r2column2_frame, text='Discount')
         self.discount_label.grid(row=6, column=0, sticky='w', padx=0, pady=0)
-        self.discount_entry = ttk.Entry(self.column4_frame, textvariable=self.discount_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.discount_entry = ttk.Entry(self.r2column2_frame, textvariable=self.discount_var, state='disabled', style='BlackOnDisabled.TEntry')
         self.discount_entry.grid(row=7, column=0, sticky='w', padx=0, pady=0)
         
         self.sold_price_var = tk.StringVar()
-        self.sold_price_label = ttk.Label(self.column4_frame, text='Sold Price')
+        self.sold_price_label = ttk.Label(self.r2column2_frame, text='Sold Price')
         self.sold_price_label.grid(row=8, column=0, sticky='w', padx=0, pady=0)
-        self.sold_price_entry = ttk.Entry(self.column4_frame, textvariable=self.sold_price_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.sold_price_entry = ttk.Entry(self.r2column2_frame, textvariable=self.sold_price_var, state='disabled', style='BlackOnDisabled.TEntry')
         self.sold_price_entry.grid(row=9, column=0, sticky='w', padx=0, pady=0)
         
         
@@ -587,6 +589,9 @@ class Application(tk.Frame):
         self.products_to_sell_list_button = ttk.Button(self.settings_frame, text="Show list of products available to sell", command=self.products_to_sell_report)
         self.products_to_sell_list_button.grid(row=8, column=0, padx=5, pady=5, sticky='w')
 
+        self.update_prices_button = ttk.Button(self.settings_frame, text="Update empty product prices based on Fair Market Value.", command=self.update_prices)
+        self.update_prices_button.grid(row=9, column=0, padx=5, pady=5, sticky='w')
+
         self.back_button = ttk.Button(self.settings_window, text="<- Back", command=self.back_to_main)
         self.back_button.grid(row=0, column=0, sticky='w', padx=5, pady=5)
 
@@ -605,47 +610,37 @@ class Application(tk.Frame):
             messagebox.showerror("Error", "Excel file path or sheet name is not set.")
             return
 
-        # Define the To Sell folder path (instead of Backup folder)
+        # Define the To Sell folder path
         to_sell_folder = self.to_sell_folder
         if not os.path.exists(to_sell_folder):
             messagebox.showerror("Error", "To Sell folder path is not set or does not exist.")
             return
 
-        # Create a copy of the Excel file in the To Sell folder
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        copy_path = os.path.join(to_sell_folder, f"Products To Sell - {today_str}.xlsx")
-        shutil.copy2(filepath, copy_path)
-
-        # Load the workbook and get the sheet
-        workbook = load_workbook(copy_path)
-        original_sheet = workbook[sheet_name]
-
-        # Create a DataFrame from the sheet data
-        data = original_sheet.values
+        # Load the original workbook and read the specified sheet into a DataFrame
+        workbook = load_workbook(filepath, data_only=True)
+        sheet = workbook[sheet_name]
+        data = sheet.values
         columns = next(data)[0:]
         df = pd.DataFrame(data, columns=columns)
-        
-        # Filter out products marked as Damaged, Cancelled Order, Personal, or Sold
+
+        # Filter out unwanted products and keep only necessary columns
         df = df[(df['Damaged'] != 'YES') & (df['Cancelled Order'] != 'YES') & (df['Personal'] != 'YES') & (df['Sold'] != 'YES') & (~pd.isna(df['Product ID']))]
-
-
-        # Keep only necessary columns
         df = df[['Product ID', 'To Sell After', 'Product Name', 'Fair Market Value']]
 
-        # Convert 'To Sell After' column to datetime and filter rows
+        # Convert 'To Sell After' to datetime
         df['To Sell After'] = pd.to_datetime(df['To Sell After'], errors='coerce')
         today = pd.to_datetime('today').normalize()
-        df = df.dropna(subset=['To Sell After'])  # Remove rows with empty 'To Sell After'
-        filtered_df = df[df['To Sell After'] <= today]
+        df = df.dropna(subset=['To Sell After'])
+        df = df[df['To Sell After'] <= today]
 
-        # Sort the filtered DataFrame by 'To Sell After' in descending order
-        sorted_df = filtered_df.sort_values(by='To Sell After', ascending=False)
+        # Sort the DataFrame
+        sorted_df = df.sort_values(by='To Sell After', ascending=False)
 
-        # Delete the original sheet and create a new one
-        del workbook[sheet_name]
-        new_sheet = workbook.create_sheet(sheet_name)
+        # Create a new workbook and add the sorted data to it
+        new_workbook = Workbook()
+        new_sheet = new_workbook.active
+        new_sheet.title = sheet_name
 
-        # Write the sorted DataFrame back to the new sheet
         for r_idx, row in enumerate(dataframe_to_rows(sorted_df, index=False, header=True), start=1):
             for c_idx, value in enumerate(row, start=1):
                 cell = new_sheet.cell(row=r_idx, column=c_idx, value=value)
@@ -677,9 +672,10 @@ class Application(tk.Frame):
         new_sheet.column_dimensions['C'].width = 700 / 7  # Width for 'Product Name'
         new_sheet.column_dimensions['D'].width = 120 / 7  # Width for 'Fair Market Value'
 
-        # Save the changes to the workbook
-        workbook.save(copy_path)
-
+        # Save the new workbook
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        copy_path = os.path.join(to_sell_folder, f"Products To Sell - {today_str}.xlsx")
+        new_workbook.save(copy_path)
 
         # Open the modified Excel file
         if sys.platform == "win32":
@@ -1514,6 +1510,7 @@ class Application(tk.Frame):
 
         self.db_manager.delete_all_folders()
         self.db_manager.setup_database()
+        self.combine_and_display_folders()
 
     def update_folder_names(self):
         # Load folder paths from folders_paths.txt
@@ -1711,6 +1708,76 @@ class Application(tk.Frame):
                 return False
 
         return to_sell_date <= datetime.today().date()
+
+    def rpc_formula(self, fair_market_value):
+        # Calculate the original value before the 11.5% decrease
+        original_value = fair_market_value / (1 - 0.115)
+        # Round up to the nearest 5 or 0
+        total_price = -(-original_value // 5) * 5
+        # Calculate the 11.5% tax of the total price
+        IVU_tax = total_price * 0.115
+        # Calculate the product price by subtracting the tax from the total price
+        product_price = total_price - IVU_tax
+        # Calculate the 10% reseller earnings of the product price
+        price_discount = product_price * 0.10
+        return product_price, total_price, IVU_tax, price_discount
+
+    def update_prices(self):
+        # Read the Excel path and sheet name from the file
+        with open('excel_and_sheet_path.txt', 'r') as file:
+            excel_path, sheet_name = file.read().strip().split('\n')
+        
+        # Load the workbook and the specific sheet
+        workbook = load_workbook(excel_path)
+        sheet = workbook[sheet_name]
+
+        # Convert the sheet into a DataFrame
+        data = sheet.values
+        columns = next(data)[0:]  # The first row of the sheet contains column names
+        df = pd.DataFrame(data, columns=columns)
+        df = df[1:]  # Skip the header row
+
+        # Convert columns to 'object' type to avoid FutureWarning
+        object_columns = ['Product Price', 'To Sell Price', 'IVU Tax', 'Discount']
+        for col in object_columns:
+            df[col] = df[col].astype('object')
+
+        # Define inner functions for conversions inside update_prices to keep them scoped
+        def to_currency(value):
+            return "${:,.2f}".format(value)
+
+        def currency_to_float(value):
+            if isinstance(value, str) and value.startswith('$'):
+                value = value.replace('$', '').replace(',', '')
+                return float(value)
+            return value
+
+        # Iterate through the DataFrame and update the prices
+        for index, row in df.iterrows():
+            if pd.isna(row['Product Price']) or pd.isna(row['To Sell Price']) or pd.isna(row['IVU Tax']) or pd.isna(row['Discount']):
+                # Convert currency string to float if needed
+                fair_market_value = currency_to_float(row['Fair Market Value'])
+                # Calculate new values with rpc_formula
+                product_price, total_price, IVU_tax, price_discount = self.rpc_formula(fair_market_value)
+                # Format results as currency
+                df.at[index, 'Product Price'] = product_price
+                df.at[index, 'To Sell Price'] = total_price
+                df.at[index, 'IVU Tax'] = IVU_tax
+                df.at[index, 'Discount'] = price_discount
+
+        # Clear the existing data in the sheet
+        for row in sheet.iter_rows(min_row=2, max_col=sheet.max_column, max_row=sheet.max_row):
+            for cell in row:
+                cell.value = None
+
+        # Write the updated DataFrame back to the sheet
+        for r_idx, df_row in enumerate(dataframe_to_rows(df, index=False, header=False), start=2):
+            for c_idx, value in enumerate(df_row, start=1):
+                sheet.cell(row=r_idx, column=c_idx, value=value)
+
+        # Save the workbook
+        workbook.save(excel_path)
+        print("Prices updated successfully in the Excel file.")
 
     def prompt_correlation(self, missing_docs):
         self.correlate_window = Toplevel(self)
