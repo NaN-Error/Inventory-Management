@@ -24,6 +24,7 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.styles import Alignment
 from ttkthemes import ThemedTk
 from openpyxl import Workbook
+import math
 
 
 
@@ -914,11 +915,20 @@ class Application(tk.Frame):
 
                     self.sold_date_var.set(formatted_sold_date)
 
-                    self.fair_market_value_var.set('' if pd.isnull(product_info.get('Fair Market Value')) else product_info.get('Fair Market Value', ''))
-                    self.discount_var.set('' if pd.isnull(product_info.get('Discount')) else product_info.get('Discount', ''))
-                    self.product_price_var.set('' if pd.isnull(product_info.get('Product Price')) else product_info.get('Product Price', ''))
-                    self.ivu_tax_var.set('' if pd.isnull(product_info.get('IVU Tax')) else product_info.get('IVU Tax', ''))
-                    self.sale_price_var.set('' if pd.isnull(product_info.get('To Sell Price')) else product_info.get('To Sell Price', ''))
+                    def format_price(value):
+                        if pd.isnull(value):
+                            return ''
+                        # Separate the fractional and integer parts
+                        fractional, integer = math.modf(value)
+                        # If the fractional part is 0, use the integer part; otherwise, format with two decimal places
+                        return f"${int(integer) if fractional == 0 else f'{value:.2f}'}"
+                    
+                    self.fair_market_value_var.set(format_price(product_info.get('Fair Market Value')))
+                    self.discount_var.set(format_price(product_info.get('Discount')))
+                    self.product_price_var.set(format_price(product_info.get('Product Price')))
+                    self.ivu_tax_var.set(format_price(product_info.get('IVU Tax')))
+                    self.sale_price_var.set(format_price(product_info.get('To Sell Price')))
+                    self.sold_price_var.set(format_price(product_info.get('Sold Price')) if not pd.isnull(product_info.get('Sold Price')) else '$')
 
                     self.order_link_text.delete(1.0, "end")
                     hyperlink = product_info.get('Order Link', '')
@@ -926,7 +936,6 @@ class Application(tk.Frame):
                         self.order_link_text.insert("insert", hyperlink, "hyperlink")
                         self.order_link_text.tag_add("hyperlink", "1.0", "end")
                         
-                    self.sold_price_var.set('' if pd.isnull(product_info.get('Sold Price')) else product_info.get('Sold Price', ''))
                     self.payment_type_var.set('' if pd.isnull(product_info.get('Payment Type')) else product_info.get('Payment Type', ''))
                     # ... continue with other fields as needed ...
                     # Add code here to populate the Sold Date and other date-related fields, if applicable
@@ -1064,9 +1073,9 @@ class Application(tk.Frame):
         self.asin_entry.config(state=state)
         self.product_id_entry.config(state='disabled')
         self.product_name_text.config(state='disabled')
-        self.fair_market_value_entry.config(state=state)
-        self.product_price_entry.config(state=state)
-        self.ivu_tax_entry.config(state=state)
+        self.fair_market_value_entry.config(state='disabled')
+        self.product_price_entry.config(state='disabled')
+        self.ivu_tax_entry.config(state='disabled')
         self.sale_price_entry.config(state=state)
         self.discount_entry.config(state=state)
         self.sold_price_entry.config(state=state)
@@ -1091,6 +1100,7 @@ class Application(tk.Frame):
             self.master.bind('<Return>', lambda e: self.edit_button.invoke())
 
     def save(self):
+        
         # Update the 'Sold' checkbox based on the 'Sold Date' entry
         if self.sold_date_var.get():
             # If 'Sold Date' is not empty, check 'Sold'
@@ -1098,6 +1108,40 @@ class Application(tk.Frame):
         else:
             # If 'Sold Date' is empty, uncheck 'Sold'
             self.sold_var.set(False)
+
+        def to_float(value):
+            try:
+                # Convert to float, if possible
+                return float(value)
+            except ValueError:
+                # Return the original value if it can't be converted
+                return value
+        def remove_dollar_sign(value):
+            return value.replace('$', '') if isinstance(value, str) else value
+        
+        try:
+            # Remove dollar sign if present and convert the sale price from string to float
+            total_price = float(remove_dollar_sign(self.sale_price_var.get()))
+        except ValueError:
+            messagebox.showerror("Error", "Invalid sale price entered.")
+            return
+
+        # Calculate the IVU tax (11.5% of the total price)
+        IVU_tax = total_price * 0.115
+
+        # Calculate the product price by subtracting the tax from the total price
+        product_price = total_price - IVU_tax
+
+        
+        discount_price = product_price * 0.10
+
+        # Update the IVU tax and product price entry fields
+        self.ivu_tax_var.set(f"${IVU_tax:.2f}")  # Format to 2 decimal places
+        self.product_price_var.set(f"${product_price:.2f}")  # Format to 2 decimal places
+        self.discount_var.set(f"${discount_price:.2f}")  # Format to 2 decimal places
+
+             
+
             
         product_id = self.product_id_var.get().strip().upper()
 
@@ -1107,7 +1151,8 @@ class Application(tk.Frame):
         if not filepath or not sheet_name:
             messagebox.showerror("Error", "Excel file path or sheet name is not set.")
             return
-            
+        
+
         # Collect the data from the form.
         product_data = {
             'Cancelled Order': self.cancelled_order_var.get(),
@@ -1118,10 +1163,15 @@ class Application(tk.Frame):
             'Sold': self.sold_var.get(),
             'To Sell After': self.to_sell_after_var.get(),
             'Product Name': self.product_name_text.get("1.0", tk.END).strip(),
-            'Fair Market Value': self.fair_market_value_var.get(),
             'Sold Price': self.sold_price_var.get(),
             'Payment Type': self.payment_type_var.get(),
             'Sold Date': self.sold_date_var.get(),
+            'Fair Market Value': to_float(remove_dollar_sign(self.fair_market_value_var.get())),
+            'Discount': to_float(remove_dollar_sign(self.discount_var.get())),
+            'Product Price': to_float(remove_dollar_sign(self.product_price_var.get())),
+            'IVU Tax': to_float(remove_dollar_sign(self.ivu_tax_var.get())),
+            'To Sell Price': to_float(remove_dollar_sign(self.sale_price_var.get())),
+            'Sold Price': to_float(remove_dollar_sign(self.sold_price_var.get())),
             # ... and so on for the rest of your form fields.
         }
 
@@ -1843,48 +1893,54 @@ class Application(tk.Frame):
         self.Settings_Window_Start()
 
     def create_word_doc(self, doc_data, iid, show_message=True):
-        #print("Create word doc function called")  # Debug #print statement
+        # Unpack the data tuple
         folder_name, product_id, product_name = doc_data
+        # Retrieve the folder path from the database
         folder_path = self.get_folder_path_from_db(str(product_id))
 
         if folder_path:
-            # Here's where you attempt to retrieve the fair market value
             try:
-                # Make sure the column names used here match exactly with those in your Excel file
-                fair_market_value_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Fair Market Value']
-                if not fair_market_value_series.empty:
-                    fair_market_value = fair_market_value_series.iloc[0]
+                # Retrieve 'To Sell Prices' from the Excel data
+                to_sell_prices_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'To Sell Price']
+                if not to_sell_prices_series.empty:
+                    to_sell_price = to_sell_prices_series.iloc[0]
                 else:
-                    fair_market_value = "N/A"  # Default to "N/A" if the value is not found
-                    
-                # Retrieving the product link
+                    to_sell_price = "N/A"  # Default to "N/A" if not found
+
+                # Retrieve the product link
                 order_link_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Order Link']
                 if not order_link_series.empty:
                     order_link = order_link_series.iloc[0]
                 else:
                     order_link = "N/A"  # Default to "N/A" if the link is not found
             except Exception as e:
-                print(f"Error retrieving data: {e}")  # Debugging #print statement
+                print(f"Error retrieving data: {e}")  # Debugging print statement
 
+            # Path for the new Word document
             doc_path = os.path.join(folder_path, f"{product_id}.docx")
             try:
+                # Create a new Word document
                 doc = Document()
                 doc.add_paragraph(f"Product ID: {product_id}")
                 doc.add_paragraph(f"Product Name: {product_name}")
-                doc.add_paragraph(f"Fair Market Value: ${fair_market_value}")
-                doc.add_paragraph(f"Product Link(to get the product description and pictures, if needed): {order_link}")
+                doc.add_paragraph(f"To Sell Price: ${to_sell_price}")
+                doc.add_paragraph(f"Amazon Link(to get the product description and pictures, if needed): {order_link}")
+
+                # Save the document
                 doc.save(doc_path)
+
                 if show_message:
                     messagebox.showinfo("Document Created", f"Word document for '{product_id}' has been created successfully.")
-                # Check if the correlate_tree attribute exists and if there are any items left
+
+                # Additional logic (if any)
                 if hasattr(self, 'correlate_tree') and not self.correlate_tree.get_children():
                     self.correlate_window.destroy()
                     self.Settings_Window_Start()
             except Exception as e:
-                #print(f"Error creating word doc: {e}")  # Debug #print statement
                 messagebox.showerror("Error", f"Failed to create document for Product ID {product_id}: {e}")
         else:
             messagebox.showerror("Error", f"No folder found for Product ID {product_id}")
+
 
     def backup_excel_database(self):
         print("Starting the backup process.")
