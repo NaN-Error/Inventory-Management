@@ -915,7 +915,11 @@ class Application(tk.Frame):
                     self.sold_date_var.set(formatted_sold_date)
 
                     self.fair_market_value_var.set('' if pd.isnull(product_info.get('Fair Market Value')) else product_info.get('Fair Market Value', ''))
-                    
+                    self.discount_var.set('' if pd.isnull(product_info.get('Discount')) else product_info.get('Discount', ''))
+                    self.product_price_var.set('' if pd.isnull(product_info.get('Product Price')) else product_info.get('Product Price', ''))
+                    self.ivu_tax_var.set('' if pd.isnull(product_info.get('IVU Tax')) else product_info.get('IVU Tax', ''))
+                    self.sale_price_var.set('' if pd.isnull(product_info.get('To Sell Price')) else product_info.get('To Sell Price', ''))
+
                     self.order_link_text.delete(1.0, "end")
                     hyperlink = product_info.get('Order Link', '')
                     if hyperlink:
@@ -961,6 +965,10 @@ class Application(tk.Frame):
                     self.product_name_text.configure(state='disabled')
                     self.order_date_var.set('')
                     self.fair_market_value_var.set('')
+                    self.discount_var.set('')
+                    self.sale_price_var.set('')
+                    self.ivu_tax_var.set('')
+                    self.product_price_var.set('')
                     self.order_link_text.delete(1.0, "end")
                     self.sold_price_var.set('')
                     self.payment_type_var.set('')
@@ -1760,10 +1768,10 @@ class Application(tk.Frame):
                 # Calculate new values with rpc_formula
                 product_price, total_price, IVU_tax, price_discount = self.rpc_formula(fair_market_value)
                 # Format results as currency
-                df.at[index, 'Product Price'] = product_price
-                df.at[index, 'To Sell Price'] = total_price
-                df.at[index, 'IVU Tax'] = IVU_tax
-                df.at[index, 'Discount'] = price_discount
+                df.at[index, 'Product Price'] = round(product_price, 2)
+                df.at[index, 'To Sell Price'] = round(total_price, 2)
+                df.at[index, 'IVU Tax'] = round(IVU_tax, 2)
+                df.at[index, 'Discount'] = round(price_discount, 2)
 
         # Clear the existing data in the sheet
         for row in sheet.iter_rows(min_row=2, max_col=sheet.max_column, max_row=sheet.max_row):
