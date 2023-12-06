@@ -633,10 +633,13 @@ class Application(tk.Frame):
         self.calculate_discount()
 
     def on_discount_price_focus_out(self, event=None):
-        """Adds '$' symbol to the discount price when focus is lost."""
+        """Adds '$' symbol to the discount price when focus is lost and clears discount percentage if empty."""
         price_str = self.discount_var.get()
-        if price_str and not price_str.startswith('$'):
-            self.discount_var.set(f"${price_str}")
+        if price_str:
+            if not price_str.startswith('$'):
+                self.discount_var.set(f"${price_str}")
+        else:
+            self.percent_discount_var.set('')  # Clear discount percentage if price is empty
 
     def on_discount_price_focus_in(self, event=None):
         """Removes '$' symbol from the discount price when focus is gained."""
@@ -655,10 +658,14 @@ class Application(tk.Frame):
             self.percent_discount_var.set(percentage_str.rstrip('%'))
 
     def on_discount_percentage_focus_out(self, event=None):
-        """Adds '%' symbol to the discount percentage when focus is lost."""
+        """Adds '%' symbol to the discount percentage when focus is lost and clears discount price if empty."""
         percentage_str = self.percent_discount_var.get()
-        if percentage_str and not percentage_str.endswith('%'):
-            self.percent_discount_var.set(f"{percentage_str}%")
+        if percentage_str:
+            if not percentage_str.endswith('%'):
+                self.percent_discount_var.set(f"{percentage_str}%")
+        else:
+            self.discount_var.set('')  # Clear discount price if percentage is empty
+
 
     def custom_float_format(self, value):
         """Formats the float value to string with two decimal places."""
