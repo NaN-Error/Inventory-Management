@@ -169,7 +169,8 @@ class Application(tk.Frame):
         self.sold_folder = None
         self.to_sell_folder = None
         self.pack(fill='both', expand=True)
-        
+        self.last_changed = None
+
         
         # Make sure you call this before combining and displaying folders
         self.Main_Window_Widgets() 
@@ -269,9 +270,14 @@ class Application(tk.Frame):
         link_font = Font(family="Helvetica", size=10)  # Adjust the size as per your requirement
         product_name_font = Font(family="Helvetica", size=11)  # Adjust the size as per your requirement
 
+        # Add validation commands
+        validate_percentage_command = (self.register(lambda P: self.validate_input(P, is_percentage=True)), '%P')
+        validate_price_command = (self.register(self.validate_input), '%P')
+        vcmd = (self.register(self.validate_input), '%P')
+
+
         self.product_frame = tk.Frame(self.bottom_frame, bg='light gray')
         self.product_frame.pack(side='right', fill='both', expand=True) #change pack to grid later
-
 
         # Row 0 Widgets
         self.row0_frame = tk.Frame(self.product_frame, bg='light gray')
@@ -375,11 +381,11 @@ class Application(tk.Frame):
         self.fair_market_value_entry = ttk.Entry(self.r2column1_frame, textvariable=self.fair_market_value_var, state='disabled', style='BlackOnDisabled.TEntry')
         self.fair_market_value_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
         
-        self.product_price_var = tk.StringVar()
-        self.product_price_label = ttk.Label(self.r2column1_frame, text='Product Price')
-        self.product_price_label.grid(row=4, column=0, sticky='w', padx=0, pady=0)
-        self.product_price_entry = ttk.Entry(self.r2column1_frame, textvariable=self.product_price_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.product_price_entry.grid(row=5, column=0, sticky='w', padx=0, pady=0)
+        self.regular_product_price_var = tk.StringVar()
+        self.regular_product_price_label = ttk.Label(self.r2column1_frame, text='Product Price')
+        self.regular_product_price_label.grid(row=4, column=0, sticky='w', padx=0, pady=0)
+        self.regular_product_price_entry = ttk.Entry(self.r2column1_frame, textvariable=self.regular_product_price_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.regular_product_price_entry.grid(row=5, column=0, sticky='w', padx=0, pady=0)
         
         self.ivu_tax_var = tk.StringVar()
         self.ivu_tax_label = ttk.Label(self.r2column1_frame, text='IVU Tax')
@@ -387,14 +393,15 @@ class Application(tk.Frame):
         self.ivu_tax_entry = ttk.Entry(self.r2column1_frame, textvariable=self.ivu_tax_var, state='disabled', style='BlackOnDisabled.TEntry')
         self.ivu_tax_entry.grid(row=7, column=0, sticky='w', padx=0, pady=0)
         
-        self.sale_price_var = tk.StringVar()
-        self.sale_price_label = ttk.Label(self.r2column1_frame, text='Product Price (including IVU)')
-        self.sale_price_label.grid(row=8, column=0, sticky='w', padx=0, pady=0)
-        self.sale_price_entry = ttk.Entry(self.r2column1_frame, textvariable=self.sale_price_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.sale_price_entry.grid(row=9, column=0, sticky='w', padx=0, pady=0)
+        self.product_price_plus_ivu_var = tk.StringVar()
+        self.product_price_plus_ivu_label = ttk.Label(self.r2column1_frame, text='Product Price (+ IVU)')
+        self.product_price_plus_ivu_label.grid(row=8, column=0, sticky='w', padx=0, pady=0)
+        self.product_price_plus_ivu_entry = ttk.Entry(self.r2column1_frame, textvariable=self.product_price_plus_ivu_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.product_price_plus_ivu_entry.grid(row=9, column=0, sticky='w', padx=0, pady=0)
 
         # Row 2 Widgets
         # Column 2 Widgets
+
         self.r2column2_frame = tk.Frame(self.product_frame, bg='light gray')
         self.r2column2_frame.grid(row=2, column=2, sticky='nw', padx=0, pady=5)
         custom_font = Font(family="Helvetica", size=7)
@@ -402,38 +409,81 @@ class Application(tk.Frame):
         
         self.r2column2_frame.grid_rowconfigure(0, minsize=75)  # Adjust 'minsize' for desired space
 
+        self.discount_var = tk.StringVar()
+        self.discount_label = ttk.Label(self.r2column2_frame, text='Discount($ Or %)')
+        self.discount_label.grid(row=1, column=0, sticky='w', padx=0, pady=0)
+
+        # Frame to hold the discount entries
+        self.discount_frame = ttk.Frame(self.r2column2_frame)
+        self.discount_frame.grid(row=2, column=0, sticky='w', padx=0, pady=0)
+
+        # Discount entries with validation and event binding
+        self.discount_var = tk.StringVar()
+        self.discount_entry = ttk.Entry(self.discount_frame, textvariable=self.discount_var, width=8, state='disabled', style='BlackOnDisabled.TEntry', validate='key', validatecommand=validate_price_command)
+        self.discount_entry.pack(side=tk.LEFT)
+        self.discount_entry.bind("<KeyRelease>", self.on_price_changed)        
+        self.discount_entry.bind("<FocusIn>", self.on_discount_price_focus_in)        
+        self.discount_entry.bind("<FocusOut>", self.on_discount_price_focus_out)
+
+        # Label "Or"
+        self.or_label = ttk.Label(self.discount_frame, text="Or")
+        self.or_label.pack(side=tk.LEFT)
+
+        self.percent_discount_var = tk.StringVar()
+        self.percent_discount_entry = ttk.Entry(self.discount_frame, textvariable=self.percent_discount_var, width=8, state='disabled', style='BlackOnDisabled.TEntry', validate='key', validatecommand=validate_percentage_command)
+        self.percent_discount_entry.pack(side=tk.LEFT)
+        self.percent_discount_entry.bind("<KeyRelease>", self.on_percentage_changed)
+        self.percent_discount_entry.bind("<FocusIn>", self.on_discount_percentage_focus_in)
+        self.percent_discount_entry.bind("<FocusOut>", self.on_discount_percentage_focus_out)
+        
+        self.product_price_after_discount_var = tk.StringVar()
+        self.product_price_after_discount_label = ttk.Label(self.r2column2_frame, text='Product Price after Discount')
+        self.product_price_after_discount_label.grid(row=3, column=0, sticky='w', padx=0, pady=0)
+        self.product_price_after_discount_entry = ttk.Entry(self.r2column2_frame, textvariable=self.product_price_after_discount_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.product_price_after_discount_entry.grid(row=4, column=0, sticky='w', padx=0, pady=0)
+
+        self.ivu_tax_after_discount_var = tk.StringVar()
+        self.ivu_tax_after_discount_label = ttk.Label(self.r2column2_frame, text='IVU Tax after Discount')
+        self.ivu_tax_after_discount_label.grid(row=5, column=0, sticky='w', padx=0, pady=0)
+        self.ivu_tax_after_discount_entry = ttk.Entry(self.r2column2_frame, textvariable=self.ivu_tax_after_discount_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.ivu_tax_after_discount_entry.grid(row=6, column=0, sticky='w', padx=0, pady=0)
+
+        self.product_price_minus_discount_plus_ivu_var = tk.StringVar()
+        self.product_price_minus_discount_plus_ivu_label = ttk.Label(self.r2column2_frame, text='Product Price (+IVU - Discount)')
+        self.product_price_minus_discount_plus_ivu_label.grid(row=7, column=0, sticky='w', padx=0, pady=0)
+        self.product_price_minus_discount_plus_ivu_entry = ttk.Entry(self.r2column2_frame, textvariable=self.product_price_minus_discount_plus_ivu_var, state='disabled', style='BlackOnDisabled.TEntry')
+        self.product_price_minus_discount_plus_ivu_entry.grid(row=8, column=0, sticky='w', padx=0, pady=0)
+
+
 
         self.sold_date_var = tk.StringVar()
         self.sold_date_label = ttk.Label(self.r2column2_frame, text='Sold Date')
-        self.sold_date_label.grid(row=2, column=0, sticky='w', padx=0, pady=0)
+        self.sold_date_label.grid(row=9, column=0, sticky='w', padx=0, pady=0)
         
         self.sold_date_entry = ttk.Entry(self.r2column2_frame, textvariable=self.sold_date_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.sold_date_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
+        self.sold_date_entry.grid(row=10, column=0, sticky='w', padx=0, pady=0)
         
         self.sold_date_button = ttk.Button(self.r2column2_frame, text="Pick\nDate", style='SmallFont.TButton', command=self.pick_date, state='disabled', width=5)
-        self.sold_date_button.grid(row=3, column=0, sticky='e', padx=0, pady=0)
+        self.sold_date_button.grid(row=10, column=0, sticky='e', padx=0, pady=0)
+
+        # Create the Clear Date button
+        self.clear_button = ttk.Button(self.r2column2_frame, text="Clear\nDate", style='SmallFont.TButton', command=self.clear_date, state='disabled', width=5)
+        self.clear_button.grid(row=10, column=1, sticky='e', padx=0, pady=0)
 
         self.payment_type_var = tk.StringVar()
         self.payment_type_label = ttk.Label(self.r2column2_frame, text='Payment Type')
-        self.payment_type_label.grid(row=4, column=0, sticky='w', padx=0, pady=0)
+        self.payment_type_label.grid(row=11, column=0, sticky='w', padx=0, pady=0)
         
         self.payment_type_combobox = ttk.Combobox(self.r2column2_frame, textvariable=self.payment_type_var, state='disabled', style='BlackOnDisabled.TEntry')
         self.payment_type_combobox['values'] = ('', 'Cash', 'ATH Movil')
-        self.payment_type_combobox.grid(row=5, column=0, sticky='w', padx=0, pady=0)
-
-        self.discount_var = tk.StringVar()
-        self.discount_label = ttk.Label(self.r2column2_frame, text='Discount')
-        self.discount_label.grid(row=6, column=0, sticky='w', padx=0, pady=0)
-        self.discount_entry = ttk.Entry(self.r2column2_frame, textvariable=self.discount_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.discount_entry.grid(row=7, column=0, sticky='w', padx=0, pady=0)
+        self.payment_type_combobox.grid(row=12, column=0, sticky='w', padx=0, pady=0)        
         
         self.sold_price_var = tk.StringVar()
         self.sold_price_label = ttk.Label(self.r2column2_frame, text='Sold Price')
-        self.sold_price_label.grid(row=8, column=0, sticky='w', padx=0, pady=0)
+        self.sold_price_label.grid(row=13, column=0, sticky='w', padx=0, pady=0)
         self.sold_price_entry = ttk.Entry(self.r2column2_frame, textvariable=self.sold_price_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.sold_price_entry.grid(row=9, column=0, sticky='w', padx=0, pady=0)
-        
-        
+        self.sold_price_entry.grid(row=14, column=0, sticky='w', padx=0, pady=0)
+
 
         # Row 2 Widgets
         # Column 3 Widgets
@@ -472,6 +522,7 @@ class Application(tk.Frame):
 
 
         self.product_frame.grid_rowconfigure(3, minsize=60)  # This creates a 20-pixel-high empty row as a spacer
+        
 
         # Row 4 Widgets
         # Column 0 Widgets
@@ -479,7 +530,7 @@ class Application(tk.Frame):
         self.comments_frame = tk.Frame(self.product_frame, bg='light gray')
         self.comments_frame.grid(row=4, column=0, columnspan=3, sticky='nw', padx=25, pady=5)
 
-        self.comments_text = tk.Text(self.comments_frame, height=8, width=150, bg="#eff0f1", fg="#000000", wrap="word", bd=0, highlightthickness=1, highlightcolor="#94cfeb", font=product_name_font)
+        self.comments_text = tk.Text(self.comments_frame, height=8, width=150, bg="#eff0f1", fg="#000000", wrap="word", state="disabled", bd=0, highlightthickness=1, highlightcolor="#94cfeb", font=product_name_font)
         self.comments_text.grid(row=4, column=0, sticky='w', padx=0, pady=1)
 
 
@@ -491,6 +542,40 @@ class Application(tk.Frame):
         self.reviewed_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.reviewed_var))
         self.pictures_downloaded_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.pictures_downloaded_var))
 
+        # Add focus in and focus out bindings for price-related entry fields
+        self.fair_market_value_entry.bind("<FocusIn>", self.on_price_focus_in)
+        self.fair_market_value_entry.bind("<FocusOut>", self.on_price_focus_out)
+
+        self.regular_product_price_entry.bind("<FocusIn>", self.on_price_focus_in)
+        self.regular_product_price_entry.bind("<FocusOut>", self.on_price_focus_out)
+
+        self.ivu_tax_entry.bind("<FocusIn>", self.on_price_focus_in)
+        self.ivu_tax_entry.bind("<FocusOut>", self.on_price_focus_out)
+
+        self.product_price_plus_ivu_entry.bind("<FocusIn>", self.on_price_focus_in)
+        self.product_price_plus_ivu_entry.bind("<FocusOut>", self.on_price_focus_out)
+
+        self.product_price_after_discount_entry.bind("<FocusIn>", self.on_price_focus_in)
+        self.product_price_after_discount_entry.bind("<FocusOut>", self.on_price_focus_out)
+
+        self.ivu_tax_after_discount_entry.bind("<FocusIn>", self.on_price_focus_in)
+        self.ivu_tax_after_discount_entry.bind("<FocusOut>", self.on_price_focus_out)
+
+        self.product_price_minus_discount_plus_ivu_entry.bind("<FocusIn>", self.on_price_focus_in)
+        self.product_price_minus_discount_plus_ivu_entry.bind("<FocusOut>", self.on_price_focus_out)
+
+        self.sold_price_entry.bind("<FocusIn>", self.on_price_focus_in)
+        self.sold_price_entry.bind("<FocusOut>", self.on_price_focus_out)
+
+        # configure validation commands
+        self.fair_market_value_entry.config(validate='key', validatecommand=vcmd)
+        self.regular_product_price_entry.config(validate='key', validatecommand=vcmd)
+        self.ivu_tax_entry.config(validate='key', validatecommand=validate_price_command)
+        self.product_price_plus_ivu_entry.config(validate='key', validatecommand=vcmd)
+        self.product_price_after_discount_entry.config(validate='key', validatecommand=vcmd)
+        self.ivu_tax_after_discount_entry.config(validate='key', validatecommand=vcmd)
+        self.product_price_minus_discount_plus_ivu_entry.config(validate='key', validatecommand=vcmd)
+        self.sold_price_entry.config(validate='key', validatecommand=vcmd)
 
         # Load settings
         try:
@@ -505,12 +590,111 @@ class Application(tk.Frame):
             pass
         self.search_entry.focus_set()
 
+
+    def validate_input(self, input_value, is_percentage=False):
+        """Validates the input to allow only one decimal point and up to two decimal places."""
+        if input_value == "":
+            return True
+
+        if input_value.count('.') > 1:
+            return False
+
+        parts = input_value.split('.')
+        if len(parts) == 2 and len(parts[1]) > 2:
+            return False
+
+        return all(ch.isdigit() or ch == '.' for ch in input_value)
+
+    def on_price_focus_in(self, event):
+        """Removes '$' symbol from the price when focus is gained."""
+        entry_widget = event.widget
+        price_str = entry_widget.get()
+        if price_str.startswith('$'):
+            entry_widget.delete(0, tk.END)
+            entry_widget.insert(0, price_str.lstrip('$'))
+
+    def on_price_focus_out(self, event):
+        """Adds '$' symbol to the price when focus is lost."""
+        entry_widget = event.widget
+        price_str = entry_widget.get()
+
+        # Temporarily disable validation
+        entry_widget.config(validate='none')
+
+        if price_str and not price_str.startswith('$'):
+            entry_widget.delete(0, tk.END)
+            entry_widget.insert(0, f"${price_str}")
+
+        # Re-enable validation
+        entry_widget.config(validate='key')
+
+    def on_price_changed(self, *args):
+        self.last_changed = 'price'
+        self.calculate_discount()
+
+    def on_discount_price_focus_out(self, event=None):
+        """Adds '$' symbol to the discount price when focus is lost."""
+        price_str = self.discount_var.get()
+        if price_str and not price_str.startswith('$'):
+            self.discount_var.set(f"${price_str}")
+
+    def on_discount_price_focus_in(self, event=None):
+        """Removes '$' symbol from the discount price when focus is gained."""
+        price_str = self.discount_var.get()
+        if price_str.startswith('$'):
+            self.discount_var.set(price_str.lstrip('$'))
+
+    def on_percentage_changed(self, *args):
+        self.last_changed = 'percentage'
+        self.calculate_discount()
+
+    def on_discount_percentage_focus_in(self, event=None):
+        """Removes '%' symbol from the discount percentage when focus is gained."""
+        percentage_str = self.percent_discount_var.get()
+        if percentage_str.endswith('%'):
+            self.percent_discount_var.set(percentage_str.rstrip('%'))
+
+    def on_discount_percentage_focus_out(self, event=None):
+        """Adds '%' symbol to the discount percentage when focus is lost."""
+        percentage_str = self.percent_discount_var.get()
+        if percentage_str and not percentage_str.endswith('%'):
+            self.percent_discount_var.set(f"{percentage_str}%")
+
+    def custom_float_format(self, value):
+        """Formats the float value to string with two decimal places."""
+        return "{:.2f}".format(value)
+
+    def calculate_discount(self, *args):
+        try:
+            # Extract the numeric part of the price, removing the '$' symbol
+            price_str = self.regular_product_price_var.get().lstrip('$')
+            price = float(price_str) if price_str else 0
+
+            if self.last_changed == 'percentage' and self.percent_discount_var.get().strip('%'):
+                percentage_str = self.percent_discount_var.get().strip('%')
+                percentage = float(percentage_str) if percentage_str else 0
+                calculated_price = price * percentage / 100
+                self.discount_var.set(f"${self.custom_float_format(calculated_price)}")
+
+            elif self.last_changed == 'price' and self.discount_var.get().strip('$'):
+                discount_str = self.discount_var.get().strip('$')
+                discount = float(discount_str) if discount_str else 0
+                if price != 0:
+                    percentage = (discount / price) * 100
+                    self.percent_discount_var.set(f"{self.custom_float_format(percentage)}%")
+        except ValueError:
+            pass
+
     def pick_date(self):
         def grab_date():
             selected_date = cal.selection_get()  # Get the selected date
             formatted_date = selected_date.strftime('%m/%d/%Y')  # Format the date
+
+            self.sold_date_entry.config(state="normal")  # Enable the entry widget
             self.sold_date_entry.delete(0, tk.END)  # Clear the entry field
             self.sold_date_entry.insert(0, formatted_date)  # Insert the formatted date
+            self.sold_date_entry.config(state="disabled")  # Disable the entry widget
+
             top.destroy()  # Close the Toplevel window
         def select_today_and_close(event):
             cal.selection_set(datetime.today())  # Set selection to today's date
@@ -522,6 +706,11 @@ class Application(tk.Frame):
         top.focus_set()
         top.bind('<Return>', select_today_and_close)
         cal.bind("<<CalendarSelected>>", lambda event: grab_date())
+    
+    def clear_date(self):
+        self.sold_date_entry.config(state="normal")  # Enable the entry widget
+        self.sold_date_entry.delete(0, tk.END)  # Clear the entry field
+        self.sold_date_entry.config(state="disabled")  # Disable the entry widget
 
     def focus_search_entry(self):
         self.search_entry.focus_set()
@@ -863,6 +1052,13 @@ class Application(tk.Frame):
                         self.product_name_text.insert("insert", product_name) 
                     self.product_name_text.configure(state='disabled')
 
+                    self.comments_text.configure(state='normal')
+                    self.comments_text.delete(1.0, "end")
+                    comments_text = product_info.get('Comments', '')
+                    if comments_text:
+                        self.comments_text.insert("insert", comments_text) 
+                    self.comments_text.configure(state='disabled')
+
                     # When a product is selected and the order date is fetched
                     order_date = product_info.get('Order Date', '')
                     formatted_order_date = ''  # Default value
@@ -922,13 +1118,22 @@ class Application(tk.Frame):
                         fractional, integer = math.modf(value)
                         # If the fractional part is 0, use the integer part; otherwise, format with two decimal places
                         return f"${int(integer) if fractional == 0 else f'{value:.2f}'}"
-                    
+
+                    def format_percentage(value):
+                        if pd.isnull(value):
+                            return ''
+                        # Separate the fractional and integer parts
+                        fractional, integer = math.modf(value)
+                        # If the fractional part is 0, use the integer part; otherwise, format with two decimal places
+                        return f"{int(integer) if fractional == 0 else f'{value:.2f}'}%"
+
                     self.fair_market_value_var.set(format_price(product_info.get('Fair Market Value')))
                     self.discount_var.set(format_price(product_info.get('Discount')))
-                    self.product_price_var.set(format_price(product_info.get('Product Price')))
+                    self.percent_discount_var.set(format_percentage(product_info.get('Discount Percentage')))
+                    self.regular_product_price_var.set(format_price(product_info.get('Product Price')))
                     self.ivu_tax_var.set(format_price(product_info.get('IVU Tax')))
-                    self.sale_price_var.set(format_price(product_info.get('To Sell Price')))
-                    self.sold_price_var.set(format_price(product_info.get('Sold Price')) if not pd.isnull(product_info.get('Sold Price')) else '$')
+                    self.product_price_plus_ivu_var.set(format_price(product_info.get('To Sell Price')))
+                    self.sold_price_var.set(format_price(product_info.get('Sold Price')) if not pd.isnull(product_info.get('Sold Price')) else '')
 
                     self.order_link_text.delete(1.0, "end")
                     hyperlink = product_info.get('Order Link', '')
@@ -972,12 +1177,18 @@ class Application(tk.Frame):
                     self.product_name_text.delete(1.0, tk.END)
                     self.product_name_text.insert(tk.END, 'Product not found in Excel.')
                     self.product_name_text.configure(state='disabled')
+                    self.comments_text.configure(state='normal')
+                    self.comments_text.delete(1.0, tk.END)
+                    self.comments_text.insert(tk.END, 'Comment not found in Excel.')
+                    self.comments_text.configure(state='disabled')
                     self.order_date_var.set('')
                     self.fair_market_value_var.set('')
                     self.discount_var.set('')
-                    self.sale_price_var.set('')
+                    self.percent_discount_var.set("")
+
+                    self.product_price_plus_ivu_var.set('')
                     self.ivu_tax_var.set('')
-                    self.product_price_var.set('')
+                    self.regular_product_price_var.set('')
                     self.order_link_text.delete(1.0, "end")
                     self.sold_price_var.set('')
                     self.payment_type_var.set('')
@@ -1066,20 +1277,23 @@ class Application(tk.Frame):
         readonly_state = 'readonly' if self.edit_mode else 'disabled'  # Use 'readonly' when in edit mode, 'disabled' otherwise        
         
         self.order_date_entry.config(state='disabled')
-        self.sold_date_entry.config(state=state)
         self.sold_date_button.config(state=state)
+        self.clear_button.config(state=state)       
         self.to_sell_after_entry.config(state='disabled')
         self.payment_type_combobox.config(state=readonly_state)
         self.asin_entry.config(state=state)
         self.product_id_entry.config(state='disabled')
         self.product_name_text.config(state='disabled')
         self.fair_market_value_entry.config(state='disabled')
-        self.product_price_entry.config(state='disabled')
+        self.regular_product_price_entry.config(state='disabled')
         self.ivu_tax_entry.config(state='disabled')
-        self.sale_price_entry.config(state=state)
+        self.product_price_plus_ivu_entry.config(state=state)
         self.discount_entry.config(state=state)
+        self.percent_discount_entry.config(state=state)
         self.sold_price_entry.config(state=state)
         self.save_button.config(state=state)
+        self.comments_text.config(state=state)
+
         if self.edit_mode:
             self.product_name_text.bind("<Button-1>", lambda e: None)
 
@@ -1100,7 +1314,7 @@ class Application(tk.Frame):
             self.master.bind('<Return>', lambda e: self.edit_button.invoke())
 
     def save(self):
-        
+
         # Update the 'Sold' checkbox based on the 'Sold Date' entry
         if self.sold_date_var.get():
             # If 'Sold Date' is not empty, check 'Sold'
@@ -1121,7 +1335,7 @@ class Application(tk.Frame):
         
         try:
             # Remove dollar sign if present and convert the sale price from string to float
-            total_price = float(remove_dollar_sign(self.sale_price_var.get()))
+            total_price = float(remove_dollar_sign(self.product_price_plus_ivu_var.get()))
         except ValueError:
             messagebox.showerror("Error", "Invalid sale price entered.")
             return
@@ -1130,14 +1344,14 @@ class Application(tk.Frame):
         IVU_tax = total_price * 0.115
 
         # Calculate the product price by subtracting the tax from the total price
-        product_price = total_price - IVU_tax
+        regular_product_price = total_price - IVU_tax
 
         
-        discount_price = product_price * 0.10
+        discount_price = regular_product_price * 0.10
 
         # Update the IVU tax and product price entry fields
         self.ivu_tax_var.set(f"${IVU_tax:.2f}")  # Format to 2 decimal places
-        self.product_price_var.set(f"${product_price:.2f}")  # Format to 2 decimal places
+        self.regular_product_price_var.set(f"${regular_product_price:.2f}")  # Format to 2 decimal places
         self.discount_var.set(f"${discount_price:.2f}")  # Format to 2 decimal places
 
              
@@ -1166,11 +1380,12 @@ class Application(tk.Frame):
             'Sold Price': self.sold_price_var.get(),
             'Payment Type': self.payment_type_var.get(),
             'Sold Date': self.sold_date_var.get(),
+            'Comments': self.comments_text.get("1.0", tk.END).strip(),
             'Fair Market Value': to_float(remove_dollar_sign(self.fair_market_value_var.get())),
             'Discount': to_float(remove_dollar_sign(self.discount_var.get())),
-            'Product Price': to_float(remove_dollar_sign(self.product_price_var.get())),
+            'Product Price': to_float(remove_dollar_sign(self.regular_product_price_var.get())),
             'IVU Tax': to_float(remove_dollar_sign(self.ivu_tax_var.get())),
-            'To Sell Price': to_float(remove_dollar_sign(self.sale_price_var.get())),
+            'To Sell Price': to_float(remove_dollar_sign(self.product_price_plus_ivu_var.get())),
             'Sold Price': to_float(remove_dollar_sign(self.sold_price_var.get())),
             # ... and so on for the rest of your form fields.
         }
@@ -1775,10 +1990,20 @@ class Application(tk.Frame):
         # Calculate the 11.5% tax of the total price
         IVU_tax = total_price * 0.115
         # Calculate the product price by subtracting the tax from the total price
-        product_price = total_price - IVU_tax
+        regular_product_price = total_price - IVU_tax
         # Calculate the 10% reseller earnings of the product price
-        price_discount = product_price * 0.10
-        return product_price, total_price, IVU_tax, price_discount
+
+
+        
+        price_discount = regular_product_price * 0.10 #delete, price discount is product price multiplied by discount percentage
+
+        #add variable containing discount percentage?
+        # verificar el calculo automatizado en load y en save. ver que campos se llenan automaticamente. asumo son estos en esta formula.
+        # verificar la formula donde se establece que campos llenar. asumo se llena en base de si el campo product price tiene algo.
+        # solo 
+
+
+        return regular_product_price, total_price, IVU_tax, price_discount
 
     def update_prices(self):
         # Read the Excel path and sheet name from the file
@@ -1816,9 +2041,9 @@ class Application(tk.Frame):
                 # Convert currency string to float if needed
                 fair_market_value = currency_to_float(row['Fair Market Value'])
                 # Calculate new values with rpc_formula
-                product_price, total_price, IVU_tax, price_discount = self.rpc_formula(fair_market_value)
+                regular_product_price, total_price, IVU_tax, price_discount = self.rpc_formula(fair_market_value)
                 # Format results as currency
-                df.at[index, 'Product Price'] = round(product_price, 2)
+                df.at[index, 'Product Price'] = round(regular_product_price, 2)
                 df.at[index, 'To Sell Price'] = round(total_price, 2)
                 df.at[index, 'IVU Tax'] = round(IVU_tax, 2)
                 df.at[index, 'Discount'] = round(price_discount, 2)
@@ -1912,7 +2137,21 @@ class Application(tk.Frame):
                 if not order_link_series.empty:
                     order_link = order_link_series.iloc[0]
                 else:
-                    order_link = "N/A"  # Default to "N/A" if the link is not found
+                    order_link = "N/A"  # Default to "N/A"            
+                    
+                    # Retrieve the product 
+                comments_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Comments']
+                if not comments_series.empty:
+                    comments = comments_series.iloc[0]
+                else:
+                    comments = "N/A"  # Default to "N/A" 
+                    
+                    # Retrieve the product 
+                product_name_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Product Name']
+                if not product_name_series.empty:
+                    product_name = product_name_series.iloc[0]
+                else:
+                    product_name = "N/A"  # Default to "N/A" 
             except Exception as e:
                 print(f"Error retrieving data: {e}")  # Debugging print statement
 
@@ -1925,6 +2164,7 @@ class Application(tk.Frame):
                 doc.add_paragraph(f"Product Name: {product_name}")
                 doc.add_paragraph(f"To Sell Price: ${to_sell_price}")
                 doc.add_paragraph(f"Amazon Link(to get the product description and pictures, if needed): {order_link}")
+                doc.add_paragraph(f"Comments: {comments}")
 
                 # Save the document
                 doc.save(doc_path)
@@ -1940,7 +2180,6 @@ class Application(tk.Frame):
                 messagebox.showerror("Error", f"Failed to create document for Product ID {product_id}: {e}")
         else:
             messagebox.showerror("Error", f"No folder found for Product ID {product_id}")
-
 
     def backup_excel_database(self):
         print("Starting the backup process.")
