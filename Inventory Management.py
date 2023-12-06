@@ -1261,6 +1261,7 @@ class Application(tk.Frame):
         # If in edit mode, allow the checkbox to change state
 
     def toggle_edit_mode(self):
+
         # Toggle the edit mode
         print("toggling edit mode")
         
@@ -1314,6 +1315,17 @@ class Application(tk.Frame):
             self.master.bind('<Return>', lambda e: self.edit_button.invoke())
 
     def save(self):
+        # Extract values from the widgets
+        sold_price = self.sold_price_entry.get()
+        sold_date = self.sold_date_var.get()  # Assuming it's a StringVar associated with an Entry
+        payment_type = self.payment_type_var.get()  # Similarly, for payment type
+
+        # Check if any of the fields have data
+        if sold_price or sold_date or payment_type:
+            # Check if all required fields are filled
+            if not (sold_price and sold_date and payment_type):
+                messagebox.showwarning("Incomplete Data", "Please fill in Sold Price, Sold Date, and Payment Type.")
+                return  # Return without saving
 
         # Update the 'Sold' checkbox based on the 'Sold Date' entry
         if self.sold_date_var.get():
@@ -1353,9 +1365,6 @@ class Application(tk.Frame):
         self.ivu_tax_var.set(f"${IVU_tax:.2f}")  # Format to 2 decimal places
         self.regular_product_price_var.set(f"${regular_product_price:.2f}")  # Format to 2 decimal places
         self.discount_var.set(f"${discount_price:.2f}")  # Format to 2 decimal places
-
-             
-
             
         product_id = self.product_id_var.get().strip().upper()
 
