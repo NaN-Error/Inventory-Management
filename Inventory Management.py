@@ -25,6 +25,9 @@ from openpyxl.styles import Alignment
 from ttkthemes import ThemedTk
 from openpyxl import Workbook
 import math
+from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation
+
 
 
 
@@ -170,6 +173,7 @@ class Application(tk.Frame):
         self.to_sell_folder = None
         self.pack(fill='both', expand=True)
         self.last_changed = None
+        self.initial_discount_price = None  # Class attribute to store the initial discount price
 
         
         # Make sure you call this before combining and displaying folders
@@ -421,7 +425,7 @@ class Application(tk.Frame):
         self.discount_var = tk.StringVar()
         self.discount_entry = ttk.Entry(self.discount_frame, textvariable=self.discount_var, width=8, state='disabled', style='BlackOnDisabled.TEntry', validate='key', validatecommand=validate_price_command)
         self.discount_entry.pack(side=tk.LEFT)
-        self.discount_entry.bind("<KeyRelease>", self.on_price_changed)        
+        #self.discount_entry.bind("<KeyRelease>", self.on_price_changed)        
         self.discount_entry.bind("<FocusIn>", self.on_discount_price_focus_in)        
         self.discount_entry.bind("<FocusOut>", self.on_discount_price_focus_out)
 
@@ -590,7 +594,6 @@ class Application(tk.Frame):
             pass
         self.search_entry.focus_set()
 
-
     def validate_input(self, input_value, is_percentage=False):
         """Validates the input to allow only one decimal point and up to two decimal places."""
         if input_value == "":
@@ -628,12 +631,42 @@ class Application(tk.Frame):
         # Re-enable validation
         entry_widget.config(validate='key')
 
+        # Check if this is the product price plus IVU field
+        if event.widget == self.product_price_plus_ivu_entry:
+            self.recalculate_original_price_and_tax() # Recalculate the original product price and IVU tax
+            self.calculate_discount_fields()  # Call the calculate function only for this field
+
     def on_price_changed(self, *args):
-        self.last_changed = 'price'
-        self.calculate_discount()
+        # Extract the value from the discount entry field
+        discount_str = self.discount_var.get().strip('$')
+
+        # Check if the discount string is a valid decimal number
+        try:
+            Decimal(discount_str)
+            valid_input = True
+        except (ValueError, InvalidOperation):
+            valid_input = False
+
+        # Only recalculate if the input is valid
+        if valid_input:
+            self.last_changed = 'price'
+            self.calculate_discount()
+
+    def on_discount_price_focus_in(self, event=None):
+        """Removes '$' symbol and stores the rounded value of the discount price when focus is gained."""
+        price_str = self.discount_var.get()
+        if price_str.startswith('$'):
+            price_str = price_str.lstrip('$')
+            self.discount_var.set(price_str)
+        
+        # Store the rounded numerical value
+        try:
+            self.initial_discount_price = round(float(price_str), 2)
+        except ValueError:
+            self.initial_discount_price = None
 
     def on_discount_price_focus_out(self, event=None):
-        """Adds '$' symbol to the discount price when focus is lost and clears discount percentage if empty."""
+        """Adds '$' symbol to the discount price when focus is lost and recalculates if the value changed."""
         price_str = self.discount_var.get()
         if price_str:
             if not price_str.startswith('$'):
@@ -641,11 +674,18 @@ class Application(tk.Frame):
         else:
             self.percent_discount_var.set('')  # Clear discount percentage if price is empty
 
-    def on_discount_price_focus_in(self, event=None):
-        """Removes '$' symbol from the discount price when focus is gained."""
-        price_str = self.discount_var.get()
-        if price_str.startswith('$'):
-            self.discount_var.set(price_str.lstrip('$'))
+        # Convert current value to float, round it, and compare with the initial value
+        current_price = None
+        try:
+            current_price = round(float(price_str), 2)
+        except ValueError:
+            pass
+
+        # Recalculate only if the rounded value has changed
+        if current_price != self.initial_discount_price:
+            self.calculate_discount()  # Trigger the discount calculation
+
+        self.initial_discount_price = None  # Reset the initial value
 
     def on_percentage_changed(self, *args):
         self.last_changed = 'percentage'
@@ -666,6 +706,7 @@ class Application(tk.Frame):
         else:
             self.discount_var.set('')  # Clear discount price if percentage is empty
 
+        self.calculate_discount_fields()  # Call the calculate function at the end
 
     def custom_float_format(self, value):
         """Formats the float value to string with two decimal places."""
@@ -675,22 +716,94 @@ class Application(tk.Frame):
         try:
             # Extract the numeric part of the price, removing the '$' symbol
             price_str = self.regular_product_price_var.get().lstrip('$')
-            price = float(price_str) if price_str else 0
+            price = Decimal(price_str) if price_str else Decimal('0')
 
             if self.last_changed == 'percentage' and self.percent_discount_var.get().strip('%'):
                 percentage_str = self.percent_discount_var.get().strip('%')
-                percentage = float(percentage_str) if percentage_str else 0
-                calculated_price = price * percentage / 100
-                self.discount_var.set(f"${self.custom_float_format(calculated_price)}")
+                percentage = Decimal(percentage_str) if percentage_str else Decimal('0')
+                calculated_price = (price * percentage / Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                self.discount_var.set(f"${calculated_price:.2f}")
 
             elif self.last_changed == 'price' and self.discount_var.get().strip('$'):
                 discount_str = self.discount_var.get().strip('$')
-                discount = float(discount_str) if discount_str else 0
-                if price != 0:
-                    percentage = (discount / price) * 100
-                    self.percent_discount_var.set(f"{self.custom_float_format(percentage)}%")
+                discount = Decimal(discount_str) if discount_str else Decimal('0')
+                if price != Decimal('0'):
+                    percentage = ((discount / price) * Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                    self.percent_discount_var.set(f"{percentage:.2f}%")
         except ValueError:
             pass
+
+    def calculate_discount_fields(self):
+        # Helper function to strip characters and convert to Decimal
+        def clean_and_convert(value, strip_char=None):
+            if strip_char:
+                value = value.replace(strip_char, '')
+            try:
+                return Decimal(value)
+            except ValueError:
+                return Decimal('0')
+
+        # Get values and clean them
+        product_price_plus_ivu = clean_and_convert(self.product_price_plus_ivu_var.get(), '$')
+        discount_price = clean_and_convert(self.discount_var.get(), '$')
+        discount_percentage = clean_and_convert(self.percent_discount_var.get(), '%')
+
+        # Define the tax rate
+        tax_rate = Decimal('0.115')
+
+        # Correctly calculate the original product price and IVU Tax
+        original_product_price = (product_price_plus_ivu / (1 + tax_rate)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        ivu_tax = (original_product_price * tax_rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+        # Check if there's a discount
+        has_discount = discount_price > 0 or discount_percentage > 0
+
+        # Calculate Discounted Prices
+        if has_discount:
+            # Determine the discount amount
+            if discount_price > 0:
+                discount_amount = discount_price
+            else:
+                discount_amount = (original_product_price * (discount_percentage / Decimal('100'))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+            # Apply the discount to the original product price
+            product_price_after_discount = (original_product_price - discount_amount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+            # Recalculate the IVU tax based on the discounted price
+            ivu_tax_after_discount = (product_price_after_discount * tax_rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+            # Calculate the total price after discount including IVU tax
+            product_price_plus_ivu_discount = (product_price_after_discount + ivu_tax_after_discount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        else:
+            product_price_after_discount = original_product_price
+            ivu_tax_after_discount = ivu_tax
+            product_price_plus_ivu_discount = product_price_plus_ivu
+
+        # Update the fields
+        self.product_price_after_discount_var.set(f"${product_price_after_discount:.2f}")
+        self.ivu_tax_after_discount_var.set(f"${ivu_tax_after_discount:.2f}")
+        self.product_price_minus_discount_plus_ivu_var.set(f"${product_price_plus_ivu_discount:.2f}")
+
+    def recalculate_original_price_and_tax(self):
+        # Extract and clean the product price (+ IVU) value
+        price_plus_ivu_str = self.product_price_plus_ivu_var.get().lstrip('$')
+        try:
+            price_plus_ivu = Decimal(price_plus_ivu_str)
+        except ValueError:
+            price_plus_ivu = Decimal('0')
+
+        # Define the tax rate
+        tax_rate = Decimal('0.115')
+
+        # Calculate the IVU tax based on the total price (price_plus_ivu)
+        IVU_tax = (price_plus_ivu * tax_rate / (1 + tax_rate)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+        # Calculate the original product price by subtracting the IVU tax from the total price
+        original_product_price = (price_plus_ivu - IVU_tax).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+        # Update the IVU tax and original product price fields
+        self.ivu_tax_var.set(f"${IVU_tax:.2f}")
+        self.regular_product_price_var.set(f"${original_product_price:.2f}")
 
     def pick_date(self):
         def grab_date():
@@ -1137,9 +1250,15 @@ class Application(tk.Frame):
                     self.fair_market_value_var.set(format_price(product_info.get('Fair Market Value')))
                     self.discount_var.set(format_price(product_info.get('Discount')))
                     self.percent_discount_var.set(format_percentage(product_info.get('Discount Percentage')))
+
                     self.regular_product_price_var.set(format_price(product_info.get('Product Price')))
                     self.ivu_tax_var.set(format_price(product_info.get('IVU Tax')))
-                    self.product_price_plus_ivu_var.set(format_price(product_info.get('To Sell Price')))
+                    self.product_price_plus_ivu_var.set(format_price(product_info.get('Product Price After IVU')))
+
+                    self.product_price_after_discount_var.set(format_price(product_info.get('Product Price After Discount')))
+                    self.ivu_tax_after_discount_var.set(format_price(product_info.get('IVU Tax After Discount')))
+                    self.product_price_minus_discount_plus_ivu_var.set(format_price(product_info.get('Product Price After IVU and Discount')))
+
                     self.sold_price_var.set(format_price(product_info.get('Sold Price')) if not pd.isnull(product_info.get('Sold Price')) else '')
 
                     self.order_link_text.delete(1.0, "end")
@@ -1192,6 +1311,10 @@ class Application(tk.Frame):
                     self.fair_market_value_var.set('')
                     self.discount_var.set('')
                     self.percent_discount_var.set("")
+
+                    self.product_price_after_discount_var.set("")
+                    self.ivu_tax_after_discount_var.set("")
+                    self.product_price_minus_discount_plus_ivu_var.set("")
 
                     self.product_price_plus_ivu_var.set('')
                     self.ivu_tax_var.set('')
@@ -1344,35 +1467,16 @@ class Application(tk.Frame):
 
         def to_float(value):
             try:
-                # Convert to float, if possible
-                return float(value)
+                # Remove any non-numeric characters like $ and %, then convert to float
+                numeric_value = value.replace('$', '').replace('%', '')
+                return float(numeric_value)
             except ValueError:
                 # Return the original value if it can't be converted
                 return value
+            
         def remove_dollar_sign(value):
             return value.replace('$', '') if isinstance(value, str) else value
         
-        try:
-            # Remove dollar sign if present and convert the sale price from string to float
-            total_price = float(remove_dollar_sign(self.product_price_plus_ivu_var.get()))
-        except ValueError:
-            messagebox.showerror("Error", "Invalid sale price entered.")
-            return
-
-        # Calculate the IVU tax (11.5% of the total price)
-        IVU_tax = total_price * 0.115
-
-        # Calculate the product price by subtracting the tax from the total price
-        regular_product_price = total_price - IVU_tax
-
-        
-        discount_price = regular_product_price * 0.10
-
-        # Update the IVU tax and product price entry fields
-        self.ivu_tax_var.set(f"${IVU_tax:.2f}")  # Format to 2 decimal places
-        self.regular_product_price_var.set(f"${regular_product_price:.2f}")  # Format to 2 decimal places
-        self.discount_var.set(f"${discount_price:.2f}")  # Format to 2 decimal places
-            
         product_id = self.product_id_var.get().strip().upper()
 
         # Ensure that the Excel file path and sheet name are set.
@@ -1381,7 +1485,6 @@ class Application(tk.Frame):
         if not filepath or not sheet_name:
             messagebox.showerror("Error", "Excel file path or sheet name is not set.")
             return
-        
 
         # Collect the data from the form.
         product_data = {
@@ -1399,9 +1502,15 @@ class Application(tk.Frame):
             'Comments': self.comments_text.get("1.0", tk.END).strip(),
             'Fair Market Value': to_float(remove_dollar_sign(self.fair_market_value_var.get())),
             'Discount': to_float(remove_dollar_sign(self.discount_var.get())),
+            'Discount Percentage': to_float(remove_dollar_sign(self.percent_discount_var.get())),
             'Product Price': to_float(remove_dollar_sign(self.regular_product_price_var.get())),
             'IVU Tax': to_float(remove_dollar_sign(self.ivu_tax_var.get())),
-            'To Sell Price': to_float(remove_dollar_sign(self.product_price_plus_ivu_var.get())),
+            'Product Price After IVU': to_float(remove_dollar_sign(self.product_price_plus_ivu_var.get())),
+
+            'Product Price After Discount': to_float(remove_dollar_sign(self.product_price_after_discount_var.get())),
+            'IVU Tax After Discount': to_float(remove_dollar_sign(self.ivu_tax_after_discount_var.get())),
+            'Product Price After IVU and Discount': to_float(remove_dollar_sign(self.product_price_minus_discount_plus_ivu_var.get())),
+
             'Sold Price': to_float(remove_dollar_sign(self.sold_price_var.get())),
             # ... and so on for the rest of your form fields.
         }
@@ -1999,25 +2108,20 @@ class Application(tk.Frame):
         return to_sell_date <= datetime.today().date()
 
     def rpc_formula(self, fair_market_value):
-        # Calculate the original value before the 11.5% decrease
-        original_value = fair_market_value / (1 - 0.115)
+        tax_rate = Decimal('0.115')
+        original_value = (Decimal(fair_market_value) / (1 - tax_rate)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
         # Round up to the nearest 5 or 0
-        total_price = -(-original_value // 5) * 5
-        # Calculate the 11.5% tax of the total price
-        IVU_tax = total_price * 0.115
-        # Calculate the product price by subtracting the tax from the total price
-        regular_product_price = total_price - IVU_tax
-        # Calculate the 10% reseller earnings of the product price
+        total_price = -(-original_value // Decimal('5')) * Decimal('5')
 
+        # Calculate the IVU tax from the total price
+        IVU_tax = (total_price * tax_rate / (1 + tax_rate)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-        
-        price_discount = regular_product_price * 0.10 #delete, price discount is product price multiplied by discount percentage
+        # Calculate the regular product price by subtracting the IVU tax from the total price
+        regular_product_price = (total_price - IVU_tax).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-        #add variable containing discount percentage?
-        # verificar el calculo automatizado en load y en save. ver que campos se llenan automaticamente. asumo son estos en esta formula.
-        # verificar la formula donde se establece que campos llenar. asumo se llena en base de si el campo product price tiene algo.
-        # solo 
-
+        # Calculate the 10% reseller earnings of the regular product price
+        price_discount = (regular_product_price * Decimal('0.10')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
         return regular_product_price, total_price, IVU_tax, price_discount
 
@@ -2037,7 +2141,7 @@ class Application(tk.Frame):
         df = df[1:]  # Skip the header row
 
         # Convert columns to 'object' type to avoid FutureWarning
-        object_columns = ['Product Price', 'To Sell Price', 'IVU Tax', 'Discount']
+        object_columns = ['Product Price', 'Product Price After IVU', 'IVU Tax', 'Discount']
         for col in object_columns:
             df[col] = df[col].astype('object')
 
@@ -2053,16 +2157,23 @@ class Application(tk.Frame):
 
         # Iterate through the DataFrame and update the prices
         for index, row in df.iterrows():
-            if pd.isna(row['Product Price']) or pd.isna(row['To Sell Price']) or pd.isna(row['IVU Tax']) or pd.isna(row['Discount']):
-                # Convert currency string to float if needed
-                fair_market_value = currency_to_float(row['Fair Market Value'])
-                # Calculate new values with rpc_formula
+            if pd.isna(row['Product Price']) or pd.isna(row['Product Price After IVU']) or pd.isna(row['IVU Tax']):
+                fair_market_value = Decimal(currency_to_float(row['Fair Market Value']))
                 regular_product_price, total_price, IVU_tax, price_discount = self.rpc_formula(fair_market_value)
-                # Format results as currency
-                df.at[index, 'Product Price'] = round(regular_product_price, 2)
-                df.at[index, 'To Sell Price'] = round(total_price, 2)
-                df.at[index, 'IVU Tax'] = round(IVU_tax, 2)
-                df.at[index, 'Discount'] = round(price_discount, 2)
+                
+                # Calculate the discounted prices using Decimal
+                product_price_after_discount = (regular_product_price - price_discount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                ivu_tax_after_discount = (product_price_after_discount * Decimal('0.115')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                product_price_plus_ivu_discount = (product_price_after_discount + ivu_tax_after_discount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+                df.at[index, 'Product Price'] = float(regular_product_price)
+                df.at[index, 'Product Price After IVU'] = float(total_price)
+                df.at[index, 'IVU Tax'] = float(IVU_tax)
+                df.at[index, 'Discount'] = float(price_discount)
+                df.at[index, 'Discount Percentage'] = 10  # Assuming a fixed 10% discount
+                df.at[index, 'Product Price After Discount'] = float(product_price_after_discount)
+                df.at[index, 'IVU Tax After Discount'] = float(ivu_tax_after_discount)
+                df.at[index, 'Product Price After IVU and Discount'] = float(product_price_plus_ivu_discount)
 
         # Clear the existing data in the sheet
         for row in sheet.iter_rows(min_row=2, max_col=sheet.max_column, max_row=sheet.max_row):
@@ -2076,7 +2187,7 @@ class Application(tk.Frame):
 
         # Save the workbook
         workbook.save(excel_path)
-        print("Prices updated successfully in the Excel file.")
+        messagebox.showinfo("Success", "Prices updated successfully in the Excel file.")
 
     def prompt_correlation(self, missing_docs):
         self.correlate_window = Toplevel(self)
@@ -2142,11 +2253,11 @@ class Application(tk.Frame):
         if folder_path:
             try:
                 # Retrieve 'To Sell Prices' from the Excel data
-                to_sell_prices_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'To Sell Price']
-                if not to_sell_prices_series.empty:
-                    to_sell_price = to_sell_prices_series.iloc[0]
+                product_price_after_ivu_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Product Price After IVU']
+                if not product_price_after_ivu_series.empty:
+                    product_price_after_ivu = product_price_after_ivu_series.iloc[0]
                 else:
-                    to_sell_price = "N/A"  # Default to "N/A" if not found
+                    product_price_after_ivu = "N/A"  # Default to "N/A" if not found
 
                 # Retrieve the product link
                 order_link_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Order Link']
@@ -2168,6 +2279,14 @@ class Application(tk.Frame):
                     product_name = product_name_series.iloc[0]
                 else:
                     product_name = "N/A"  # Default to "N/A" 
+
+                    # Retrieve the product 
+                discount_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Discount']
+                if not discount_series.empty:
+                    discount = discount_series.iloc[0]
+                else:
+                    discount = "N/A"  # Default to "N/A" 
+
             except Exception as e:
                 print(f"Error retrieving data: {e}")  # Debugging print statement
 
@@ -2178,7 +2297,8 @@ class Application(tk.Frame):
                 doc = Document()
                 doc.add_paragraph(f"Product ID: {product_id}")
                 doc.add_paragraph(f"Product Name: {product_name}")
-                doc.add_paragraph(f"To Sell Price: ${to_sell_price}")
+                doc.add_paragraph(f"Product Price After IVU: ${product_price_after_ivu}")
+                doc.add_paragraph(f"Reseller Earnings: ${discount}")
                 doc.add_paragraph(f"Amazon Link(to get the product description and pictures, if needed): {order_link}")
                 doc.add_paragraph(f"Comments: {comments}")
 
