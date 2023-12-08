@@ -787,6 +787,7 @@ class Application(tk.Frame):
     def recalculate_original_price_and_tax(self):
         # Extract and clean the product price (+ IVU) value
         price_plus_ivu_str = self.product_price_plus_ivu_var.get().lstrip('$')
+        print(price_plus_ivu_str)
         try:
             price_plus_ivu = Decimal(price_plus_ivu_str)
         except ValueError:
@@ -2150,15 +2151,22 @@ class Application(tk.Frame):
             return "${:,.2f}".format(value)
 
         def currency_to_float(value):
-            if isinstance(value, str) and value.startswith('$'):
+            if pd.isna(value):
+                return 0  # or some other sensible default value
+            elif isinstance(value, str) and value.startswith('$'):
                 value = value.replace('$', '').replace(',', '')
-                return float(value)
+                try:
+                    return float(value)
+                except ValueError:
+                    return 0  # or some other sensible default value
             return value
+
 
         # Iterate through the DataFrame and update the prices
         for index, row in df.iterrows():
             if pd.isna(row['Product Price']) or pd.isna(row['Product Price After IVU']) or pd.isna(row['IVU Tax']):
-                fair_market_value = Decimal(currency_to_float(row['Fair Market Value']))
+                fair_market_value_raw = row['Fair Market Value']
+                fair_market_value = Decimal(currency_to_float(fair_market_value_raw))
                 regular_product_price, total_price, IVU_tax, price_discount = self.rpc_formula(fair_market_value)
                 
                 # Calculate the discounted prices using Decimal
