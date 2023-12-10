@@ -28,7 +28,6 @@ import math
 from decimal import Decimal, ROUND_HALF_UP
 from decimal import Decimal, InvalidOperation
 from tkinter import simpledialog
-import time
 
 
 
@@ -176,6 +175,7 @@ class Application(tk.Frame):
         self.pack(fill='both', expand=True)
         self.last_changed = None
         self.initial_discount_price = None  # Class attribute to store the initial discount price
+        self.initial_percent_discount = None  # Class attribute to store the initial discount price
         self.initial_product_price_plus_ivu = ''  # Initialize the variable
         self.trigger_price_focus_out_flag = True
         #self.trigger_save_flag = False # Can be used to save when pressing enter once while in Product Price (+IVU) entry.
@@ -633,7 +633,69 @@ class Application(tk.Frame):
 
             entry_widget.config(validate='none')
 
-            if current_price and not current_price.startswith('$'):
+            # Check if the price string is empty and set it and related fields to default values
+            try:
+                if not current_price.strip():
+                    # Temporarily disable validation and update widget state
+                    entry_list = [self.regular_product_price_entry, self.ivu_tax_entry, 
+                                self.discount_entry, self.product_price_after_discount_entry, 
+                                self.ivu_tax_after_discount_entry, 
+                                self.product_price_minus_discount_plus_ivu_entry, 
+                                self.percent_discount_entry]
+
+                    for widget in entry_list:
+                        widget.config(validate='none', state='normal')
+
+                        # Set the current widget to $0
+                        self.product_price_plus_ivu_entry.delete(0, tk.END)
+                        self.product_price_plus_ivu_entry.insert(0, "$0")
+
+                        # Set related fields to their default values
+                        
+                        self.regular_product_price_entry.delete(0, tk.END)
+                        self.regular_product_price_entry.insert(0, "$0")
+
+                        self.ivu_tax_entry.delete(0, tk.END)
+                        self.ivu_tax_entry.insert(0, "$0")
+                        
+                        # Temporarily disable validation and change state to normal
+                        self.discount_entry.config(validate='none', state='normal')
+
+                        # Set the widget to '$0'
+                        self.discount_entry.delete(0, tk.END)
+                        self.discount_entry.insert(0, "$0")
+
+                        # Re-enable validation and change state back to disabled
+                        self.discount_entry.config(validate='key', state='disabled')
+
+
+                        self.product_price_after_discount_entry.delete(0, tk.END)
+                        self.product_price_after_discount_entry.insert(0, "$0")
+
+                        self.ivu_tax_after_discount_entry.delete(0, tk.END)
+                        self.ivu_tax_after_discount_entry.insert(0, "$0")
+
+                        self.product_price_minus_discount_plus_ivu_entry.delete(0, tk.END)
+                        self.product_price_minus_discount_plus_ivu_entry.insert(0, "$0")
+
+                        self.percent_discount_entry.delete(0, tk.END)
+                        self.percent_discount_entry.insert(0, "0%")
+
+                        # Re-enable validation and update widget state, disable all except specific widgets
+                        for widget in entry_list:
+                            if widget not in [self.discount_entry, self.percent_discount_entry, self.product_price_plus_ivu_entry]:
+                                widget.config(validate='key', state='disabled')
+                            else:
+                                widget.config(validate='key', state='normal')  # Keep these widgets editable
+
+                    # Update GUI
+                    self.update_idletasks()
+
+                    return           
+            except Exception as e:
+                print(f"Error while setting prices as $0/0%: {e}")
+            
+            if not current_price.startswith('$'):
                 entry_widget.delete(0, tk.END)
                 entry_widget.insert(0, f"${current_price}")
 
@@ -704,17 +766,29 @@ class Application(tk.Frame):
             self.initial_discount_price = None
 
     def on_discount_price_focus_out(self, event=None):
-        """Adds '$' symbol to the discount price when focus is lost and recalculates."""
+        """Adds '$' symbol to the discount price when focus is lost."""
         price_str = self.discount_var.get()
-        if price_str and not price_str.startswith('$'):
-            self.discount_var.set(f"${price_str}")
-        
-        # Trigger discount calculation based on price
-        self.last_changed = 'price'
-        self.calculate_discount('price')  # Pass 'price' as the argument
-        #if #flag
-            #self.save()
-            #flag = false
+
+        # Check if the price string is empty or invalid, set it to '$0'
+        if not price_str or not price_str.replace('$', '').strip().replace('.', '', 1).isdigit():
+            self.discount_var.set("$0")
+            final_discount_price = 0.0
+        else:
+            if not price_str.startswith('$'):
+                self.discount_var.set(f"${price_str}")
+
+            try:
+                final_discount_price = round(float(price_str.lstrip('$')), 2)
+            except ValueError:
+                final_discount_price = None
+
+        # Trigger discount calculation only if the price has changed
+        if self.initial_discount_price != final_discount_price:
+            self.last_changed = 'price'
+            self.calculate_discount('price')  # Pass 'price' as the argument
+        else:
+            # Optionally, handle the case where the price hasn't changed
+            pass
 
     def on_percentage_changed(self, *args):
         self.last_changed = 'percentage'
@@ -723,18 +797,43 @@ class Application(tk.Frame):
     def on_discount_percentage_focus_in(self, event=None):
         """Removes '%' symbol from the discount percentage when focus is gained."""
         percentage_str = self.percent_discount_var.get()
+
         if percentage_str.endswith('%'):
-            self.percent_discount_var.set(percentage_str.rstrip('%'))
+            percentage_str = percentage_str.rstrip('%')
+            self.percent_discount_var.set(percentage_str)
+        
+        # Now try converting the stripped string to a float
+        try:
+            self.initial_percent_discount = round(float(percentage_str), 2)
+        except ValueError:
+            self.initial_percent_discount = None
 
     def on_discount_percentage_focus_out(self, event=None):
-        """Adds '%' symbol to the discount percentage when focus is lost and recalculates."""
+        """Adds '%' symbol to the discount percentage when focus is lost."""
         percentage_str = self.percent_discount_var.get()
-        if percentage_str and not percentage_str.endswith('%'):
-            self.percent_discount_var.set(f"{percentage_str}%")
-        
-        # Trigger discount calculation based on percentage
-        self.last_changed = 'percentage'
-        self.calculate_discount('percentage')  # Pass 'percentage' as the argument
+
+        # Check if the percentage string is empty or invalid, set it to '0%'
+        if not percentage_str or not percentage_str.replace('%', '').strip().isdigit():
+            self.percent_discount_var.set("0%")
+            final_percent_discount = 0.0
+        else:
+            if not percentage_str.endswith('%'):
+                self.percent_discount_var.set(f"{percentage_str}%")
+
+            try:
+                final_percent_discount = round(float(percentage_str.strip('%')), 2)
+            except ValueError:
+                final_percent_discount = None
+
+        # Trigger discount calculation only if the percentage has changed
+        if self.initial_percent_discount != final_percent_discount:
+            self.last_changed = 'percentage'
+            self.calculate_discount('percentage')  # Pass 'percentage' as the argument
+        else:
+            # Optionally, handle the case where the percentage hasn't changed
+            pass
+
+
         #if #flag
             #self.save()
             #flag = false
@@ -775,7 +874,7 @@ class Application(tk.Frame):
                 value = value.replace(strip_char, '')
             try:
                 return Decimal(value)
-            except ValueError:
+            except (ValueError, InvalidOperation):
                 return Decimal('0')
 
         # Get values and clean them
