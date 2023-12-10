@@ -27,6 +27,8 @@ from openpyxl import Workbook
 import math
 from decimal import Decimal, ROUND_HALF_UP
 from decimal import Decimal, InvalidOperation
+from tkinter import simpledialog
+import time
 
 
 
@@ -174,6 +176,10 @@ class Application(tk.Frame):
         self.pack(fill='both', expand=True)
         self.last_changed = None
         self.initial_discount_price = None  # Class attribute to store the initial discount price
+        self.initial_product_price_plus_ivu = ''  # Initialize the variable
+        self.trigger_price_focus_out_flag = True
+        #self.trigger_save_flag = False # Can be used to save when pressing enter once while in Product Price (+IVU) entry.
+
 
         
         # Make sure you call this before combining and displaying folders
@@ -436,7 +442,7 @@ class Application(tk.Frame):
         self.percent_discount_var = tk.StringVar()
         self.percent_discount_entry = ttk.Entry(self.discount_frame, textvariable=self.percent_discount_var, width=8, state='disabled', style='BlackOnDisabled.TEntry', validate='key', validatecommand=validate_percentage_command)
         self.percent_discount_entry.pack(side=tk.LEFT)
-        self.percent_discount_entry.bind("<KeyRelease>", self.on_percentage_changed)
+        #self.percent_discount_entry.bind("<KeyRelease>", self.on_percentage_changed)
         self.percent_discount_entry.bind("<FocusIn>", self.on_discount_percentage_focus_in)
         self.percent_discount_entry.bind("<FocusOut>", self.on_discount_percentage_focus_out)
         
@@ -609,48 +615,80 @@ class Application(tk.Frame):
         return all(ch.isdigit() or ch == '.' for ch in input_value)
 
     def on_price_focus_in(self, event):
-        """Removes '$' symbol from the price when focus is gained."""
+        """Stores the initial price when focus is gained."""
         entry_widget = event.widget
         price_str = entry_widget.get()
+        if event.widget == self.product_price_plus_ivu_entry:
+            # Only store the price for the specific field
+            self.initial_product_price_plus_ivu = price_str.lstrip('$')
         if price_str.startswith('$'):
             entry_widget.delete(0, tk.END)
             entry_widget.insert(0, price_str.lstrip('$'))
 
     def on_price_focus_out(self, event):
-        """Adds '$' symbol to the price when focus is lost."""
-        entry_widget = event.widget
-        price_str = entry_widget.get()
+        if self.trigger_price_focus_out_flag:
 
-        # Temporarily disable validation
-        entry_widget.config(validate='none')
+            entry_widget = event.widget
+            current_price = entry_widget.get().lstrip('$')
 
-        if price_str and not price_str.startswith('$'):
-            entry_widget.delete(0, tk.END)
-            entry_widget.insert(0, f"${price_str}")
+            entry_widget.config(validate='none')
 
-        # Re-enable validation
-        entry_widget.config(validate='key')
+            if current_price and not current_price.startswith('$'):
+                entry_widget.delete(0, tk.END)
+                entry_widget.insert(0, f"${current_price}")
 
-        # Check if this is the product price plus IVU field
-        if event.widget == self.product_price_plus_ivu_entry:
-            self.recalculate_original_price_and_tax() # Recalculate the original product price and IVU tax
-            self.calculate_discount_fields()  # Call the calculate function only for this field
+            entry_widget.config(validate='key')
 
-    def on_price_changed(self, *args):
-        # Extract the value from the discount entry field
-        discount_str = self.discount_var.get().strip('$')
+            if event.widget == self.product_price_plus_ivu_entry and self.initial_product_price_plus_ivu != current_price:
+                if not hasattr(self, 'prompt_shown'):
+                    self.prompt_shown = True
 
-        # Check if the discount string is a valid decimal number
-        try:
-            Decimal(discount_str)
-            valid_input = True
-        except (ValueError, InvalidOperation):
-            valid_input = False
+                    self.recalculate_original_price_and_tax()
+                    discount_price = self.discount_var.get().lstrip('$')
+                    discount_percentage = self.percent_discount_var.get().rstrip('%')
+                    message = f"Product price changed. Calculate discount based on?\n\nPrice: ${discount_price}\nPercentage: {discount_percentage}%"
+                    response = messagebox.askquestion("Discount Calculation", message)
 
-        # Only recalculate if the input is valid
-        if valid_input:
-            self.last_changed = 'price'
-            self.calculate_discount()
+                    if response == 'yes':
+                        self.calculate_discount('price')
+                        # if self.trigger_save_flag:
+                        #     self.save()
+                        #     self.trigger_save_flag = False
+
+                    else:
+                         
+                        self.calculate_discount('percentage')
+                        # if self.trigger_save_flag:
+                        #     self.save()
+                        #     self.trigger_save_flag = False
+
+                    del self.prompt_shown
+
+                self.initial_product_price_plus_ivu = ''
+
+    def save_on_key_handler(self, event):
+    
+        if event.widget in [self.discount_entry, self.percent_discount_entry, self.product_price_plus_ivu_entry]:
+            #self.trigger_save_flag = True 
+            self.product_id_entry.focus_set()
+        else:
+            self.save()
+
+    def edit_on_key_handler(self, event):
+
+        productid = self.product_id_entry.get().upper()
+        if event.widget in [self.discount_entry, self.percent_discount_entry, self.product_price_plus_ivu_entry]:
+            self.trigger_price_focus_out_flag = False
+            self.search_entry.focus_set()
+            self.trigger_price_focus_out_flag = True
+            self.refresh_and_select_product(productid)
+            self.toggle_edit_mode()
+        else:
+            self.toggle_edit_mode()
+
+    def on_price_changed(self, event=None):
+        self.last_changed = 'price'
+        self.calculate_discount()
 
     def on_discount_price_focus_in(self, event=None):
         """Removes '$' symbol and stores the rounded value of the discount price when focus is gained."""
@@ -666,26 +704,17 @@ class Application(tk.Frame):
             self.initial_discount_price = None
 
     def on_discount_price_focus_out(self, event=None):
-        """Adds '$' symbol to the discount price when focus is lost and recalculates if the value changed."""
+        """Adds '$' symbol to the discount price when focus is lost and recalculates."""
         price_str = self.discount_var.get()
-        if price_str:
-            if not price_str.startswith('$'):
-                self.discount_var.set(f"${price_str}")
-        else:
-            self.percent_discount_var.set('')  # Clear discount percentage if price is empty
-
-        # Convert current value to float, round it, and compare with the initial value
-        current_price = None
-        try:
-            current_price = round(float(price_str), 2)
-        except ValueError:
-            pass
-
-        # Recalculate only if the rounded value has changed
-        if current_price != self.initial_discount_price:
-            self.calculate_discount()  # Trigger the discount calculation
-
-        self.initial_discount_price = None  # Reset the initial value
+        if price_str and not price_str.startswith('$'):
+            self.discount_var.set(f"${price_str}")
+        
+        # Trigger discount calculation based on price
+        self.last_changed = 'price'
+        self.calculate_discount('price')  # Pass 'price' as the argument
+        #if #flag
+            #self.save()
+            #flag = false
 
     def on_percentage_changed(self, *args):
         self.last_changed = 'percentage'
@@ -698,40 +727,46 @@ class Application(tk.Frame):
             self.percent_discount_var.set(percentage_str.rstrip('%'))
 
     def on_discount_percentage_focus_out(self, event=None):
-        """Adds '%' symbol to the discount percentage when focus is lost and clears discount price if empty."""
+        """Adds '%' symbol to the discount percentage when focus is lost and recalculates."""
         percentage_str = self.percent_discount_var.get()
-        if percentage_str:
-            if not percentage_str.endswith('%'):
-                self.percent_discount_var.set(f"{percentage_str}%")
-        else:
-            self.discount_var.set('')  # Clear discount price if percentage is empty
-
-        self.calculate_discount_fields()  # Call the calculate function at the end
+        if percentage_str and not percentage_str.endswith('%'):
+            self.percent_discount_var.set(f"{percentage_str}%")
+        
+        # Trigger discount calculation based on percentage
+        self.last_changed = 'percentage'
+        self.calculate_discount('percentage')  # Pass 'percentage' as the argument
+        #if #flag
+            #self.save()
+            #flag = false
 
     def custom_float_format(self, value):
         """Formats the float value to string with two decimal places."""
         return "{:.2f}".format(value)
 
-    def calculate_discount(self, *args):
+    def calculate_discount(self, based_on):
         try:
-            # Extract the numeric part of the price, removing the '$' symbol
             price_str = self.regular_product_price_var.get().lstrip('$')
             price = Decimal(price_str) if price_str else Decimal('0')
 
-            if self.last_changed == 'percentage' and self.percent_discount_var.get().strip('%'):
+            if based_on == 'percentage':
                 percentage_str = self.percent_discount_var.get().strip('%')
                 percentage = Decimal(percentage_str) if percentage_str else Decimal('0')
-                calculated_price = (price * percentage / Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                self.discount_var.set(f"${calculated_price:.2f}")
+                discount_price = (price * percentage / Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                self.discount_var.set(f"${discount_price:.2f}")
 
-            elif self.last_changed == 'price' and self.discount_var.get().strip('$'):
+            elif based_on == 'price':
                 discount_str = self.discount_var.get().strip('$')
                 discount = Decimal(discount_str) if discount_str else Decimal('0')
-                if price != Decimal('0'):
-                    percentage = ((discount / price) * Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                    self.percent_discount_var.set(f"{percentage:.2f}%")
-        except ValueError:
+                percentage = ((discount / price) * Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                
+                # Adjust the format to allow for decimal percentages
+                formatted_percentage = "{:.2f}%".format(percentage)
+                self.percent_discount_var.set(formatted_percentage)
+
+        except (ValueError, InvalidOperation):
             pass
+
+        self.calculate_discount_fields()
 
     def calculate_discount_fields(self):
         # Helper function to strip characters and convert to Decimal
@@ -832,9 +867,6 @@ class Application(tk.Frame):
         self.sold_date_entry.config(state="normal")  # Enable the entry widget
         self.sold_date_entry.delete(0, tk.END)  # Clear the entry field
         self.sold_date_entry.config(state="disabled")  # Disable the entry widget
-
-    def focus_search_entry(self):
-        self.search_entry.focus_set()
 
     def open_hyperlink(self, event):
         try:
@@ -1011,7 +1043,7 @@ class Application(tk.Frame):
         # Refresh the folder list with the updated settings
         self.combine_and_display_folders()
         
-        self.focus_search_entry()
+        self.search_entry.focus_set()
 
     def choose_inventory_folder(self):
         inventory_folder = filedialog.askdirectory()
@@ -1128,6 +1160,7 @@ class Application(tk.Frame):
             self.combine_and_display_folders()  # If the search box is empty, display all folders
 
     def display_product_details(self, event):
+        
         selection = self.folder_list.curselection()
         # Get the index of the selected item
         if not selection:
@@ -1336,14 +1369,10 @@ class Application(tk.Frame):
 
         # Unbind the Enter key from the save_button's command
         self.master.unbind('<Return>')
-        
-        # Bind the Escape key to do nothing, which overrides the binding if in edit mode
-        self.master.bind('<Escape>', lambda e: None)
-        # Any other code you want to execute when displaying product details, such as configuring widget states
-        
-        # Now bind the Enter key to the edit_button's command
-        self.edit_button.focus_set()  # Optional: set the focus on the edit button
-        self.master.bind('<Return>', lambda e: self.edit_button.invoke())
+        self.master.unbind('<Escape>')
+       
+        # Bind the Enter key to the global enter handler
+        self.master.bind('<Return>', self.edit_on_key_handler)
 
     def open_product_folder(self, folder_path):
         if sys.platform == "win32":
@@ -1429,21 +1458,19 @@ class Application(tk.Frame):
         if self.edit_mode:
             self.product_name_text.bind("<Button-1>", lambda e: None)
 
-            self.save_button.focus_set()  # Optional: set the focus on the save button
             # When in edit mode, bind the Enter key to the save_button's command
-            self.master.bind('<Return>', lambda e: self.save_button.invoke())
+            self.master.bind('<Return>', self.save_on_key_handler)
             
             # When in edit mode, bind the Escape key to the edit_button's command
-            self.master.bind('<Escape>', lambda e: self.edit_button.invoke())
+            self.master.bind('<Escape>', self.edit_on_key_handler)
         else:
             self.product_name_text.bind("<Button-1>", lambda e: "break")
 
             # When not in edit mode, unbind the Enter and Escape keys
             self.master.unbind('<Return>')
             self.master.unbind('<Escape>')
-            self.edit_button.focus_set()  # Optional: set the focus on the save button
             # When in edit mode, bind the Enter key to the save_button's command
-            self.master.bind('<Return>', lambda e: self.edit_button.invoke())
+            self.master.bind('<Return>', self.edit_on_key_handler)
 
     def save(self):
         # Extract values from the widgets
@@ -1589,17 +1616,14 @@ class Application(tk.Frame):
         self.create_word_doc(doc_data, iid="dummy", show_message=True)  # Call create_word_doc with dummy iid
 
         self.toggle_edit_mode()
-        self.focus_search_entry()
+        self.search_entry.focus_set()
         # Unbind the Enter and Escape keys
-        self.master.unbind('<Return>')
-        self.master.unbind('<Escape>')
-
-        # Optional: Reset focus to the product list or the edit button
-        self.edit_button.focus_set()
+        #self.master.unbind('<Return>')
+        #self.master.unbind('<Escape>')
     
         # Additionally, you might want to re-bind the Enter key to the edit_button's command
         # if you want to be able to press Enter to switch to edit mode again
-        self.master.bind('<Return>', lambda e: self.edit_button.invoke())
+        #self.master.bind('<Return>', lambda e: self.edit_on_key_handler.invoke())
 
     def refresh_and_select_product(self, product_id):
         # Refresh the list of products
@@ -1622,7 +1646,7 @@ class Application(tk.Frame):
             self.folder_list.see(product_index)  # Ensure the product is visible in the list
             self.folder_list.event_generate("<<ListboxSelect>>")  # Trigger the event to display product details
         self.toggle_edit_mode()
-        self.focus_search_entry()
+        self.search_entry.focus_set()
 
     def get_folder_names_from_db(self):
         self.db_manager.cur.execute("SELECT Folder FROM folder_paths")
