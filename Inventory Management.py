@@ -226,7 +226,7 @@ class Application(tk.Frame):
                 self.combine_and_display_folders()  # Update the list items with folder names
 
             # Schedule this method to be called again after 10000 milliseconds (10 seconds)
-            self.after(10000, self.check_and_update_product_list)
+            #self.after(10000, self.check_and_update_product_list)
 
     def Main_Window_Widgets(self):
         
@@ -626,107 +626,108 @@ class Application(tk.Frame):
             entry_widget.insert(0, price_str.lstrip('$'))
 
     def on_price_focus_out(self, event):
-        if self.trigger_price_focus_out_flag:
+        if self.edit_mode:
+            if self.trigger_price_focus_out_flag:
 
-            entry_widget = event.widget
-            current_price = entry_widget.get().lstrip('$')
+                entry_widget = event.widget
+                current_price = entry_widget.get().lstrip('$')
 
-            entry_widget.config(validate='none')
+                entry_widget.config(validate='none')
 
-            # Check if the price string is empty and set it and related fields to default values
-            try:
-                if not current_price.strip():
-                    # Temporarily disable validation and update widget state
-                    entry_list = [self.regular_product_price_entry, self.ivu_tax_entry, 
-                                self.discount_entry, self.product_price_after_discount_entry, 
-                                self.ivu_tax_after_discount_entry, 
-                                self.product_price_minus_discount_plus_ivu_entry, 
-                                self.percent_discount_entry]
+                # Check if the price string is empty and set it and related fields to default values
+                try:
+                    if not current_price.strip():
+                        # Temporarily disable validation and update widget state
+                        entry_list = [self.regular_product_price_entry, self.ivu_tax_entry, 
+                                    self.discount_entry, self.product_price_after_discount_entry, 
+                                    self.ivu_tax_after_discount_entry, 
+                                    self.product_price_minus_discount_plus_ivu_entry, 
+                                    self.percent_discount_entry]
 
-                    for widget in entry_list:
-                        widget.config(validate='none', state='normal')
-
-                        # Set the current widget to $0
-                        self.product_price_plus_ivu_entry.delete(0, tk.END)
-                        self.product_price_plus_ivu_entry.insert(0, "$0")
-
-                        # Set related fields to their default values
-                        
-                        self.regular_product_price_entry.delete(0, tk.END)
-                        self.regular_product_price_entry.insert(0, "$0")
-
-                        self.ivu_tax_entry.delete(0, tk.END)
-                        self.ivu_tax_entry.insert(0, "$0")
-                        
-                        # Temporarily disable validation and change state to normal
-                        self.discount_entry.config(validate='none', state='normal')
-
-                        # Set the widget to '$0'
-                        self.discount_entry.delete(0, tk.END)
-                        self.discount_entry.insert(0, "$0")
-
-                        # Re-enable validation and change state back to disabled
-                        self.discount_entry.config(validate='key', state='disabled')
-
-
-                        self.product_price_after_discount_entry.delete(0, tk.END)
-                        self.product_price_after_discount_entry.insert(0, "$0")
-
-                        self.ivu_tax_after_discount_entry.delete(0, tk.END)
-                        self.ivu_tax_after_discount_entry.insert(0, "$0")
-
-                        self.product_price_minus_discount_plus_ivu_entry.delete(0, tk.END)
-                        self.product_price_minus_discount_plus_ivu_entry.insert(0, "$0")
-
-                        self.percent_discount_entry.delete(0, tk.END)
-                        self.percent_discount_entry.insert(0, "0%")
-
-                        # Re-enable validation and update widget state, disable all except specific widgets
                         for widget in entry_list:
-                            if widget not in [self.discount_entry, self.percent_discount_entry, self.product_price_plus_ivu_entry]:
-                                widget.config(validate='key', state='disabled')
-                            else:
-                                widget.config(validate='key', state='normal')  # Keep these widgets editable
+                            widget.config(validate='none', state='normal')
 
-                    # Update GUI
-                    self.update_idletasks()
+                            # Set the current widget to $0
+                            self.product_price_plus_ivu_entry.delete(0, tk.END)
+                            self.product_price_plus_ivu_entry.insert(0, "$0")
 
-                    return           
-            except Exception as e:
-                print(f"Error while setting prices as $0/0%: {e}")
-            
-            if not current_price.startswith('$'):
-                entry_widget.delete(0, tk.END)
-                entry_widget.insert(0, f"${current_price}")
+                            # Set related fields to their default values
+                            
+                            self.regular_product_price_entry.delete(0, tk.END)
+                            self.regular_product_price_entry.insert(0, "$0")
 
-            entry_widget.config(validate='key')
+                            self.ivu_tax_entry.delete(0, tk.END)
+                            self.ivu_tax_entry.insert(0, "$0")
 
-            if event.widget == self.product_price_plus_ivu_entry and self.initial_product_price_plus_ivu != current_price:
-                if not hasattr(self, 'prompt_shown'):
-                    self.prompt_shown = True
+                            # Temporarily disable validation and change state to normal
+                            self.discount_entry.config(validate='none', state='normal')
 
-                    self.recalculate_original_price_and_tax()
-                    discount_price = self.discount_var.get().lstrip('$')
-                    discount_percentage = self.percent_discount_var.get().rstrip('%')
-                    message = f"Product price changed. Calculate discount based on?\n\nPrice: ${discount_price}\nPercentage: {discount_percentage}%"
-                    response = messagebox.askquestion("Discount Calculation", message)
+                            # Set the widget to '$0'
+                            self.discount_entry.delete(0, tk.END)
+                            self.discount_entry.insert(0, "$0")
 
-                    if response == 'yes':
-                        self.calculate_discount('price')
-                        # if self.trigger_save_flag:
-                        #     self.save()
-                        #     self.trigger_save_flag = False
+                            # Re-enable validation and change state back to disabled
+                            self.discount_entry.config(validate='key', state='disabled')
 
-                    else:
-                         
-                        self.calculate_discount('percentage')
-                        # if self.trigger_save_flag:
-                        #     self.save()
-                        #     self.trigger_save_flag = False
 
-                    del self.prompt_shown
+                            self.product_price_after_discount_entry.delete(0, tk.END)
+                            self.product_price_after_discount_entry.insert(0, "$0")
 
-                self.initial_product_price_plus_ivu = ''
+                            self.ivu_tax_after_discount_entry.delete(0, tk.END)
+                            self.ivu_tax_after_discount_entry.insert(0, "$0")
+
+                            self.product_price_minus_discount_plus_ivu_entry.delete(0, tk.END)
+                            self.product_price_minus_discount_plus_ivu_entry.insert(0, "$0")
+
+                            self.percent_discount_entry.delete(0, tk.END)
+                            self.percent_discount_entry.insert(0, "0%")
+
+                            # Re-enable validation and update widget state, disable all except specific widgets
+                            for widget in entry_list:
+                                if widget not in [self.discount_entry, self.percent_discount_entry, self.product_price_plus_ivu_entry]:
+                                    widget.config(validate='key', state='disabled')
+                                else:
+                                    widget.config(validate='key', state='normal')  # Keep these widgets editable
+
+                        # Update GUI
+                        self.update_idletasks()
+
+                        return           
+                except Exception as e:
+                    print(f"Error while setting prices as $0/0%: {e}")
+                
+                if not current_price.startswith('$'):
+                    entry_widget.delete(0, tk.END)
+                    entry_widget.insert(0, f"${current_price}")
+
+                entry_widget.config(validate='key')
+
+                if event.widget == self.product_price_plus_ivu_entry and self.initial_product_price_plus_ivu != current_price:
+                    if not hasattr(self, 'prompt_shown'):
+                        self.prompt_shown = True
+
+                        self.recalculate_original_price_and_tax()
+                        discount_price = self.discount_var.get().lstrip('$')
+                        discount_percentage = self.percent_discount_var.get().rstrip('%')
+                        message = f"Product price changed. Calculate discount based on?\n\nPrice: ${discount_price}\nPercentage: {discount_percentage}%"
+                        response = messagebox.askquestion("Discount Calculation", message)
+
+                        if response == 'yes':
+                            self.calculate_discount('price')
+                            # if self.trigger_save_flag:
+                            #     self.save()
+                            #     self.trigger_save_flag = False
+
+                        else:
+                            
+                            self.calculate_discount('percentage')
+                            # if self.trigger_save_flag:
+                            #     self.save()
+                            #     self.trigger_save_flag = False
+
+                        del self.prompt_shown
+
+                    self.initial_product_price_plus_ivu = ''
 
     def save_on_key_handler(self, event):
     
