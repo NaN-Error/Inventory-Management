@@ -28,6 +28,8 @@ import math
 from decimal import Decimal, ROUND_HALF_UP
 from decimal import Decimal, InvalidOperation
 from tkinter import simpledialog
+from PIL import Image, ImageTk
+from openpyxl_image_loader import SheetImageLoader
 
 
 
@@ -315,7 +317,6 @@ class Application(tk.Frame):
         self.to_sell_after_label.grid(row=2, column=0, sticky='w', padx=0, pady=0)
         self.to_sell_after_entry = ttk.Entry(self.row1_frame, textvariable=self.to_sell_after_var, state='disabled', style='BlackOnDisabled.TEntry')
         self.to_sell_after_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
-
 
         # Row 2 Widgets
         # Column 0 Widgets
@@ -922,7 +923,6 @@ class Application(tk.Frame):
     def recalculate_original_price_and_tax(self):
         # Extract and clean the product price (+ IVU) value
         price_plus_ivu_str = self.product_price_plus_ivu_var.get().lstrip('$')
-        print(price_plus_ivu_str)
         try:
             price_plus_ivu = Decimal(price_plus_ivu_str)
         except ValueError:
@@ -931,15 +931,18 @@ class Application(tk.Frame):
         # Define the tax rate
         tax_rate = Decimal('0.115')
 
-        # Calculate the IVU tax based on the total price (price_plus_ivu)
-        IVU_tax = (price_plus_ivu * tax_rate / (1 + tax_rate)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        # Calculate the original product price before tax
+        original_product_price = (price_plus_ivu / (1 + tax_rate)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-        # Calculate the original product price by subtracting the IVU tax from the total price
-        original_product_price = (price_plus_ivu - IVU_tax).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        # Calculate the IVU tax based on the original product price
+        IVU_tax = (original_product_price * tax_rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
+
+        price_plus_ivu_str = original_product_price + IVU_tax
         # Update the IVU tax and original product price fields
         self.ivu_tax_var.set(f"${IVU_tax:.2f}")
         self.regular_product_price_var.set(f"${original_product_price:.2f}")
+        self.product_price_plus_ivu_var.set(f"${price_plus_ivu_str:.2f}")
 
     def pick_date(self):
         def grab_date():
@@ -1297,8 +1300,8 @@ class Application(tk.Frame):
                     # For each field, check if the value is NaN using pd.isnull and set it to an empty string if it is
                     self.asin_var.set('' if pd.isnull(product_info.get('ASIN')) else product_info.get('ASIN', ''))
                     self.product_id_var.set('' if pd.isnull(product_info.get('Product ID')) else product_info.get('Product ID', ''))
-                    # ... handle the product image ...
-                    
+
+                  
                     self.product_name_text.configure(state='normal')
                     self.product_name_text.delete(1.0, "end")
                     product_name = product_info.get('Product Name', '')
@@ -2239,14 +2242,18 @@ class Application(tk.Frame):
         # Round up to the nearest 5 or 0
         total_price = -(-original_value // Decimal('5')) * Decimal('5')
 
-        # Calculate the IVU tax from the total price
-        IVU_tax = (total_price * tax_rate / (1 + tax_rate)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-
         # Calculate the regular product price by subtracting the IVU tax from the total price
-        regular_product_price = (total_price - IVU_tax).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        regular_product_price = (total_price / (1 + tax_rate)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+        # Calculate the IVU tax from the total price
+        IVU_tax = (regular_product_price * tax_rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
         # Calculate the 10% reseller earnings of the regular product price
         price_discount = (regular_product_price * Decimal('0.10')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+        total_price = regular_product_price + IVU_tax
+
+
 
         return regular_product_price, total_price, IVU_tax, price_discount
 
