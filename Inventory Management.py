@@ -27,6 +27,9 @@ from openpyxl import Workbook
 import math
 from decimal import Decimal, ROUND_HALF_UP
 from decimal import Decimal, InvalidOperation
+from openpyxl.styles import PatternFill
+
+
 from tkinter import simpledialog
 from PIL import Image, ImageTk
 from openpyxl_image_loader import SheetImageLoader
@@ -1044,7 +1047,49 @@ class Application(tk.Frame):
     def on_settings_close(self):
         self.master.destroy()
     
+    def get_previous_excel_report_data(self):
+        to_sell_folder = self.to_sell_folder
+        latest_file_date = None
+        latest_file = None
+
+        # Today's date for comparison
+        today = datetime.today().date()
+
+        # List all files and find the latest one
+        for file in os.listdir(to_sell_folder):
+            if file.startswith("Products To Sell -") and file.endswith(".xlsx"):
+                # Correct the indices to exclude the leading space
+                file_date_str = file[len("Products To Sell - "):-len(".xlsx")]
+                print(f"Extracted date string: '{file_date_str}' from file name: '{file}'")  # Debugging
+                try:
+                    file_date = datetime.strptime(file_date_str, "%Y-%m-%d").date()
+            
+                    print(f"File: {file}, File Date: {file_date}, Today: {today}")  # Debugging
+                    if file_date < today and (latest_file_date is None or file_date > latest_file_date):
+                        latest_file_date = file_date
+                        latest_file = file
+                except ValueError as e:
+                    print(f"Error parsing date from file name: {e}")  # Debugging
+                    # If the date format is incorrect, skip this file
+                    continue
+
+        # Check if a file was found
+        if latest_file is None:
+            return [0]
+
+        # Read the Excel file and get Product IDs
+        file_path = os.path.join(to_sell_folder, latest_file)
+        workbook = load_workbook(file_path, data_only=True)
+        sheet = workbook.active
+        product_ids = []
+        for row in sheet.iter_rows(min_row=2, values_only=True):  # Assuming Product IDs start from the second row
+            product_id = row[0]  # Assuming Product IDs are in the first column
+            product_ids.append(product_id)
+
+        return product_ids
+
     def products_to_sell_report(self):
+
         # Ensure the Excel file path and sheet name are set
         filepath, sheet_name = self.load_excel_settings()
         if not filepath or not sheet_name:
@@ -1077,6 +1122,12 @@ class Application(tk.Frame):
         # Sort the DataFrame
         sorted_df = df.sort_values(by='To Sell After', ascending=False)
 
+        # Call get_previous_excel_report_data and assign the return value to listx
+        listx = [item.upper() for item in self.get_previous_excel_report_data()]
+
+        # Define the light green fill
+        light_green_fill = PatternFill(start_color='90EE90', end_color='90EE90', fill_type='solid')
+
         # Create a new workbook and add the sorted data to it
         new_workbook = Workbook()
         new_sheet = new_workbook.active
@@ -1085,14 +1136,27 @@ class Application(tk.Frame):
         for r_idx, row in enumerate(dataframe_to_rows(sorted_df, index=False, header=True), start=1):
             for c_idx, value in enumerate(row, start=1):
                 cell = new_sheet.cell(row=r_idx, column=c_idx, value=value)
-                # Apply date format to 'To Sell After' column (assuming it's the second column)
+
+                if c_idx == 1 and r_idx > 1:  # Skip header row
+                    
+                    print(f"Comparing values with list {cell.value}, {listx}")  # Debugging
+                    
+                    if cell.value is not None and cell.value.upper() in listx:
+                        listx.remove(cell.value)
+                        
+                        print(f"Highlighting cell {r_idx}, {c_idx}")  # Debugging
+                        print(f"New list {listx}")  # Debugging
+                    else:
+                        cell.fill = light_green_fill
+
+
                 if c_idx == 2 and r_idx > 1:  # Skip header row
                     cell.number_format = 'MM/DD/YYYY'
                 # Apply currency format to 'Fair Market Value' column (assuming it's the fourth column)
                 if c_idx == 4 and r_idx > 1:  # Skip header row
                     cell.number_format = '"$"#,##0.00'
                 # Apply middle and center alignment to all cells
-                if c_idx == 3:  # 'Product Name' column
+                if c_idx == 3 and r_idx > 1:  # 'Product Name' column
                     cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
                 else:
                     cell.alignment = Alignment(horizontal='center', vertical='center')
@@ -1112,6 +1176,9 @@ class Application(tk.Frame):
         new_sheet.column_dimensions['B'].width = 120 / 7  # Width for 'To Sell After'
         new_sheet.column_dimensions['C'].width = 700 / 7  # Width for 'Product Name'
         new_sheet.column_dimensions['D'].width = 120 / 7  # Width for 'Fair Market Value'
+
+        # Add the explanatory text in cell 'F1'
+        new_sheet['F1'] = "Fields highlighted in green represent new products added since the last report."
 
         # Save the new workbook
         today_str = datetime.now().strftime("%Y-%m-%d")
