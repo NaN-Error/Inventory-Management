@@ -31,10 +31,6 @@ from tkinter import simpledialog
 from PIL import Image, ImageTk
 from openpyxl_image_loader import SheetImageLoader
 
-
-
-
-
 # Prototyping (make it work, then make it pretty.)
 
 class DatabaseManager: #DB practice(use txt to store folder paths when program finished for faster reads.)
@@ -162,7 +158,6 @@ class ExcelManager:
             if header_name in col:
                 return col.index(header_name) + 1
         return None
-
 
 class Application(tk.Frame):
 
@@ -2252,8 +2247,6 @@ class Application(tk.Frame):
         price_discount = (regular_product_price * Decimal('0.10')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
         total_price = regular_product_price + IVU_tax
-
-
 
         return regular_product_price, total_price, IVU_tax, price_discount
 
