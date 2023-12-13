@@ -31,12 +31,10 @@ from openpyxl.styles import PatternFill
 from io import BytesIO
 import threading
 import io
-
-
-
 from tkinter import simpledialog
 from PIL import Image, ImageTk
 from openpyxl_image_loader import SheetImageLoader
+
 
 # Prototyping (make it work, then make it pretty.)
 
@@ -1529,6 +1527,7 @@ class Application(tk.Frame):
                     self.reviewed_var.set(False)
                     self.pictures_downloaded_var.set(False)
                     self.sold_var.set(False)
+                    self.product_image_label.config(image='')
                     self.product_image_label.configure(text="Image not loaded.")
                     # Populate the widgets with the matched data
                     self.asin_var.set('')
@@ -1601,6 +1600,9 @@ class Application(tk.Frame):
                         # Resize the image using PIL
                         desired_size = (100, 100)  # Set the desired size
                         resized_image = pil_image.resize(desired_size)
+                        if not self.running:
+                            print("Task exited before PhotoImage creation: Application no longer running")
+                            return  # Exit if the application is no longer running
 
                         # Convert the resized image to Tkinter PhotoImage
                         tk_photo = ImageTk.PhotoImage(resized_image)
