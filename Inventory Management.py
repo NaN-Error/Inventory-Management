@@ -1063,7 +1063,6 @@ class Application(tk.Frame):
                 print(f"Extracted date string: '{file_date_str}' from file name: '{file}'")  # Debugging
                 try:
                     file_date = datetime.strptime(file_date_str, "%Y-%m-%d").date()
-            
                     print(f"File: {file}, File Date: {file_date}, Today: {today}")  # Debugging
                     if file_date < today and (latest_file_date is None or file_date > latest_file_date):
                         latest_file_date = file_date
@@ -1075,7 +1074,8 @@ class Application(tk.Frame):
 
         # Check if a file was found
         if latest_file is None:
-            return [0]
+            return [0], None  # Return None for latest_file if not found
+
 
         # Read the Excel file and get Product IDs
         file_path = os.path.join(to_sell_folder, latest_file)
@@ -1086,7 +1086,7 @@ class Application(tk.Frame):
             product_id = row[0]  # Assuming Product IDs are in the first column
             product_ids.append(product_id)
 
-        return product_ids
+        return product_ids, latest_file_date  # Return both product_ids and the latest file
 
     def products_to_sell_report(self):
 
@@ -1123,7 +1123,7 @@ class Application(tk.Frame):
         sorted_df = df.sort_values(by='To Sell After', ascending=False)
 
         # Call get_previous_excel_report_data and assign the return value to listx
-        listx = [item.upper() for item in self.get_previous_excel_report_data()]
+        previous_product_ids, latest_file_date = self.get_previous_excel_report_data()
 
         # Define the light green fill
         light_green_fill = PatternFill(start_color='90EE90', end_color='90EE90', fill_type='solid')
@@ -1137,19 +1137,11 @@ class Application(tk.Frame):
             for c_idx, value in enumerate(row, start=1):
                 cell = new_sheet.cell(row=r_idx, column=c_idx, value=value)
 
-                if c_idx == 1 and r_idx > 1:  # Skip header row
-                    
-                    print(f"Comparing values with list {cell.value}, {listx}")  # Debugging
-                    
-                    if cell.value is not None and cell.value.upper() in listx:
-                        listx.remove(cell.value)
-                        
-                        print(f"Highlighting cell {r_idx}, {c_idx}")  # Debugging
-                        print(f"New list {listx}")  # Debugging
+                if c_idx == 1 and r_idx > 1:  # Skip header row                    
+                    if cell.value is not None and cell.value.upper() in previous_product_ids:
+                        previous_product_ids.remove(cell.value)
                     else:
                         cell.fill = light_green_fill
-
-
                 if c_idx == 2 and r_idx > 1:  # Skip header row
                     cell.number_format = 'MM/DD/YYYY'
                 # Apply currency format to 'Fair Market Value' column (assuming it's the fourth column)
@@ -1177,8 +1169,22 @@ class Application(tk.Frame):
         new_sheet.column_dimensions['C'].width = 700 / 7  # Width for 'Product Name'
         new_sheet.column_dimensions['D'].width = 120 / 7  # Width for 'Fair Market Value'
 
-        # Add the explanatory text in cell 'F1'
-        new_sheet['F1'] = "Fields highlighted in green represent new products added since the last report."
+        # Assigning values to cells# Assuming latest_file is a string in the format "YYYY-MM-DD"
+        formatted_date = latest_file_date.strftime('%A, %B %d, %Y')
+        new_sheet['F2'] = f"Product IDs highlighted in green represent new products added since the \nlast report from {formatted_date}."
+        new_sheet['F3'] = datetime.now().strftime("This report was generated on %A, %B %d, %Y at %I:%M %p.")
+
+        # Creating an Alignment object for center and middle alignment
+        align_center_middle = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+        # Applying the alignment and fill to the cells
+        new_sheet['F2'].alignment = align_center_middle
+        new_sheet['F2'].fill = light_green_fill
+        new_sheet['F3'].alignment = align_center_middle
+        new_sheet['F3'].fill = light_green_fill
+
+        # Setting the width of column 'F' to 80 points
+        new_sheet.column_dimensions['F'].width = 80
 
         # Save the new workbook
         today_str = datetime.now().strftime("%Y-%m-%d")
