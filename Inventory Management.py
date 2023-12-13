@@ -1384,7 +1384,9 @@ class Application(tk.Frame):
                     # 3. Print the column name and row number
                     if product_image_col_num is not None:
                         self.load_and_display_image(current_row_num  +3, product_image_col_num)
-
+                        # If images or other objects were embedded in or near the deleted row, their anchoring might have been affected. 
+                        # This could lead to a misalignment in how openpyxl identifies the position of these objects.
+                        # Thats why there's a +3 in current_row_num
 
                     self.edit_button.config(state="normal")
                     self.order_link_text.config(state='normal')
