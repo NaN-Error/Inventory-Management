@@ -1125,7 +1125,7 @@ class Application(tk.Frame):
 
         # Filter out unwanted products and keep only necessary columns
         df = df[(df['Damaged'] != 'YES') & (df['Cancelled Order'] != 'YES') & (df['Personal'] != 'YES') & (df['Sold'] != 'YES') & (~pd.isna(df['Product ID']))]
-        df = df[['Product ID', 'To Sell After', 'Product Name', 'Fair Market Value']]
+        df = df[['Product ID', 'To Sell After', 'Product Name', 'Product Price After IVU']]
 
         # Convert 'To Sell After' to datetime
         df['To Sell After'] = pd.to_datetime(df['To Sell After'], errors='coerce')
@@ -1158,7 +1158,7 @@ class Application(tk.Frame):
                         cell.fill = light_green_fill
                 if c_idx == 2 and r_idx > 1:  # Skip header row
                     cell.number_format = 'MM/DD/YYYY'
-                # Apply currency format to 'Fair Market Value' column (assuming it's the fourth column)
+                # Apply currency format to 'Product Price After IVU' column (assuming it's the fourth column)
                 if c_idx == 4 and r_idx > 1:  # Skip header row
                     cell.number_format = '"$"#,##0.00'
                 # Apply middle and center alignment to all cells
@@ -1181,11 +1181,14 @@ class Application(tk.Frame):
         new_sheet.column_dimensions['A'].width = 120 / 7  # Width for 'Product ID'
         new_sheet.column_dimensions['B'].width = 120 / 7  # Width for 'To Sell After'
         new_sheet.column_dimensions['C'].width = 700 / 7  # Width for 'Product Name'
-        new_sheet.column_dimensions['D'].width = 120 / 7  # Width for 'Fair Market Value'
+        new_sheet.column_dimensions['D'].width = 200 / 7  # Width for 'Product Price After IVU'
 
-        # Assigning values to cells# Assuming latest_file is a string in the format "YYYY-MM-DD"
-        formatted_date = latest_file_date.strftime('%A, %B %d, %Y')
-        new_sheet['F2'] = f"Product IDs highlighted in green represent new products added since the \nlast report from {formatted_date}."
+        if latest_file_date is not None:
+            formatted_date = latest_file_date.strftime('%A, %B %d, %Y')
+            new_sheet['F2'] = f"Product IDs highlighted in green represent new products added since the \nlast report from {formatted_date}."
+        else:
+            new_sheet['F2'] = "Product IDs highlighted in green represent new products added."
+
         new_sheet['F3'] = datetime.now().strftime("This report was generated on %A, %B %d, %Y at %I:%M %p.")
 
         # Creating an Alignment object for center and middle alignment
