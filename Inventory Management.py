@@ -28,6 +28,10 @@ import math
 from decimal import Decimal, ROUND_HALF_UP
 from decimal import Decimal, InvalidOperation
 from openpyxl.styles import PatternFill
+from io import BytesIO
+import threading
+import io
+
 
 
 from tkinter import simpledialog
@@ -162,6 +166,7 @@ class ExcelManager:
                 return col.index(header_name) + 1
         return None
 
+
 class Application(tk.Frame):
 
     def __init__(self, master=None):
@@ -178,6 +183,8 @@ class Application(tk.Frame):
         self.initial_percent_discount = None  # Class attribute to store the initial discount price
         self.initial_product_price_plus_ivu = ''  # Initialize the variable
         self.trigger_price_focus_out_flag = True
+        self.running = True
+
         #self.trigger_save_flag = False # Can be used to save when pressing enter once while in Product Price (+IVU) entry.
 
 
@@ -192,6 +199,10 @@ class Application(tk.Frame):
         # Call the methods associated with the settings buttons
         #self.update_links_in_excel()  # This corresponds to 'Autofill Excel Data(link, asin, tosellafter)'
         #self.update_folders_paths()   # This corresponds to 'Update folder names and paths'
+
+    def close_application(self):
+        self.running = False
+        self.destroy()
 
     def load_settings(self):
         # Load settings
@@ -316,9 +327,17 @@ class Application(tk.Frame):
         self.to_sell_after_entry = ttk.Entry(self.row1_frame, textvariable=self.to_sell_after_var, state='disabled', style='BlackOnDisabled.TEntry')
         self.to_sell_after_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
 
-        # Row 2 Widgets
-        # Column 0 Widgets
+        # Row 1 Widgets
+        # Column 1 Widget
         
+        self.r1column1_frame = tk.Frame(self.product_frame, bg='light gray')
+        self.r1column1_frame.grid(row=1, column=2, sticky='nw', padx=0, pady=0)
+        self.product_image_label = ttk.Label(self.r1column1_frame, text='Image not loaded')
+        self.product_image_label.grid(row=0, column=1, sticky='w', padx=0, pady=0)
+        
+        
+        # Row 2 Widgets
+        # Column 0 Widget
         # Create a new frame for the column 0 widgets
         self.r2column0_frame = tk.Frame(self.product_frame, bg='light gray')
         self.r2column0_frame.grid(row=2, column=0, sticky='nw', padx=25, pady=25)
@@ -463,8 +482,6 @@ class Application(tk.Frame):
         self.product_price_minus_discount_plus_ivu_entry = ttk.Entry(self.r2column2_frame, textvariable=self.product_price_minus_discount_plus_ivu_var, state='disabled', style='BlackOnDisabled.TEntry')
         self.product_price_minus_discount_plus_ivu_entry.grid(row=8, column=0, sticky='w', padx=0, pady=0)
 
-
-
         self.sold_date_var = tk.StringVar()
         self.sold_date_label = ttk.Label(self.r2column2_frame, text='Sold Date')
         self.sold_date_label.grid(row=9, column=0, sticky='w', padx=0, pady=0)
@@ -475,7 +492,6 @@ class Application(tk.Frame):
         self.sold_date_button = ttk.Button(self.r2column2_frame, text="Pick\nDate", style='SmallFont.TButton', command=self.pick_date, state='disabled', width=5)
         self.sold_date_button.grid(row=10, column=0, sticky='e', padx=0, pady=0)
 
-        # Create the Clear Date button
         self.clear_button = ttk.Button(self.r2column2_frame, text="Clear\nDate", style='SmallFont.TButton', command=self.clear_date, state='disabled', width=5)
         self.clear_button.grid(row=10, column=1, sticky='e', padx=0, pady=0)
 
@@ -1328,10 +1344,10 @@ class Application(tk.Frame):
                         if all(term.upper() in folder_name.upper() for term in search_terms):
                             self.folder_list.insert(tk.END, folder_name)
         else:
-            self.combine_and_display_folders()  # If the search box is empty, display all folders
+            self.combine_and_display_folders()  # If the search box is empty, display all folders        
 
     def display_product_details(self, event):
-        
+
         selection = self.folder_list.curselection()
         # Get the index of the selected item
         if not selection:
@@ -1355,6 +1371,22 @@ class Application(tk.Frame):
                 self.product_folder_path = self.get_folder_path_from_db(selected_product_id)
 
                 if product_info:
+                    
+                    self.product_image_label.config(image='')
+                    self.product_image_label.configure(text='Loading image...')
+                    # 1. Find the column number for "Product Image"
+                    product_image_col_num = None
+                    for col_num, col_name in enumerate(self.excel_manager.data_frame.columns):
+                        if col_name == 'Product Image':
+                            product_image_col_num = col_num
+                            break
+                    # 2. Get the current row number
+                    current_row_num = self.excel_manager.data_frame[self.excel_manager.data_frame['Product ID'].str.upper() == selected_product_id.upper()].index[0]
+  
+                    # 3. Print the column name and row number
+                    if product_image_col_num is not None:
+                        self.load_and_display_image(current_row_num  +3, product_image_col_num)
+
 
                     self.edit_button.config(state="normal")
                     self.order_link_text.config(state='normal')
@@ -1369,7 +1401,6 @@ class Application(tk.Frame):
                     self.asin_var.set('' if pd.isnull(product_info.get('ASIN')) else product_info.get('ASIN', ''))
                     self.product_id_var.set('' if pd.isnull(product_info.get('Product ID')) else product_info.get('Product ID', ''))
 
-                  
                     self.product_name_text.configure(state='normal')
                     self.product_name_text.delete(1.0, "end")
                     product_name = product_info.get('Product Name', '')
@@ -1498,7 +1529,7 @@ class Application(tk.Frame):
                     self.reviewed_var.set(False)
                     self.pictures_downloaded_var.set(False)
                     self.sold_var.set(False)
-                    
+                    self.product_image_label.configure(text="Image not loaded.")
                     # Populate the widgets with the matched data
                     self.asin_var.set('')
                     self.product_id_var.set('')
@@ -1544,6 +1575,67 @@ class Application(tk.Frame):
        
         # Bind the Enter key to the global enter handler
         self.master.bind('<Return>', self.edit_on_key_handler)
+
+    def load_and_display_image(self, current_row_num, product_image_col_num):
+        def task():
+            print(f"Starting image loading task: Row {current_row_num}, Column {product_image_col_num}")
+
+            if not self.running:
+                print("Task exited: Application no longer running")
+                return  # Exit the thread if the application is no longer running
+
+            try:
+                wb = openpyxl.load_workbook(self.excel_manager.filepath, data_only=True)
+                sheet = wb[self.excel_manager.sheet_name]
+                print(f"Workbook loaded: {self.excel_manager.filepath}")
+
+                found_image = False
+                for image in sheet._images:
+                    print(f"Checking image at Row {image.anchor._from.row}, Column {image.anchor._from.col}")
+                    if (image.anchor._from.row == current_row_num and 
+                        image.anchor._from.col == product_image_col_num):
+                        print("Image found, attempting to load...")
+                        image_stream = io.BytesIO(image._data())  # Keep the stream open
+                        pil_image = Image.open(image_stream)
+                        
+                        # Resize the image using PIL
+                        desired_size = (100, 100)  # Set the desired size
+                        resized_image = pil_image.resize(desired_size)
+
+                        # Convert the resized image to Tkinter PhotoImage
+                        tk_photo = ImageTk.PhotoImage(resized_image)
+
+                        if self.running:
+                            print("Scheduling image update in main thread")
+                            self.after(0, lambda: self.update_image_label(tk_photo))
+                        else:
+                            print("Skipped image update: Application no longer running")
+                        found_image = True
+                        break
+
+                if not found_image and self.running:
+                    print("No image found at specified cell")
+                    self.after(0, lambda: self.product_image_label.config(text="Product image not found"))
+                elif not self.running:
+                    print("Skipped 'no image found' update: Application no longer running")
+
+                wb.close()
+            except Exception as e:
+                print(f"Error loading image: {e}")
+                if self.running:
+                    self.after(0, lambda: self.product_image_label.config(text="Error loading image"))
+                else:
+                    print("Skipped error message update: Application no longer running")
+
+        threading.Thread(target=task).start()
+
+    def update_image_label(self, tk_photo):
+        if self.running:
+            print("Updating image label in main thread")
+            self.product_image_label.config(image=tk_photo)
+            self.product_image_label.image = tk_photo  # Keep a reference
+        else:
+            print("Skipped updating image label: Application no longer running")
 
     def open_product_folder(self, folder_path):
         if sys.platform == "win32":
@@ -2566,21 +2658,10 @@ class Application(tk.Frame):
     def __del__(self):
         self.db_manager.conn.close()
 
-def on_close(app, root):
-    print("Closing the application and attempting to backup the database.")
-    if hasattr(app, 'excel_manager') and app.excel_manager.filepath:
-        print(f"Excel file path at time of backup: {app.excel_manager.filepath}")
-        try:
-            app.backup_excel_database()  # Perform the backup
-            print("Backup should now be complete.")
-        except Exception as e:
-            print(f"An error occurred during backup: {e}")
-    else:
-        print("Excel manager not set or no filepath available.")
-    root.destroy()  # Call the destroy method to close the application
-
 def exit_application(app, root):
     on_close(app)  # Perform backup
+    app.running = False
+
     root.destroy()  # Exit the application
 
 def main():
@@ -2596,6 +2677,21 @@ def main():
     root.protocol("WM_DELETE_WINDOW", lambda: on_close(app, root))
     
     app.mainloop()
+
+def on_close(app, root):
+    
+    print("Closing the application and attempting to backup the database.")
+    if hasattr(app, 'excel_manager') and app.excel_manager.filepath:
+        print(f"Excel file path at time of backup: {app.excel_manager.filepath}")
+        try:
+            app.backup_excel_database()  # Perform the backup
+            print("Backup should now be complete.")
+        except Exception as e:
+            print(f"An error occurred during backup: {e}")
+    else:
+        print("Excel manager not set or no filepath available.")
+    app.running = False
+    root.destroy()  # Call the destroy method to close the application
 
 if __name__ == '__main__':
     main()
