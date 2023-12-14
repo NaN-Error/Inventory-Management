@@ -34,9 +34,10 @@ import io
 from tkinter import simpledialog
 from PIL import Image, ImageTk
 from openpyxl_image_loader import SheetImageLoader
-
+from tkinter import Label, Toplevel
 
 # Prototyping (make it work, then make it pretty.)
+
 
 class DatabaseManager: #DB practice(use txt to store folder paths when program finished for faster reads.)
 
@@ -164,7 +165,6 @@ class ExcelManager:
                 return col.index(header_name) + 1
         return None
 
-
 class Application(tk.Frame):
 
     def __init__(self, master=None):
@@ -182,21 +182,25 @@ class Application(tk.Frame):
         self.initial_product_price_plus_ivu = ''  # Initialize the variable
         self.trigger_price_focus_out_flag = True
         self.running = True
+        self.current_product_id = None
+        self.workbook_cache = None
+        self.workbook_path = None
+        self.image_cache = {}
 
         #self.trigger_save_flag = False # Can be used to save when pressing enter once while in Product Price (+IVU) entry.
-
-
-        
-        # Make sure you call this before combining and displaying folders
+        self.cache_images_on_load()
         self.Main_Window_Widgets() 
-        
-        # Now it's safe to load settings and combine folders since the list widget is created
         self.load_settings()
         self.combine_and_display_folders()
         
         # Call the methods associated with the settings buttons
         #self.update_links_in_excel()  # This corresponds to 'Autofill Excel Data(link, asin, tosellafter)'
         #self.update_folders_paths()   # This corresponds to 'Update folder names and paths'
+
+    def cache_images_on_load(self):
+        filepath, sheet_name = self.load_excel_settings()
+        if filepath and sheet_name:
+            self.cache_images(filepath, sheet_name)
 
     def close_application(self):
         self.running = False
@@ -1347,6 +1351,33 @@ class Application(tk.Frame):
         else:
             self.combine_and_display_folders()  # If the search box is empty, display all folders        
 
+
+
+    def load_workbook_cached(self, path):
+        if path != self.workbook_path or self.workbook_cache is None:
+            self.workbook_cache = openpyxl.load_workbook(path, data_only=True)
+            self.workbook_path = path
+        return self.workbook_cache
+
+    def get_cached_image(self, row, col):
+        key = (row, col)
+        if key in self.image_cache:
+            return Image.open(io.BytesIO(self.image_cache[key]))
+        return None
+
+    def cache_images(self, workbook_path, sheet_name):
+        wb = openpyxl.load_workbook(workbook_path, data_only=True)
+        sheet = wb[sheet_name]
+        for image in sheet._images:
+            row, col = image.anchor._from.row, image.anchor._from.col
+            key = (row, col)
+            self.image_cache[key] = image._data()
+        wb.close()
+
+    def get_image_data(self, row, col):
+        key = (row, col)
+        return self.image_cache.get(key, None)
+
     def display_product_details(self, event):
 
         selection = self.folder_list.curselection()
@@ -1356,6 +1387,8 @@ class Application(tk.Frame):
         index = selection[0]
         selected_folder_name = self.folder_list.get(index)
         selected_product_id = selected_folder_name.split(' ')[0].upper()  # Assuming the product ID is at the beginning
+        self.current_product_id = selected_product_id  # Set the current product ID
+
         if self.edit_mode:
             self.toggle_edit_mode()
         # Ensure that the Excel file path and sheet name are set
@@ -1372,24 +1405,6 @@ class Application(tk.Frame):
                 self.product_folder_path = self.get_folder_path_from_db(selected_product_id)
 
                 if product_info:
-                    
-                    self.product_image_label.config(image='')
-                    self.product_image_label.configure(text='Loading image...')
-                    # 1. Find the column number for "Product Image"
-                    product_image_col_num = None
-                    for col_num, col_name in enumerate(self.excel_manager.data_frame.columns):
-                        if col_name == 'Product Image':
-                            product_image_col_num = col_num
-                            break
-                    # 2. Get the current row number
-                    current_row_num = self.excel_manager.data_frame[self.excel_manager.data_frame['Product ID'].str.upper() == selected_product_id.upper()].index[0]
-  
-                    # 3. Print the column name and row number
-                    if product_image_col_num is not None:
-                        self.load_and_display_image(current_row_num  +3, product_image_col_num)
-                        # If images or other objects were embedded in or near the deleted row, their anchoring might have been affected. 
-                        # This could lead to a misalignment in how openpyxl identifies the position of these objects.
-                        # Thats why there's a +3 in current_row_num
 
                     self.edit_button.config(state="normal")
                     self.order_link_text.config(state='normal')
@@ -1413,9 +1428,16 @@ class Application(tk.Frame):
 
                     self.comments_text.configure(state='normal')
                     self.comments_text.delete(1.0, "end")
-                    comments_text = product_info.get('Comments', '')
-                    if comments_text:
-                        self.comments_text.insert("insert", comments_text) 
+
+                    # Assuming product_info['Comments'] can be NaN, None, or a string
+                    comments_text = product_info.get('Comments', None)
+                    # Check for NaN (using pandas' isna function if you're working with pandas)
+                    # You can also directly check if comments_text is None, which covers both None and NaN cases
+                    if comments_text is None or pd.isna(comments_text):
+                        display_text = "No comments found."
+                    else:
+                        display_text = comments_text
+                    self.comments_text.insert("insert", display_text)
                     self.comments_text.configure(state='disabled')
 
                     # When a product is selected and the order date is fetched
@@ -1523,7 +1545,23 @@ class Application(tk.Frame):
                     else:
                         self.product_folder_var.set("No Folder")
                         self.product_folder_link.config(state='disabled')
-                    
+                    self.product_image_label.config(image='')
+                    self.product_image_label.configure(text='Loading image...')
+                    # 1. Find the column number for "Product Image"
+                    product_image_col_num = None
+                    for col_num, col_name in enumerate(self.excel_manager.data_frame.columns):
+                        if col_name == 'Product Image':
+                            product_image_col_num = col_num
+                            break
+                    # 2. Get the current row number
+                    current_row_num = self.excel_manager.data_frame[self.excel_manager.data_frame['Product ID'].str.upper() == selected_product_id.upper()].index[0]
+  
+                    # 3. Print the column name and row number
+                    if product_image_col_num is not None:
+                        self.load_and_display_image(current_row_num + 3, product_image_col_num, selected_product_id)
+                        # If images or other objects were embedded in or near the deleted row, their anchoring might have been affected. 
+                        # This could lead to a misalignment in how openpyxl identifies the position of these objects.
+                        # Thats why there's a +3 in current_row_num
                 else:
                     self.edit_button.config(state='disabled')
                     self.cancelled_order_var.set(False)
@@ -1580,59 +1618,52 @@ class Application(tk.Frame):
         # Bind the Enter key to the global enter handler
         self.master.bind('<Return>', self.edit_on_key_handler)
 
-    def load_and_display_image(self, current_row_num, product_image_col_num):
+    def load_and_display_image(self, current_row_num, product_image_col_num, product_id):
         def task():
             print(f"Starting image loading task: Row {current_row_num}, Column {product_image_col_num}")
 
-            if not self.running:
-                print("Task exited: Application no longer running")
-                return  # Exit the thread if the application is no longer running
+            if not self.running or self.current_product_id != product_id:
+                print("Task exited: Application no longer running or product changed")
+                return
 
             try:
-                wb = openpyxl.load_workbook(self.excel_manager.filepath, data_only=True)
-                sheet = wb[self.excel_manager.sheet_name]
-                print(f"Workbook loaded: {self.excel_manager.filepath}")
+                image_data = self.get_image_data(current_row_num, product_image_col_num)
+                if not image_data:
+                    # Image not in cache, load from workbook and cache it
+                    wb = self.load_workbook_cached(self.excel_manager.filepath)
+                    sheet = wb[self.excel_manager.sheet_name]
+                    for image in sheet._images:
+                        if image.anchor._from.row == current_row_num and image.anchor._from.col == product_image_col_num:
+                            print("Image found, caching...")
+                            image_data = image._data()
+                            self.image_cache[(current_row_num, product_image_col_num)] = image_data
+                            break
+                    wb.close()
 
-                found_image = False
-                for image in sheet._images:
-                    print(f"Checking image at Row {image.anchor._from.row}, Column {image.anchor._from.col}")
-                    if (image.anchor._from.row == current_row_num and 
-                        image.anchor._from.col == product_image_col_num):
-                        print("Image found, attempting to load...")
-                        image_stream = io.BytesIO(image._data())  # Keep the stream open
+                if image_data:
+                    # Load image from cached data
+                    with io.BytesIO(image_data) as image_stream:
                         pil_image = Image.open(image_stream)
-                        
                         # Resize the image using PIL
-                        desired_size = (100, 100)  # Set the desired size
+                        desired_size = (100, 100)
                         resized_image = pil_image.resize(desired_size)
-                        if not self.running:
-                            print("Task exited before PhotoImage creation: Application no longer running")
-                            return  # Exit if the application is no longer running
-
                         # Convert the resized image to Tkinter PhotoImage
                         tk_photo = ImageTk.PhotoImage(resized_image)
 
-                        if self.running:
-                            print("Scheduling image update in main thread")
-                            self.after(0, lambda: self.update_image_label(tk_photo))
-                        else:
-                            print("Skipped image update: Application no longer running")
-                        found_image = True
-                        break
+                    if self.running and self.current_product_id == product_id:
+                        print("Scheduling image update in main thread")
+                        self.after(0, lambda: self.update_image_label(tk_photo))
+                    else:
+                        print("Skipped image update: Application no longer running or product changed")
+                else:
+                    print("Image not found in workbook or cache")
+                    if self.running and self.current_product_id == product_id:
+                        self.after(0, lambda: self.product_image_label.config(text="Product image not found"))
 
-                if not found_image and self.running:
-                    print("No image found at specified cell")
-                    self.after(0, lambda: self.product_image_label.config(text="Product image not found"))
-                elif not self.running:
-                    print("Skipped 'no image found' update: Application no longer running")
-
-                wb.close()
             except Exception as e:
                 print(f"Error loading image: {e}")
-                if self.running:
+                if self.running and self.current_product_id == product_id:
                     self.after(0, lambda: self.product_image_label.config(text="Error loading image"))
-                else:
-                    print("Skipped error message update: Application no longer running")
 
         threading.Thread(target=task).start()
 
@@ -1643,6 +1674,8 @@ class Application(tk.Frame):
             self.product_image_label.image = tk_photo  # Keep a reference
         else:
             print("Skipped updating image label: Application no longer running")
+
+
 
     def open_product_folder(self, folder_path):
         if sys.platform == "win32":
@@ -2701,4 +2734,5 @@ def on_close(app, root):
     root.destroy()  # Call the destroy method to close the application
 
 if __name__ == '__main__':
+    
     main()
