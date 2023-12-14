@@ -1351,19 +1351,11 @@ class Application(tk.Frame):
         else:
             self.combine_and_display_folders()  # If the search box is empty, display all folders        
 
-
-
     def load_workbook_cached(self, path):
         if path != self.workbook_path or self.workbook_cache is None:
             self.workbook_cache = openpyxl.load_workbook(path, data_only=True)
             self.workbook_path = path
         return self.workbook_cache
-
-    def get_cached_image(self, row, col):
-        key = (row, col)
-        if key in self.image_cache:
-            return Image.open(io.BytesIO(self.image_cache[key]))
-        return None
 
     def cache_images(self, workbook_path, sheet_name):
         wb = openpyxl.load_workbook(workbook_path, data_only=True)
@@ -1674,8 +1666,6 @@ class Application(tk.Frame):
             self.product_image_label.image = tk_photo  # Keep a reference
         else:
             print("Skipped updating image label: Application no longer running")
-
-
 
     def open_product_folder(self, folder_path):
         if sys.platform == "win32":
