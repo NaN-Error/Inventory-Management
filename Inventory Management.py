@@ -35,11 +35,13 @@ from tkinter import simpledialog
 from PIL import Image, ImageTk
 from openpyxl_image_loader import SheetImageLoader
 from tkinter import Label, Toplevel
+import logging
+from logging.handlers import RotatingFileHandler
 
 # Prototyping (make it work, then make it pretty.)
 
 
-class DatabaseManager: #DB practice(use txt to store folder paths when program finished for faster reads.)
+class DatabaseManager: #DB practice(use txt/json to store folder paths when program finished for faster reads.)
 
     def __init__(self, db_name='inventory_management.db'):
         self.conn = sqlite3.connect(db_name)
@@ -186,8 +188,9 @@ class Application(tk.Frame):
         self.workbook_cache = None
         self.workbook_path = None
         self.image_cache = {}
-
         #self.trigger_save_flag = False # Can be used to save when pressing enter once while in Product Price (+IVU) entry.
+
+        self.configure_logger()
         self.cache_images_on_load()
         self.Main_Window_Widgets() 
         self.load_settings()
@@ -196,6 +199,26 @@ class Application(tk.Frame):
         # Call the methods associated with the settings buttons
         #self.update_links_in_excel()  # This corresponds to 'Autofill Excel Data(link, asin, tosellafter)'
         #self.update_folders_paths()   # This corresponds to 'Update folder names and paths'
+
+    def configure_logger(self):
+        # Set up a logger
+        self.logger = logging.getLogger('InventoryManagementLogger')
+        self.logger.setLevel(logging.INFO)  # Set the logging level
+
+        # Create a rotating file handler
+        handler = RotatingFileHandler('inventory_management.log', maxBytes=1000000, backupCount=5)
+        handler.setLevel(logging.INFO)
+
+        # Create a logging format
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+
+        # Add the handler to the logger
+        self.logger.addHandler(handler)
+
+        # Log the start of the application
+        self.logger.info("Inventory Management Application started")
+
 
     def cache_images_on_load(self):
         filepath, sheet_name = self.load_excel_settings()
@@ -1066,59 +1089,60 @@ class Application(tk.Frame):
         self.master.destroy()
     
     def get_previous_excel_report_data(self):
+        self.logger.info("Starting to get previous Excel report data")
+
         to_sell_folder = self.to_sell_folder
         latest_file_date = None
         latest_file = None
 
-        # Today's date for comparison
         today = datetime.today().date()
 
-        # List all files and find the latest one
         for file in os.listdir(to_sell_folder):
             if file.startswith("Products To Sell -") and file.endswith(".xlsx"):
-                # Correct the indices to exclude the leading space
                 file_date_str = file[len("Products To Sell - "):-len(".xlsx")]
-                print(f"Extracted date string: '{file_date_str}' from file name: '{file}'")  # Debugging
+                self.logger.debug(f"Extracted date string: '{file_date_str}' from file name: '{file}'")
                 try:
                     file_date = datetime.strptime(file_date_str, "%Y-%m-%d").date()
-                    print(f"File: {file}, File Date: {file_date}, Today: {today}")  # Debugging
                     if file_date < today and (latest_file_date is None or file_date > latest_file_date):
                         latest_file_date = file_date
                         latest_file = file
                 except ValueError as e:
-                    print(f"Error parsing date from file name: {e}")  # Debugging
-                    # If the date format is incorrect, skip this file
-                    continue
+                    self.logger.error(f"Error parsing date from file name '{file}': {e}")
 
-        # Check if a file was found
         if latest_file is None:
-            return [0], None  # Return None for latest_file if not found
+            self.logger.info("No latest file found")
+            return [0], None
 
-
-        # Read the Excel file and get Product IDs
         file_path = os.path.join(to_sell_folder, latest_file)
+        self.logger.info(f"Reading data from the latest file: {latest_file}")
+
         workbook = load_workbook(file_path, data_only=True)
         sheet = workbook.active
-        product_ids = []
-        for row in sheet.iter_rows(min_row=2, values_only=True):  # Assuming Product IDs start from the second row
-            product_id = row[0]  # Assuming Product IDs are in the first column
-            product_ids.append(product_id)
+        product_ids = [row[0] for row in sheet.iter_rows(min_row=2, values_only=True)]
 
-        return product_ids, latest_file_date  # Return both product_ids and the latest file
+        self.logger.info(f"Retrieved product IDs from {latest_file}")
+
+        return product_ids, latest_file_date
 
     def products_to_sell_report(self):
+
+        self.logger.info("Starting products to sell report generation")
 
         # Ensure the Excel file path and sheet name are set
         filepath, sheet_name = self.load_excel_settings()
         if not filepath or not sheet_name:
+            self.logger.error("Excel file path or sheet name is not set")
             messagebox.showerror("Error", "Excel file path or sheet name is not set.")
             return
 
         # Define the To Sell folder path
         to_sell_folder = self.to_sell_folder
         if not os.path.exists(to_sell_folder):
+            self.logger.error("To Sell folder path is not set or does not exist")
             messagebox.showerror("Error", "To Sell folder path is not set or does not exist.")
             return
+
+        self.logger.info("Loading data from the Excel workbook")
 
         # Load the original workbook and read the specified sheet into a DataFrame
         workbook = load_workbook(filepath, data_only=True)
@@ -1128,33 +1152,43 @@ class Application(tk.Frame):
         df = pd.DataFrame(data, columns=columns)
 
         # Filter out unwanted products and keep only necessary columns
+
+        self.logger.info("Filtering and processing product data")
+        # Log the number of products before and after filtering
+        initial_count = len(df)
         df = df[(df['Damaged'] != 'YES') & (df['Cancelled Order'] != 'YES') & (df['Personal'] != 'YES') & (df['Sold'] != 'YES') & (~pd.isna(df['Product ID']))]
         df = df[['Product ID', 'To Sell After', 'Product Name', 'Product Price After IVU']]
+        filtered_count = len(df)
+        self.logger.info(f"Filtered from {initial_count} products to {filtered_count} products")
 
         # Convert 'To Sell After' to datetime
         df['To Sell After'] = pd.to_datetime(df['To Sell After'], errors='coerce')
         today = pd.to_datetime('today').normalize()
         df = df.dropna(subset=['To Sell After'])
         df = df[df['To Sell After'] <= today]
+        self.logger.info("Converted 'To Sell After' dates and performed additional filtering")
 
         # Sort the DataFrame
         sorted_df = df.sort_values(by='To Sell After', ascending=False)
+        self.logger.info("Sorted the DataFrame based on 'To Sell After' dates")
 
         # Call get_previous_excel_report_data and assign the return value to listx
         previous_product_ids, latest_file_date = self.get_previous_excel_report_data()
+        self.logger.info(f"Retrieved data from the previous report dated {latest_file_date}")
 
         # Define the light green fill
         light_green_fill = PatternFill(start_color='90EE90', end_color='90EE90', fill_type='solid')
 
         # Create a new workbook and add the sorted data to it
+        self.logger.info("Creating new workbook for the report")
         new_workbook = Workbook()
         new_sheet = new_workbook.active
         new_sheet.title = sheet_name
 
+        self.logger.info("Applying formatting and styles to the workbook")
         for r_idx, row in enumerate(dataframe_to_rows(sorted_df, index=False, header=True), start=1):
             for c_idx, value in enumerate(row, start=1):
                 cell = new_sheet.cell(row=r_idx, column=c_idx, value=value)
-
                 if c_idx == 1 and r_idx > 1:  # Skip header row                    
                     if cell.value is not None and cell.value.upper() in previous_product_ids:
                         previous_product_ids.remove(cell.value)
@@ -1175,9 +1209,9 @@ class Application(tk.Frame):
         table_ref = f"A1:{chr(65 + sorted_df.shape[1] - 1)}{sorted_df.shape[0] + 1}"
 
         # Create a table
+        self.logger.info("Creating a table in the new workbook")
         table = Table(displayName="ProductsToSellTable", ref=table_ref)
-        style = TableStyleInfo(name="TableStyleMedium9", showFirstColumn=False,
-                            showLastColumn=False, showRowStripes=True, showColumnStripes=True)
+        style = TableStyleInfo(name="TableStyleMedium9", showFirstColumn=False, showLastColumn=False, showRowStripes=True, showColumnStripes=True)
         table.tableStyleInfo = style
         new_sheet.add_table(table)
 
@@ -1207,10 +1241,15 @@ class Application(tk.Frame):
         # Setting the width of column 'F' to 80 points
         new_sheet.column_dimensions['F'].width = 80
 
+
+        self.logger.info("Finalizing and saving the report")
         # Save the new workbook
         today_str = datetime.now().strftime("%Y-%m-%d")
+
+        self.logger.info("Saving the new workbook")
         copy_path = os.path.join(to_sell_folder, f"Products To Sell - {today_str}.xlsx")
         new_workbook.save(copy_path)
+        self.logger.info(f"Report saved at {copy_path}")
 
         # Open the modified Excel file
         if sys.platform == "win32":
