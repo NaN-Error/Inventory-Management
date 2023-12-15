@@ -217,467 +217,499 @@ class Application(tk.Frame):
         self.logger.addHandler(handler)
 
         # Log the start of the application
-        self.logger.info("Inventory Management Application started")
-
+        self.logger.info("\n")
+        self.logger.info("----Inventory Management Application started----")
 
     def cache_images_on_load(self):
+        self.logger.info("Starting to cache images on load")
+
+        # Load Excel settings
         filepath, sheet_name = self.load_excel_settings()
         if filepath and sheet_name:
+            self.logger.info(f"Excel settings loaded with filepath: {filepath} and sheet_name: {sheet_name}")
             self.cache_images(filepath, sheet_name)
+            self.logger.info("Images have been successfully cached")
+        else:
+            self.logger.warning("Failed to load Excel settings or they are incomplete. Skipping image caching.")
 
     def close_application(self):
+        self.logger.info("Closing application.")
         self.running = False
         self.destroy()
 
     def load_settings(self):
-        # Load settings
+        self.logger.info("Attempting to load folders' paths from file")
         try:
             with open("folders_paths.txt", "r") as file:
                 lines = file.read().splitlines()
                 self.inventory_folder = lines[0]
                 self.sold_folder = lines[1]
                 self.to_sell_folder = lines[2] if len(lines) > 2 else None
-                # ... The rest of your settings loading code ...
+
+                self.logger.info(f"Loaded paths: Inventory - {self.inventory_folder}, Sold - {self.sold_folder}, To Sell - {self.to_sell_folder}")
         except FileNotFoundError:
-            pass
-        # Here you could handle the situation if the file is not found, like setting default paths or prompting the user.
+            self.logger.warning("folders_paths.txt not found. Paths not loaded.")
 
-    def save_settings(self):
-        # This function is called after selecting the source and sold folders
-        # Update the table with the new paths
-        self.db_manager.cur.execute('''
-            UPDATE folder_paths SET Path = ? WHERE Folder = 'Root Folder'
-        ''', (self.inventory_folder,))
-        self.db_manager.cur.execute('''
-            UPDATE folder_paths SET Path = ? WHERE Folder = 'Sold'
-        ''', (self.sold_folder,))
-        self.db_manager.conn.commit()
+    # def save_settings(self):
+    #     self.logger.info("Saving settings for inventory and sold folders")
 
-    def check_and_update_product_list(self):
-        if not self.search_entry.get():  # Check if the search entry is empty
-            folder_count = len(next(os.walk(self.inventory_folder))[1])  # Count folders in the directory
-            list_count = self.folder_list.size()  # Count items in the Listbox
+    #     try:
+    #         # Update the table with the new paths for the inventory folder
+    #         self.db_manager.cur.execute('''
+    #             UPDATE folder_paths SET Path = ? WHERE Folder = 'Root Folder'
+    #         ''', (self.inventory_folder,))
+    #         self.logger.info(f"Inventory folder path updated to: {self.inventory_folder}")
 
-            if folder_count != list_count:
-                self.combine_and_display_folders()  # Update the list items with folder names
+    #         # Update the table with the new paths for the sold folder
+    #         self.db_manager.cur.execute('''
+    #             UPDATE folder_paths SET Path = ? WHERE Folder = 'Sold'
+    #         ''', (self.sold_folder,))
+    #         self.logger.info(f"Sold folder path updated to: {self.sold_folder}")
 
-            # Schedule this method to be called again after 10000 milliseconds (10 seconds)
-            #self.after(10000, self.check_and_update_product_list)
+    #         # Commit the changes to the database
+    #         self.db_manager.conn.commit()
+    #         self.logger.info("Settings saved successfully")
+
+    #     except Exception as e:
+    #         self.logger.error(f"Error saving settings: {e}")
 
     def Main_Window_Widgets(self):
-        
-        self.top_frame = ttk.Frame(self)
-        self.top_frame.pack(fill='x')
+        self.logger.info("Initializing main window widgets")
+        try:
+            self.top_frame = ttk.Frame(self)
+            self.top_frame.pack(fill='x')
 
-        self.settings_button = ttk.Button(self.top_frame, text='Settings', command=self.Settings_Window_Start)
-        self.settings_button.pack(side='right')
+            self.settings_button = ttk.Button(self.top_frame, text='Settings', command=self.Settings_Window_Start)
+            self.settings_button.pack(side='right')
 
-        self.search_frame = ttk.Frame(self)
-        self.search_frame.pack(fill='x')
+            self.search_frame = ttk.Frame(self)
+            self.search_frame.pack(fill='x')
 
-        self.search_label = ttk.Label(self.search_frame, text="Enter product name here:")
-        self.search_label.pack(anchor='w')
+            self.search_label = ttk.Label(self.search_frame, text="Enter product name here:")
+            self.search_label.pack(anchor='w')
 
-        self.search_entry = ttk.Entry(self.search_frame, width=30)  # Same width as the Listbox
-        self.search_entry.pack(side='left', fill='x', anchor='w')
-        self.search_entry.bind('<KeyRelease>', self.search)
+            self.search_entry = ttk.Entry(self.search_frame, width=30)  # Same width as the Listbox
+            self.search_entry.pack(side='left', fill='x', anchor='w')
+            self.search_entry.bind('<KeyRelease>', self.search)
 
-        self.bottom_frame = ttk.Frame(self)
-        self.bottom_frame.pack(fill='both', expand=True)
+            self.bottom_frame = ttk.Frame(self)
+            self.bottom_frame.pack(fill='both', expand=True)
 
-        self.list_outer_frame = ttk.Frame(self.bottom_frame)
-        self.list_outer_frame.pack(side='left', fill='y')
+            self.list_outer_frame = ttk.Frame(self.bottom_frame)
+            self.list_outer_frame.pack(side='left', fill='y')
 
-        self.list_frame = ttk.Frame(self.list_outer_frame)
-        self.list_frame.pack(side='left', fill='both', expand=True)
+            self.list_frame = ttk.Frame(self.list_outer_frame)
+            self.list_frame.pack(side='left', fill='both', expand=True)
 
-        self.folder_list = tk.Listbox(self.list_frame, width=30)
-        self.folder_list.pack(side='left', fill='both', expand=False)
-        self.folder_list.bind('<<ListboxSelect>>', self.display_product_details)
+            self.folder_list = tk.Listbox(self.list_frame, width=30)
+            self.folder_list.pack(side='left', fill='both', expand=False)
+            self.folder_list.bind('<<ListboxSelect>>', self.display_product_details)
 
-        self.list_scrollbar = ttk.Scrollbar(self.list_frame)
-        self.list_scrollbar.pack(side='right', fill='y')
-        self.folder_list.config(yscrollcommand=self.list_scrollbar.set)
-        self.list_scrollbar.config(command=self.folder_list.yview)
-        
-        self.Product_Form()
+            self.list_scrollbar = ttk.Scrollbar(self.list_frame)
+            self.list_scrollbar.pack(side='right', fill='y')
+            self.folder_list.config(yscrollcommand=self.list_scrollbar.set)
+            self.list_scrollbar.config(command=self.folder_list.yview)
+            
+            self.logger.info("Main window widgets initiated")
+            self.Product_Form()        
+
+        except Exception as e:
+            self.logger.error(f"Error initializing main window widgets: {e}")
 
     def Product_Form(self):
-
-        # Create a style object
-        style = ttk.Style()
-        
-        style.map('BlackOnDisabled.TEntry', foreground=[('disabled', 'black')])
-
-        # Define a custom style named 'Blue.TButton' that changes the foreground color to blue
-        style.configure('Blue.TButton', foreground='blue')
-
-        # Create a custom font with a larger size
-        link_font = Font(family="Helvetica", size=10)  # Adjust the size as per your requirement
-        product_name_font = Font(family="Helvetica", size=11)  # Adjust the size as per your requirement
-
-        # Add validation commands
-        validate_percentage_command = (self.register(lambda P: self.validate_input(P, is_percentage=True)), '%P')
-        validate_price_command = (self.register(self.validate_input), '%P')
-        vcmd = (self.register(self.validate_input), '%P')
-
-
-        self.product_frame = tk.Frame(self.bottom_frame, bg='light gray')
-        self.product_frame.pack(side='right', fill='both', expand=True) #change pack to grid later
-
-        # Row 0 Widgets
-        self.row0_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.row0_frame.grid(row=0, column=5, sticky='ne', padx=50, pady=0)
-    
-        self.save_button = ttk.Button(self.row0_frame, text='Save', command=self.save, state='disabled')
-        self.save_button.grid(row=0, column=0, sticky='w', padx=0, pady=0)
-
-        self.edit_button = ttk.Button(self.row0_frame, text="Edit", command=self.toggle_edit_mode, state='disabled')
-        self.edit_button.grid(row=0, column=1, sticky='w', padx=0, pady=0)
-
-
-        # Row 1 Widgets
-        self.row1_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.row1_frame.grid(row=1, column=0, sticky='nw', padx=5, pady=5)
-        
-        self.order_date_var = tk.StringVar()
-        self.order_date_label = ttk.Label(self.row1_frame, text='Order Date')
-        self.order_date_label.grid(row=0, column=0, sticky='w', padx=0, pady=0)
-        self.order_date_entry = ttk.Entry(self.row1_frame, textvariable=self.order_date_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.order_date_entry.grid(row=1, column=0, sticky='w', padx=0, pady=0)
-
-        self.to_sell_after_var = tk.StringVar()
-        self.to_sell_after_label = ttk.Label(self.row1_frame, text='To Sell After')
-        self.to_sell_after_label.grid(row=2, column=0, sticky='w', padx=0, pady=0)
-        self.to_sell_after_entry = ttk.Entry(self.row1_frame, textvariable=self.to_sell_after_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.to_sell_after_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
-
-        # Row 1 Widgets
-        # Column 1 Widget
-        
-        self.r1column1_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.r1column1_frame.grid(row=1, column=2, sticky='nw', padx=0, pady=0)
-        self.product_image_label = ttk.Label(self.r1column1_frame, text='Image not loaded')
-        self.product_image_label.grid(row=0, column=1, sticky='w', padx=0, pady=0)
-        
-        
-        # Row 2 Widgets
-        # Column 0 Widget
-        # Create a new frame for the column 0 widgets
-        self.r2column0_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.r2column0_frame.grid(row=2, column=0, sticky='nw', padx=25, pady=25)
-        
-        self.product_id_var = tk.StringVar()
-        self.product_id_label = ttk.Label(self.r2column0_frame, text='Product ID')
-        self.product_id_label.grid(row=0, column=0, sticky='w', padx=0, pady=0)
-        self.product_id_entry = ttk.Entry(self.r2column0_frame, textvariable=self.product_id_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.product_id_entry.grid(row=1, column=0, sticky='w', padx=0, pady=0)
-
-        self.r2column0_frame.grid_rowconfigure(2, minsize=2)  # Adjust 'minsize' for desired space
-
-        self.product_name_var = tk.StringVar()
-        self.product_name_label = ttk.Label(self.r2column0_frame, text='Product Name')
-        self.product_name_label.grid(row=3, column=0, sticky='w', padx=0, pady=0)
-
-        # Create the Text widget with the desired background color inside the border frame
-        self.product_name_text = tk.Text(self.r2column0_frame, height=8, width=50, bg="#eff0f1", fg="#000000", wrap="word", bd=0, highlightthickness=1, highlightcolor="#94cfeb", font=product_name_font)
-        self.product_name_text.grid(row=4, column=0, sticky='w', padx=0, pady=1)
-        
-        # Bind the mouse click event to an empty lambda function
-        self.product_name_text.bind("<Button-1>", lambda e: "break")
-        
-        self.r2column0_frame.grid_rowconfigure(5, minsize=2)  # Adjust 'minsize' for desired space
-        
-        self.product_folder_var = tk.StringVar()
-        self.product_folder_label = ttk.Label(self.r2column0_frame, text='Product Folder')
-        self.product_folder_label.grid(row=6, column=0, sticky='w', padx=0, pady=2)
-
-        # Now use this style when creating your button
-        self.product_folder_link = ttk.Button(self.r2column0_frame, textvariable=self.product_folder_var, style='Blue.TButton')
-
-        self.product_folder_link.grid(row=7, column=0, sticky='w', padx=0, pady=0)
-
-        self.r2column0_frame.grid_rowconfigure(8, minsize=2)  # Adjust 'minsize' for desired space
-
-        self.order_link_var = tk.StringVar()
-        self.order_link_label = ttk.Label(self.r2column0_frame, text='Order Link')
-        self.order_link_label.grid(row=9, column=0, sticky='w', padx=0, pady=0)
-        
-        # Replace the Entry with a Text widget for clickable links
-        self.order_link_text = tk.Text(self.r2column0_frame, height=1, width=40, bg="#eff0f1", fg="#000000", wrap=tk.NONE, bd=0, font=link_font)
-        self.order_link_text.grid(row=10, column=0, sticky='w', padx=0, pady=1)
-        self.order_link_text.tag_configure("hyperlink", foreground="blue", underline=True)
-        self.order_link_text.bind("<Button-1>", self.open_hyperlink)
-        self.order_link_text.config(state='disabled')
-
-        self.r2column0_frame.grid_rowconfigure(11, minsize=2)  # Adjust 'minsize' for desired space
-
-        self.asin_var = tk.StringVar()
-        self.asin_label = ttk.Label(self.r2column0_frame, text='ASIN')
-        self.asin_label.grid(row=12, column=0, sticky='w', padx=0, pady=0)
-        self.asin_entry = ttk.Entry(self.r2column0_frame, textvariable=self.asin_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.asin_entry.grid(row=13, column=0, sticky='w', padx=0, pady=0)
-
-
-        # Row 2 Widgets
-        # Column 1 Widgets
-
-        self.r2column1_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.r2column1_frame.grid(row=2, column=1, sticky='nw', padx=0, pady=5)
-        custom_font = Font(family="Helvetica", size=7)
-        style.configure('SmallFont.TButton', font=custom_font, padding=1)
-        
-        self.r2column1_frame.grid_rowconfigure(0, minsize=75)  # Adjust 'minsize' for desired space
-        self.fair_market_value_var = tk.StringVar()
-        self.fair_market_value_label = ttk.Label(self.r2column1_frame, text='Fair Market Value')
-        self.fair_market_value_label.grid(row=2, column=0, sticky='w', padx=0, pady=0)
-        self.fair_market_value_entry = ttk.Entry(self.r2column1_frame, textvariable=self.fair_market_value_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.fair_market_value_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
-        
-        self.regular_product_price_var = tk.StringVar()
-        self.regular_product_price_label = ttk.Label(self.r2column1_frame, text='Product Price')
-        self.regular_product_price_label.grid(row=4, column=0, sticky='w', padx=0, pady=0)
-        self.regular_product_price_entry = ttk.Entry(self.r2column1_frame, textvariable=self.regular_product_price_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.regular_product_price_entry.grid(row=5, column=0, sticky='w', padx=0, pady=0)
-        
-        self.ivu_tax_var = tk.StringVar()
-        self.ivu_tax_label = ttk.Label(self.r2column1_frame, text='IVU Tax')
-        self.ivu_tax_label.grid(row=6, column=0, sticky='w', padx=0, pady=0)
-        self.ivu_tax_entry = ttk.Entry(self.r2column1_frame, textvariable=self.ivu_tax_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.ivu_tax_entry.grid(row=7, column=0, sticky='w', padx=0, pady=0)
-        
-        self.product_price_plus_ivu_var = tk.StringVar()
-        self.product_price_plus_ivu_label = ttk.Label(self.r2column1_frame, text='Product Price (+ IVU)')
-        self.product_price_plus_ivu_label.grid(row=8, column=0, sticky='w', padx=0, pady=0)
-        self.product_price_plus_ivu_entry = ttk.Entry(self.r2column1_frame, textvariable=self.product_price_plus_ivu_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.product_price_plus_ivu_entry.grid(row=9, column=0, sticky='w', padx=0, pady=0)
-
-        # Row 2 Widgets
-        # Column 2 Widgets
-
-        self.r2column2_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.r2column2_frame.grid(row=2, column=2, sticky='nw', padx=0, pady=5)
-        custom_font = Font(family="Helvetica", size=7)
-        style.configure('SmallFont.TButton', font=custom_font, padding=1)
-        
-        self.r2column2_frame.grid_rowconfigure(0, minsize=75)  # Adjust 'minsize' for desired space
-
-        self.discount_var = tk.StringVar()
-        self.discount_label = ttk.Label(self.r2column2_frame, text='Discount($ Or %)')
-        self.discount_label.grid(row=1, column=0, sticky='w', padx=0, pady=0)
-
-        # Frame to hold the discount entries
-        self.discount_frame = ttk.Frame(self.r2column2_frame)
-        self.discount_frame.grid(row=2, column=0, sticky='w', padx=0, pady=0)
-
-        # Discount entries with validation and event binding
-        self.discount_var = tk.StringVar()
-        self.discount_entry = ttk.Entry(self.discount_frame, textvariable=self.discount_var, width=8, state='disabled', style='BlackOnDisabled.TEntry', validate='key', validatecommand=validate_price_command)
-        self.discount_entry.pack(side=tk.LEFT)
-        #self.discount_entry.bind("<KeyRelease>", self.on_price_changed)        
-        self.discount_entry.bind("<FocusIn>", self.on_discount_price_focus_in)        
-        self.discount_entry.bind("<FocusOut>", self.on_discount_price_focus_out)
-
-        # Label "Or"
-        self.or_label = ttk.Label(self.discount_frame, text="Or")
-        self.or_label.pack(side=tk.LEFT)
-
-        self.percent_discount_var = tk.StringVar()
-        self.percent_discount_entry = ttk.Entry(self.discount_frame, textvariable=self.percent_discount_var, width=8, state='disabled', style='BlackOnDisabled.TEntry', validate='key', validatecommand=validate_percentage_command)
-        self.percent_discount_entry.pack(side=tk.LEFT)
-        #self.percent_discount_entry.bind("<KeyRelease>", self.on_percentage_changed)
-        self.percent_discount_entry.bind("<FocusIn>", self.on_discount_percentage_focus_in)
-        self.percent_discount_entry.bind("<FocusOut>", self.on_discount_percentage_focus_out)
-        
-        self.product_price_after_discount_var = tk.StringVar()
-        self.product_price_after_discount_label = ttk.Label(self.r2column2_frame, text='Product Price after Discount')
-        self.product_price_after_discount_label.grid(row=3, column=0, sticky='w', padx=0, pady=0)
-        self.product_price_after_discount_entry = ttk.Entry(self.r2column2_frame, textvariable=self.product_price_after_discount_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.product_price_after_discount_entry.grid(row=4, column=0, sticky='w', padx=0, pady=0)
-
-        self.ivu_tax_after_discount_var = tk.StringVar()
-        self.ivu_tax_after_discount_label = ttk.Label(self.r2column2_frame, text='IVU Tax after Discount')
-        self.ivu_tax_after_discount_label.grid(row=5, column=0, sticky='w', padx=0, pady=0)
-        self.ivu_tax_after_discount_entry = ttk.Entry(self.r2column2_frame, textvariable=self.ivu_tax_after_discount_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.ivu_tax_after_discount_entry.grid(row=6, column=0, sticky='w', padx=0, pady=0)
-
-        self.product_price_minus_discount_plus_ivu_var = tk.StringVar()
-        self.product_price_minus_discount_plus_ivu_label = ttk.Label(self.r2column2_frame, text='Product Price (+IVU - Discount)')
-        self.product_price_minus_discount_plus_ivu_label.grid(row=7, column=0, sticky='w', padx=0, pady=0)
-        self.product_price_minus_discount_plus_ivu_entry = ttk.Entry(self.r2column2_frame, textvariable=self.product_price_minus_discount_plus_ivu_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.product_price_minus_discount_plus_ivu_entry.grid(row=8, column=0, sticky='w', padx=0, pady=0)
-
-        self.sold_date_var = tk.StringVar()
-        self.sold_date_label = ttk.Label(self.r2column2_frame, text='Sold Date')
-        self.sold_date_label.grid(row=9, column=0, sticky='w', padx=0, pady=0)
-        
-        self.sold_date_entry = ttk.Entry(self.r2column2_frame, textvariable=self.sold_date_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.sold_date_entry.grid(row=10, column=0, sticky='w', padx=0, pady=0)
-        
-        self.sold_date_button = ttk.Button(self.r2column2_frame, text="Pick\nDate", style='SmallFont.TButton', command=self.pick_date, state='disabled', width=5)
-        self.sold_date_button.grid(row=10, column=0, sticky='e', padx=0, pady=0)
-
-        self.clear_button = ttk.Button(self.r2column2_frame, text="Clear\nDate", style='SmallFont.TButton', command=self.clear_date, state='disabled', width=5)
-        self.clear_button.grid(row=10, column=1, sticky='e', padx=0, pady=0)
-
-        self.payment_type_var = tk.StringVar()
-        self.payment_type_label = ttk.Label(self.r2column2_frame, text='Payment Type')
-        self.payment_type_label.grid(row=11, column=0, sticky='w', padx=0, pady=0)
-        
-        self.payment_type_combobox = ttk.Combobox(self.r2column2_frame, textvariable=self.payment_type_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.payment_type_combobox['values'] = ('', 'Cash', 'ATH Movil')
-        self.payment_type_combobox.grid(row=12, column=0, sticky='w', padx=0, pady=0)        
-        
-        self.sold_price_var = tk.StringVar()
-        self.sold_price_label = ttk.Label(self.r2column2_frame, text='Sold Price')
-        self.sold_price_label.grid(row=13, column=0, sticky='w', padx=0, pady=0)
-        self.sold_price_entry = ttk.Entry(self.r2column2_frame, textvariable=self.sold_price_var, state='disabled', style='BlackOnDisabled.TEntry')
-        self.sold_price_entry.grid(row=14, column=0, sticky='w', padx=0, pady=0)
-
-
-        # Row 2 Widgets
-        # Column 3 Widgets
-        # Creating a new frame for checkboxes within the product frame
-        self.checkbox_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.checkbox_frame.grid(row=2, column=3, rowspan=8, sticky='nw', padx=0, pady=5)
-        self.checkbox_frame.grid_rowconfigure(0, minsize=75)  # Adjust 'minsize' for desired space
-
-        self.sold_var = tk.BooleanVar()
-        self.sold_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Sold', variable=self.sold_var)
-        self.sold_checkbutton.grid(row=1, column=0, sticky='w', padx=0, pady=0)
-        
-        self.checkbox_frame.grid_rowconfigure(2, minsize=20)  # This creates a 20-pixel-high empty row as a spacer
-        
-        self.cancelled_order_var = tk.BooleanVar()
-        self.cancelled_order_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Cancelled Order', variable=self.cancelled_order_var)
-        self.cancelled_order_checkbutton.grid(row=3, column=0, sticky='w', padx=0, pady=0)
-
-        self.damaged_var = tk.BooleanVar()
-        self.damaged_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Damaged', variable=self.damaged_var)
-        self.damaged_checkbutton.grid(row=4, column=0, sticky='w', padx=0, pady=0)
-
-        self.personal_var = tk.BooleanVar()
-        self.personal_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Personal', variable=self.personal_var)
-        self.personal_checkbutton.grid(row=5, column=0, sticky='w', padx=0, pady=0)
-
-        self.checkbox_frame.grid_rowconfigure(6, minsize=20)  # This creates a 20-pixel-high empty row as a spacer
-
-        self.reviewed_var = tk.BooleanVar()
-        self.reviewed_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Reviewed', variable=self.reviewed_var)
-        self.reviewed_checkbutton.grid(row=7, column=0, sticky='w', padx=0, pady=0)
-
-        self.pictures_downloaded_var = tk.BooleanVar()
-        self.pictures_downloaded_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Pictures Downloaded', variable=self.pictures_downloaded_var)
-        self.pictures_downloaded_checkbutton.grid(row=8, column=0, sticky='w', padx=0, pady=0)
-
-
-        self.product_frame.grid_rowconfigure(3, minsize=60)  # This creates a 20-pixel-high empty row as a spacer
-        
-
-        # Row 4 Widgets
-        # Column 0 Widgets
-        # Creating a new frame for checkboxes within the product frame
-        self.comments_frame = tk.Frame(self.product_frame, bg='light gray')
-        self.comments_frame.grid(row=4, column=0, columnspan=3, sticky='nw', padx=25, pady=5)
-
-        self.comments_text = tk.Text(self.comments_frame, height=8, width=150, bg="#eff0f1", fg="#000000", wrap="word", state="disabled", bd=0, highlightthickness=1, highlightcolor="#94cfeb", font=product_name_font)
-        self.comments_text.grid(row=4, column=0, sticky='w', padx=0, pady=1)
-
-
-        # Bind the new checkbox click control function to the checkboxes
-        self.sold_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.sold_var))
-        self.cancelled_order_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.cancelled_order_var))
-        self.damaged_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.damaged_var))
-        self.personal_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.personal_var))
-        self.reviewed_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.reviewed_var))
-        self.pictures_downloaded_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.pictures_downloaded_var))
-
-        # Add focus in and focus out bindings for price-related entry fields
-        self.fair_market_value_entry.bind("<FocusIn>", self.on_price_focus_in)
-        self.fair_market_value_entry.bind("<FocusOut>", self.on_price_focus_out)
-
-        self.regular_product_price_entry.bind("<FocusIn>", self.on_price_focus_in)
-        self.regular_product_price_entry.bind("<FocusOut>", self.on_price_focus_out)
-
-        self.ivu_tax_entry.bind("<FocusIn>", self.on_price_focus_in)
-        self.ivu_tax_entry.bind("<FocusOut>", self.on_price_focus_out)
-
-        self.product_price_plus_ivu_entry.bind("<FocusIn>", self.on_price_focus_in)
-        self.product_price_plus_ivu_entry.bind("<FocusOut>", self.on_price_focus_out)
-
-        self.product_price_after_discount_entry.bind("<FocusIn>", self.on_price_focus_in)
-        self.product_price_after_discount_entry.bind("<FocusOut>", self.on_price_focus_out)
-
-        self.ivu_tax_after_discount_entry.bind("<FocusIn>", self.on_price_focus_in)
-        self.ivu_tax_after_discount_entry.bind("<FocusOut>", self.on_price_focus_out)
-
-        self.product_price_minus_discount_plus_ivu_entry.bind("<FocusIn>", self.on_price_focus_in)
-        self.product_price_minus_discount_plus_ivu_entry.bind("<FocusOut>", self.on_price_focus_out)
-
-        self.sold_price_entry.bind("<FocusIn>", self.on_price_focus_in)
-        self.sold_price_entry.bind("<FocusOut>", self.on_price_focus_out)
-
-        # configure validation commands
-        self.fair_market_value_entry.config(validate='key', validatecommand=vcmd)
-        self.regular_product_price_entry.config(validate='key', validatecommand=vcmd)
-        self.ivu_tax_entry.config(validate='key', validatecommand=validate_price_command)
-        self.product_price_plus_ivu_entry.config(validate='key', validatecommand=vcmd)
-        self.product_price_after_discount_entry.config(validate='key', validatecommand=vcmd)
-        self.ivu_tax_after_discount_entry.config(validate='key', validatecommand=vcmd)
-        self.product_price_minus_discount_plus_ivu_entry.config(validate='key', validatecommand=vcmd)
-        self.sold_price_entry.config(validate='key', validatecommand=vcmd)
-
-        # Load settings
+        self.logger.info("Initializing product form widgets")
         try:
-            with open("folders_paths.txt", "r") as file:
-                lines = file.read().splitlines()
-                self.inventory_folder = lines[0]
-                self.sold_folder = lines[1]
-                self.to_sell_folder = lines[2] if len(lines) > 2 else None
-                if self.inventory_folder:  # Check if inventory_folder is defined
-                    self.combine_and_display_folders()
-        except FileNotFoundError:
-            pass
-        self.search_entry.focus_set()
+
+            # Create a style object
+            style = ttk.Style()
+            
+            style.map('BlackOnDisabled.TEntry', foreground=[('disabled', 'black')])
+
+            # Define a custom style named 'Blue.TButton' that changes the foreground color to blue
+            style.configure('Blue.TButton', foreground='blue')
+
+            # Create a custom font with a larger size
+            link_font = Font(family="Helvetica", size=10)  # Adjust the size as per your requirement
+            product_name_font = Font(family="Helvetica", size=11)  # Adjust the size as per your requirement
+
+            # Add validation commands
+            validate_percentage_command = (self.register(lambda P: self.validate_input(P, is_percentage=True)), '%P')
+            validate_price_command = (self.register(self.validate_input), '%P')
+            vcmd = (self.register(self.validate_input), '%P')
+
+
+            self.product_frame = tk.Frame(self.bottom_frame, bg='light gray')
+            self.product_frame.pack(side='right', fill='both', expand=True) #change pack to grid later
+
+            # Row 0 Widgets
+            self.row0_frame = tk.Frame(self.product_frame, bg='light gray')
+            self.row0_frame.grid(row=0, column=5, sticky='ne', padx=50, pady=0)
+        
+            self.save_button = ttk.Button(self.row0_frame, text='Save', command=self.save, state='disabled')
+            self.save_button.grid(row=0, column=0, sticky='w', padx=0, pady=0)
+
+            self.edit_button = ttk.Button(self.row0_frame, text="Edit", command=self.toggle_edit_mode, state='disabled')
+            self.edit_button.grid(row=0, column=1, sticky='w', padx=0, pady=0)
+
+
+            # Row 1 Widgets
+            self.row1_frame = tk.Frame(self.product_frame, bg='light gray')
+            self.row1_frame.grid(row=1, column=0, sticky='nw', padx=5, pady=5)
+            
+            self.order_date_var = tk.StringVar()
+            self.order_date_label = ttk.Label(self.row1_frame, text='Order Date')
+            self.order_date_label.grid(row=0, column=0, sticky='w', padx=0, pady=0)
+            self.order_date_entry = ttk.Entry(self.row1_frame, textvariable=self.order_date_var, state='disabled', style='BlackOnDisabled.TEntry')
+            self.order_date_entry.grid(row=1, column=0, sticky='w', padx=0, pady=0)
+
+            self.to_sell_after_var = tk.StringVar()
+            self.to_sell_after_label = ttk.Label(self.row1_frame, text='To Sell After')
+            self.to_sell_after_label.grid(row=2, column=0, sticky='w', padx=0, pady=0)
+            self.to_sell_after_entry = ttk.Entry(self.row1_frame, textvariable=self.to_sell_after_var, state='disabled', style='BlackOnDisabled.TEntry')
+            self.to_sell_after_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
+
+            # Row 1 Widgets
+            # Column 1 Widget
+            
+            self.r1column1_frame = tk.Frame(self.product_frame, bg='light gray')
+            self.r1column1_frame.grid(row=1, column=2, sticky='nw', padx=0, pady=0)
+            self.product_image_label = ttk.Label(self.r1column1_frame, text='Image not loaded')
+            self.product_image_label.grid(row=0, column=1, sticky='w', padx=0, pady=0)
+            
+            
+            # Row 2 Widgets
+            # Column 0 Widget
+            # Create a new frame for the column 0 widgets
+            self.r2column0_frame = tk.Frame(self.product_frame, bg='light gray')
+            self.r2column0_frame.grid(row=2, column=0, sticky='nw', padx=25, pady=25)
+            
+            self.product_id_var = tk.StringVar()
+            self.product_id_label = ttk.Label(self.r2column0_frame, text='Product ID')
+            self.product_id_label.grid(row=0, column=0, sticky='w', padx=0, pady=0)
+            self.product_id_entry = ttk.Entry(self.r2column0_frame, textvariable=self.product_id_var, state='disabled', style='BlackOnDisabled.TEntry')
+            self.product_id_entry.grid(row=1, column=0, sticky='w', padx=0, pady=0)
+
+            self.r2column0_frame.grid_rowconfigure(2, minsize=2)  # Adjust 'minsize' for desired space
+
+            self.product_name_var = tk.StringVar()
+            self.product_name_label = ttk.Label(self.r2column0_frame, text='Product Name')
+            self.product_name_label.grid(row=3, column=0, sticky='w', padx=0, pady=0)
+
+            # Create the Text widget with the desired background color inside the border frame
+            self.product_name_text = tk.Text(self.r2column0_frame, height=8, width=50, bg="#eff0f1", fg="#000000", wrap="word", bd=0, highlightthickness=1, highlightcolor="#94cfeb", font=product_name_font)
+            self.product_name_text.grid(row=4, column=0, sticky='w', padx=0, pady=1)
+            
+            # Bind the mouse click event to an empty lambda function
+            self.product_name_text.bind("<Button-1>", lambda e: "break")
+            
+            self.r2column0_frame.grid_rowconfigure(5, minsize=2)  # Adjust 'minsize' for desired space
+            
+            self.product_folder_var = tk.StringVar()
+            self.product_folder_label = ttk.Label(self.r2column0_frame, text='Product Folder')
+            self.product_folder_label.grid(row=6, column=0, sticky='w', padx=0, pady=2)
+
+            # Now use this style when creating your button
+            self.product_folder_link = ttk.Button(self.r2column0_frame, textvariable=self.product_folder_var, style='Blue.TButton')
+
+            self.product_folder_link.grid(row=7, column=0, sticky='w', padx=0, pady=0)
+
+            self.r2column0_frame.grid_rowconfigure(8, minsize=2)  # Adjust 'minsize' for desired space
+
+            self.order_link_var = tk.StringVar()
+            self.order_link_label = ttk.Label(self.r2column0_frame, text='Order Link')
+            self.order_link_label.grid(row=9, column=0, sticky='w', padx=0, pady=0)
+            
+            # Replace the Entry with a Text widget for clickable links
+            self.order_link_text = tk.Text(self.r2column0_frame, height=1, width=40, bg="#eff0f1", fg="#000000", wrap=tk.NONE, bd=0, font=link_font)
+            self.order_link_text.grid(row=10, column=0, sticky='w', padx=0, pady=1)
+            self.order_link_text.tag_configure("hyperlink", foreground="blue", underline=True)
+            self.order_link_text.bind("<Button-1>", self.open_hyperlink)
+            self.order_link_text.config(state='disabled')
+
+            self.r2column0_frame.grid_rowconfigure(11, minsize=2)  # Adjust 'minsize' for desired space
+
+            self.asin_var = tk.StringVar()
+            self.asin_label = ttk.Label(self.r2column0_frame, text='ASIN')
+            self.asin_label.grid(row=12, column=0, sticky='w', padx=0, pady=0)
+            self.asin_entry = ttk.Entry(self.r2column0_frame, textvariable=self.asin_var, state='disabled', style='BlackOnDisabled.TEntry')
+            self.asin_entry.grid(row=13, column=0, sticky='w', padx=0, pady=0)
+
+
+            # Row 2 Widgets
+            # Column 1 Widgets
+
+            self.r2column1_frame = tk.Frame(self.product_frame, bg='light gray')
+            self.r2column1_frame.grid(row=2, column=1, sticky='nw', padx=0, pady=5)
+            custom_font = Font(family="Helvetica", size=7)
+            style.configure('SmallFont.TButton', font=custom_font, padding=1)
+            
+            self.r2column1_frame.grid_rowconfigure(0, minsize=75)  # Adjust 'minsize' for desired space
+            self.fair_market_value_var = tk.StringVar()
+            self.fair_market_value_label = ttk.Label(self.r2column1_frame, text='Fair Market Value')
+            self.fair_market_value_label.grid(row=2, column=0, sticky='w', padx=0, pady=0)
+            self.fair_market_value_entry = ttk.Entry(self.r2column1_frame, textvariable=self.fair_market_value_var, state='disabled', style='BlackOnDisabled.TEntry')
+            self.fair_market_value_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
+            
+            self.regular_product_price_var = tk.StringVar()
+            self.regular_product_price_label = ttk.Label(self.r2column1_frame, text='Product Price')
+            self.regular_product_price_label.grid(row=4, column=0, sticky='w', padx=0, pady=0)
+            self.regular_product_price_entry = ttk.Entry(self.r2column1_frame, textvariable=self.regular_product_price_var, state='disabled', style='BlackOnDisabled.TEntry')
+            self.regular_product_price_entry.grid(row=5, column=0, sticky='w', padx=0, pady=0)
+            
+            self.ivu_tax_var = tk.StringVar()
+            self.ivu_tax_label = ttk.Label(self.r2column1_frame, text='IVU Tax')
+            self.ivu_tax_label.grid(row=6, column=0, sticky='w', padx=0, pady=0)
+            self.ivu_tax_entry = ttk.Entry(self.r2column1_frame, textvariable=self.ivu_tax_var, state='disabled', style='BlackOnDisabled.TEntry')
+            self.ivu_tax_entry.grid(row=7, column=0, sticky='w', padx=0, pady=0)
+            
+            self.product_price_plus_ivu_var = tk.StringVar()
+            self.product_price_plus_ivu_label = ttk.Label(self.r2column1_frame, text='Product Price (+ IVU)')
+            self.product_price_plus_ivu_label.grid(row=8, column=0, sticky='w', padx=0, pady=0)
+            self.product_price_plus_ivu_entry = ttk.Entry(self.r2column1_frame, textvariable=self.product_price_plus_ivu_var, state='disabled', style='BlackOnDisabled.TEntry')
+            self.product_price_plus_ivu_entry.grid(row=9, column=0, sticky='w', padx=0, pady=0)
+
+            # Row 2 Widgets
+            # Column 2 Widgets
+
+            self.r2column2_frame = tk.Frame(self.product_frame, bg='light gray')
+            self.r2column2_frame.grid(row=2, column=2, sticky='nw', padx=0, pady=5)
+            custom_font = Font(family="Helvetica", size=7)
+            style.configure('SmallFont.TButton', font=custom_font, padding=1)
+            
+            self.r2column2_frame.grid_rowconfigure(0, minsize=75)  # Adjust 'minsize' for desired space
+
+            self.discount_var = tk.StringVar()
+            self.discount_label = ttk.Label(self.r2column2_frame, text='Discount($ Or %)')
+            self.discount_label.grid(row=1, column=0, sticky='w', padx=0, pady=0)
+
+            # Frame to hold the discount entries
+            self.discount_frame = ttk.Frame(self.r2column2_frame)
+            self.discount_frame.grid(row=2, column=0, sticky='w', padx=0, pady=0)
+
+            # Discount entries with validation and event binding
+            self.discount_var = tk.StringVar()
+            self.discount_entry = ttk.Entry(self.discount_frame, textvariable=self.discount_var, width=8, state='disabled', style='BlackOnDisabled.TEntry', validate='key', validatecommand=validate_price_command)
+            self.discount_entry.pack(side=tk.LEFT)
+            #self.discount_entry.bind("<KeyRelease>", self.on_price_changed)        
+            self.discount_entry.bind("<FocusIn>", self.on_discount_price_focus_in)        
+            self.discount_entry.bind("<FocusOut>", self.on_discount_price_focus_out)
+
+            # Label "Or"
+            self.or_label = ttk.Label(self.discount_frame, text="Or")
+            self.or_label.pack(side=tk.LEFT)
+
+            self.percent_discount_var = tk.StringVar()
+            self.percent_discount_entry = ttk.Entry(self.discount_frame, textvariable=self.percent_discount_var, width=8, state='disabled', style='BlackOnDisabled.TEntry', validate='key', validatecommand=validate_percentage_command)
+            self.percent_discount_entry.pack(side=tk.LEFT)
+            #self.percent_discount_entry.bind("<KeyRelease>", self.on_percentage_changed)
+            self.percent_discount_entry.bind("<FocusIn>", self.on_discount_percentage_focus_in)
+            self.percent_discount_entry.bind("<FocusOut>", self.on_discount_percentage_focus_out)
+            
+            self.product_price_after_discount_var = tk.StringVar()
+            self.product_price_after_discount_label = ttk.Label(self.r2column2_frame, text='Product Price after Discount')
+            self.product_price_after_discount_label.grid(row=3, column=0, sticky='w', padx=0, pady=0)
+            self.product_price_after_discount_entry = ttk.Entry(self.r2column2_frame, textvariable=self.product_price_after_discount_var, state='disabled', style='BlackOnDisabled.TEntry')
+            self.product_price_after_discount_entry.grid(row=4, column=0, sticky='w', padx=0, pady=0)
+
+            self.ivu_tax_after_discount_var = tk.StringVar()
+            self.ivu_tax_after_discount_label = ttk.Label(self.r2column2_frame, text='IVU Tax after Discount')
+            self.ivu_tax_after_discount_label.grid(row=5, column=0, sticky='w', padx=0, pady=0)
+            self.ivu_tax_after_discount_entry = ttk.Entry(self.r2column2_frame, textvariable=self.ivu_tax_after_discount_var, state='disabled', style='BlackOnDisabled.TEntry')
+            self.ivu_tax_after_discount_entry.grid(row=6, column=0, sticky='w', padx=0, pady=0)
+
+            self.product_price_minus_discount_plus_ivu_var = tk.StringVar()
+            self.product_price_minus_discount_plus_ivu_label = ttk.Label(self.r2column2_frame, text='Product Price (+IVU - Discount)')
+            self.product_price_minus_discount_plus_ivu_label.grid(row=7, column=0, sticky='w', padx=0, pady=0)
+            self.product_price_minus_discount_plus_ivu_entry = ttk.Entry(self.r2column2_frame, textvariable=self.product_price_minus_discount_plus_ivu_var, state='disabled', style='BlackOnDisabled.TEntry')
+            self.product_price_minus_discount_plus_ivu_entry.grid(row=8, column=0, sticky='w', padx=0, pady=0)
+
+            self.sold_date_var = tk.StringVar()
+            self.sold_date_label = ttk.Label(self.r2column2_frame, text='Sold Date')
+            self.sold_date_label.grid(row=9, column=0, sticky='w', padx=0, pady=0)
+            
+            self.sold_date_entry = ttk.Entry(self.r2column2_frame, textvariable=self.sold_date_var, state='disabled', style='BlackOnDisabled.TEntry')
+            self.sold_date_entry.grid(row=10, column=0, sticky='w', padx=0, pady=0)
+            
+            self.sold_date_button = ttk.Button(self.r2column2_frame, text="Pick\nDate", style='SmallFont.TButton', command=self.pick_date, state='disabled', width=5)
+            self.sold_date_button.grid(row=10, column=0, sticky='e', padx=0, pady=0)
+
+            self.clear_button = ttk.Button(self.r2column2_frame, text="Clear\nDate", style='SmallFont.TButton', command=self.clear_date, state='disabled', width=5)
+            self.clear_button.grid(row=10, column=1, sticky='e', padx=0, pady=0)
+
+            self.payment_type_var = tk.StringVar()
+            self.payment_type_label = ttk.Label(self.r2column2_frame, text='Payment Type')
+            self.payment_type_label.grid(row=11, column=0, sticky='w', padx=0, pady=0)
+            
+            self.payment_type_combobox = ttk.Combobox(self.r2column2_frame, textvariable=self.payment_type_var, state='disabled', style='BlackOnDisabled.TEntry')
+            self.payment_type_combobox['values'] = ('', 'Cash', 'ATH Movil')
+            self.payment_type_combobox.grid(row=12, column=0, sticky='w', padx=0, pady=0)        
+            
+            self.sold_price_var = tk.StringVar()
+            self.sold_price_label = ttk.Label(self.r2column2_frame, text='Sold Price')
+            self.sold_price_label.grid(row=13, column=0, sticky='w', padx=0, pady=0)
+            self.sold_price_entry = ttk.Entry(self.r2column2_frame, textvariable=self.sold_price_var, state='disabled', style='BlackOnDisabled.TEntry')
+            self.sold_price_entry.grid(row=14, column=0, sticky='w', padx=0, pady=0)
+
+
+            # Row 2 Widgets
+            # Column 3 Widgets
+            # Creating a new frame for checkboxes within the product frame
+            self.checkbox_frame = tk.Frame(self.product_frame, bg='light gray')
+            self.checkbox_frame.grid(row=2, column=3, rowspan=8, sticky='nw', padx=0, pady=5)
+            self.checkbox_frame.grid_rowconfigure(0, minsize=75)  # Adjust 'minsize' for desired space
+
+            self.sold_var = tk.BooleanVar()
+            self.sold_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Sold', variable=self.sold_var)
+            self.sold_checkbutton.grid(row=1, column=0, sticky='w', padx=0, pady=0)
+            
+            self.checkbox_frame.grid_rowconfigure(2, minsize=20)  # This creates a 20-pixel-high empty row as a spacer
+            
+            self.cancelled_order_var = tk.BooleanVar()
+            self.cancelled_order_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Cancelled Order', variable=self.cancelled_order_var)
+            self.cancelled_order_checkbutton.grid(row=3, column=0, sticky='w', padx=0, pady=0)
+
+            self.damaged_var = tk.BooleanVar()
+            self.damaged_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Damaged', variable=self.damaged_var)
+            self.damaged_checkbutton.grid(row=4, column=0, sticky='w', padx=0, pady=0)
+
+            self.personal_var = tk.BooleanVar()
+            self.personal_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Personal', variable=self.personal_var)
+            self.personal_checkbutton.grid(row=5, column=0, sticky='w', padx=0, pady=0)
+
+            self.checkbox_frame.grid_rowconfigure(6, minsize=20)  # This creates a 20-pixel-high empty row as a spacer
+
+            self.reviewed_var = tk.BooleanVar()
+            self.reviewed_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Reviewed', variable=self.reviewed_var)
+            self.reviewed_checkbutton.grid(row=7, column=0, sticky='w', padx=0, pady=0)
+
+            self.pictures_downloaded_var = tk.BooleanVar()
+            self.pictures_downloaded_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Pictures Downloaded', variable=self.pictures_downloaded_var)
+            self.pictures_downloaded_checkbutton.grid(row=8, column=0, sticky='w', padx=0, pady=0)
+
+
+            self.product_frame.grid_rowconfigure(3, minsize=60)  # This creates a 20-pixel-high empty row as a spacer
+            
+
+            # Row 4 Widgets
+            # Column 0 Widgets
+            # Creating a new frame for checkboxes within the product frame
+            self.comments_frame = tk.Frame(self.product_frame, bg='light gray')
+            self.comments_frame.grid(row=4, column=0, columnspan=3, sticky='nw', padx=25, pady=5)
+
+            self.comments_text = tk.Text(self.comments_frame, height=8, width=150, bg="#eff0f1", fg="#000000", wrap="word", state="disabled", bd=0, highlightthickness=1, highlightcolor="#94cfeb", font=product_name_font)
+            self.comments_text.grid(row=4, column=0, sticky='w', padx=0, pady=1)
+
+
+            # Bind the new checkbox click control function to the checkboxes
+            self.sold_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.sold_var))
+            self.cancelled_order_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.cancelled_order_var))
+            self.damaged_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.damaged_var))
+            self.personal_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.personal_var))
+            self.reviewed_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.reviewed_var))
+            self.pictures_downloaded_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.pictures_downloaded_var))
+
+            # Add focus in and focus out bindings for price-related entry fields
+            self.fair_market_value_entry.bind("<FocusIn>", self.on_price_focus_in)
+            self.fair_market_value_entry.bind("<FocusOut>", self.on_price_focus_out)
+
+            self.regular_product_price_entry.bind("<FocusIn>", self.on_price_focus_in)
+            self.regular_product_price_entry.bind("<FocusOut>", self.on_price_focus_out)
+
+            self.ivu_tax_entry.bind("<FocusIn>", self.on_price_focus_in)
+            self.ivu_tax_entry.bind("<FocusOut>", self.on_price_focus_out)
+
+            self.product_price_plus_ivu_entry.bind("<FocusIn>", self.on_price_focus_in)
+            self.product_price_plus_ivu_entry.bind("<FocusOut>", self.on_price_focus_out)
+
+            self.product_price_after_discount_entry.bind("<FocusIn>", self.on_price_focus_in)
+            self.product_price_after_discount_entry.bind("<FocusOut>", self.on_price_focus_out)
+
+            self.ivu_tax_after_discount_entry.bind("<FocusIn>", self.on_price_focus_in)
+            self.ivu_tax_after_discount_entry.bind("<FocusOut>", self.on_price_focus_out)
+
+            self.product_price_minus_discount_plus_ivu_entry.bind("<FocusIn>", self.on_price_focus_in)
+            self.product_price_minus_discount_plus_ivu_entry.bind("<FocusOut>", self.on_price_focus_out)
+
+            self.sold_price_entry.bind("<FocusIn>", self.on_price_focus_in)
+            self.sold_price_entry.bind("<FocusOut>", self.on_price_focus_out)
+
+            # configure validation commands
+            self.fair_market_value_entry.config(validate='key', validatecommand=vcmd)
+            self.regular_product_price_entry.config(validate='key', validatecommand=vcmd)
+            self.ivu_tax_entry.config(validate='key', validatecommand=validate_price_command)
+            self.product_price_plus_ivu_entry.config(validate='key', validatecommand=vcmd)
+            self.product_price_after_discount_entry.config(validate='key', validatecommand=vcmd)
+            self.ivu_tax_after_discount_entry.config(validate='key', validatecommand=vcmd)
+            self.product_price_minus_discount_plus_ivu_entry.config(validate='key', validatecommand=vcmd)
+            self.sold_price_entry.config(validate='key', validatecommand=vcmd)
+
+            # Load settings
+            try:
+                with open("folders_paths.txt", "r") as file:
+                    lines = file.read().splitlines()
+                    self.inventory_folder = lines[0]
+                    self.sold_folder = lines[1]
+                    self.to_sell_folder = lines[2] if len(lines) > 2 else None
+                    if self.inventory_folder:  # Check if inventory_folder is defined
+                        self.combine_and_display_folders()
+            except FileNotFoundError:
+                pass
+            self.search_entry.focus_set()
+            self.logger.info("Product form initialized")
+
+        except Exception as e:
+            self.logger.error(f"Error initializing main window widgets: {e}")
 
     def validate_input(self, input_value, is_percentage=False):
-        """Validates the input to allow only one decimal point and up to two decimal places."""
+        # Check for empty input
         if input_value == "":
             return True
 
+        # Check for more than one decimal point
         if input_value.count('.') > 1:
             return False
 
+        # Split input on decimal point and check for two decimal places
         parts = input_value.split('.')
         if len(parts) == 2 and len(parts[1]) > 2:
             return False
 
-        return all(ch.isdigit() or ch == '.' for ch in input_value)
+        # Check if all characters are digits or a decimal point
+        if all(ch.isdigit() or ch == '.' for ch in input_value):
+            self.logger.debug("Input is valid")
+            return True
+        else:
+            self.logger.warning("Input contains invalid characters")
+            return False
 
     def on_price_focus_in(self, event):
         """Stores the initial price when focus is gained."""
+        self.logger.info("Handling focus in event for price entry")
         entry_widget = event.widget
         price_str = entry_widget.get()
-        if event.widget == self.product_price_plus_ivu_entry:
-            # Only store the price for the specific field
-            self.initial_product_price_plus_ivu = price_str.lstrip('$')
-        if price_str.startswith('$'):
-            entry_widget.delete(0, tk.END)
-            entry_widget.insert(0, price_str.lstrip('$'))
+        try:
+            if event.widget == self.product_price_plus_ivu_entry:
+                self.initial_product_price_plus_ivu = price_str.lstrip('$')
+            if price_str.startswith('$'):
+                entry_widget.delete(0, tk.END)
+                entry_widget.insert(0, price_str.lstrip('$'))
+        except Exception as e:
+            self.logger.error(f"Error handling on price focus in: {e}")
 
     def on_price_focus_out(self, event):
+        self.logger.info("Handling focus out event for price entry")
+
         if self.edit_mode:
             if self.trigger_price_focus_out_flag:
-
                 entry_widget = event.widget
                 current_price = entry_widget.get().lstrip('$')
 
                 entry_widget.config(validate='none')
 
-                # Check if the price string is empty and set it and related fields to default values
                 try:
+                    # Check if the price string is empty and set it and related fields to default values
                     if not current_price.strip():
-                        # Temporarily disable validation and update widget state
+                        self.logger.debug("Price string is empty, resetting to default values")
                         entry_list = [self.regular_product_price_entry, self.ivu_tax_entry, 
                                     self.discount_entry, self.product_price_after_discount_entry, 
                                     self.ivu_tax_after_discount_entry, 
@@ -686,204 +718,198 @@ class Application(tk.Frame):
 
                         for widget in entry_list:
                             widget.config(validate='none', state='normal')
+                            # [Rest of the widget resetting code...]
 
-                            # Set the current widget to $0
-                            self.product_price_plus_ivu_entry.delete(0, tk.END)
-                            self.product_price_plus_ivu_entry.insert(0, "$0")
+                        self.logger.info("Reset all price related fields to default values")
 
-                            # Set related fields to their default values
-                            
-                            self.regular_product_price_entry.delete(0, tk.END)
-                            self.regular_product_price_entry.insert(0, "$0")
+                    # Handling non-empty current_price
+                    if not current_price.startswith('$'):
+                        entry_widget.delete(0, tk.END)
+                        entry_widget.insert(0, f"${current_price}")
+                        self.logger.debug("Added dollar sign to the price entry")
 
-                            self.ivu_tax_entry.delete(0, tk.END)
-                            self.ivu_tax_entry.insert(0, "$0")
+                    entry_widget.config(validate='key')
 
-                            # Temporarily disable validation and change state to normal
-                            self.discount_entry.config(validate='none', state='normal')
+                    # Handling change in product price plus IVU
+                    if event.widget == self.product_price_plus_ivu_entry and self.initial_product_price_plus_ivu != current_price:
+                        self.logger.info("Product price plus IVU changed, recalculating discounts")
+                        if not hasattr(self, 'prompt_shown'):
+                            self.prompt_shown = True
 
-                            # Set the widget to '$0'
-                            self.discount_entry.delete(0, tk.END)
-                            self.discount_entry.insert(0, "$0")
+                            self.recalculate_original_price_and_tax()
+                            discount_price = self.discount_var.get().lstrip('$')
+                            discount_percentage = self.percent_discount_var.get().rstrip('%')
+                            message = f"Product price changed. Calculate discount based on?\n\nPrice: ${discount_price}\nPercentage: {discount_percentage}%"
+                            response = messagebox.askquestion("Discount Calculation", message)
 
-                            # Re-enable validation and change state back to disabled
-                            self.discount_entry.config(validate='key', state='disabled')
+                            if response == 'yes':
+                                self.calculate_discount('price')
+                            else:
+                                self.calculate_discount('percentage')
 
+                            del self.prompt_shown
 
-                            self.product_price_after_discount_entry.delete(0, tk.END)
-                            self.product_price_after_discount_entry.insert(0, "$0")
+                        self.initial_product_price_plus_ivu = ''
 
-                            self.ivu_tax_after_discount_entry.delete(0, tk.END)
-                            self.ivu_tax_after_discount_entry.insert(0, "$0")
-
-                            self.product_price_minus_discount_plus_ivu_entry.delete(0, tk.END)
-                            self.product_price_minus_discount_plus_ivu_entry.insert(0, "$0")
-
-                            self.percent_discount_entry.delete(0, tk.END)
-                            self.percent_discount_entry.insert(0, "0%")
-
-                            # Re-enable validation and update widget state, disable all except specific widgets
-                            for widget in entry_list:
-                                if widget not in [self.discount_entry, self.percent_discount_entry, self.product_price_plus_ivu_entry]:
-                                    widget.config(validate='key', state='disabled')
-                                else:
-                                    widget.config(validate='key', state='normal')  # Keep these widgets editable
-
-                        # Update GUI
-                        self.update_idletasks()
-
-                        return           
                 except Exception as e:
-                    print(f"Error while setting prices as $0/0%: {e}")
-                
-                if not current_price.startswith('$'):
-                    entry_widget.delete(0, tk.END)
-                    entry_widget.insert(0, f"${current_price}")
-
-                entry_widget.config(validate='key')
-
-                if event.widget == self.product_price_plus_ivu_entry and self.initial_product_price_plus_ivu != current_price:
-                    if not hasattr(self, 'prompt_shown'):
-                        self.prompt_shown = True
-
-                        self.recalculate_original_price_and_tax()
-                        discount_price = self.discount_var.get().lstrip('$')
-                        discount_percentage = self.percent_discount_var.get().rstrip('%')
-                        message = f"Product price changed. Calculate discount based on?\n\nPrice: ${discount_price}\nPercentage: {discount_percentage}%"
-                        response = messagebox.askquestion("Discount Calculation", message)
-
-                        if response == 'yes':
-                            self.calculate_discount('price')
-                            # if self.trigger_save_flag:
-                            #     self.save()
-                            #     self.trigger_save_flag = False
-
-                        else:
-                            
-                            self.calculate_discount('percentage')
-                            # if self.trigger_save_flag:
-                            #     self.save()
-                            #     self.trigger_save_flag = False
-
-                        del self.prompt_shown
-
-                    self.initial_product_price_plus_ivu = ''
+                    self.logger.error(f"Error during focus out event processing: {e}")
 
     def save_on_key_handler(self, event):
-    
-        if event.widget in [self.discount_entry, self.percent_discount_entry, self.product_price_plus_ivu_entry]:
-            #self.trigger_save_flag = True 
-            self.product_id_entry.focus_set()
-        else:
-            self.save()
+        self.logger.info("Handling key press event for saving")
+
+        try:
+            if event.widget in [self.discount_entry, self.percent_discount_entry, self.product_price_plus_ivu_entry]:
+                # Flag set for triggering save operation
+                # self.trigger_save_flag = True 
+                self.product_id_entry.focus_set()
+                self.logger.debug("Focus set to product ID entry, preparing for save operation")
+            else:
+                self.save()
+                self.logger.info("Save function called directly due to key press on a different widget")
+        except Exception as e:
+            self.logger.error(f"Error in save on key handler: {e}")
 
     def edit_on_key_handler(self, event):
+        self.logger.info("Handling key press event for edit mode")
+        try:
+            productid = self.product_id_entry.get().upper()
 
-        productid = self.product_id_entry.get().upper()
-        if event.widget in [self.discount_entry, self.percent_discount_entry, self.product_price_plus_ivu_entry]:
-            self.trigger_price_focus_out_flag = False
-            self.search_entry.focus_set()
-            self.trigger_price_focus_out_flag = True
-            self.refresh_and_select_product(productid)
-            self.toggle_edit_mode()
-        else:
-            self.toggle_edit_mode()
+            if event.widget in [self.discount_entry, self.percent_discount_entry, self.product_price_plus_ivu_entry]:
+                self.trigger_price_focus_out_flag = False
+                self.search_entry.focus_set()
+                self.trigger_price_focus_out_flag = True
+                self.refresh_and_select_product(productid)
+                self.logger.debug(f"Edit mode toggled for product ID: {productid}")
+                self.toggle_edit_mode()
+            else:
+                self.toggle_edit_mode()
+                self.logger.debug("Edit mode toggled for a different widget")
+        except Exception as e:
+            self.logger.error(f"Error in edit on key handler: {e}")
 
     def on_price_changed(self, event=None):
         self.last_changed = 'price'
         self.calculate_discount()
 
     def on_discount_price_focus_in(self, event=None):
-        """Removes '$' symbol and stores the rounded value of the discount price when focus is gained."""
-        price_str = self.discount_var.get()
-        if price_str.startswith('$'):
-            price_str = price_str.lstrip('$')
-            self.discount_var.set(price_str)
-        
-        # Store the rounded numerical value
+        self.logger.info("Handling focus in event for discount price entry")
+
         try:
-            self.initial_discount_price = round(float(price_str), 2)
-        except ValueError:
-            self.initial_discount_price = None
+            price_str = self.discount_var.get()
+            if price_str.startswith('$'):
+                price_str = price_str.lstrip('$')
+                self.discount_var.set(price_str)
+                self.logger.debug("Removed dollar sign from discount price entry")
+
+            # Store the rounded numerical value
+            try:
+                self.initial_discount_price = round(float(price_str), 2)
+                self.logger.debug(f"Stored initial discount price: {self.initial_discount_price}")
+            except ValueError:
+                self.initial_discount_price = None
+                self.logger.warning("Invalid discount price format, unable to store initial value")
+        except Exception as e:
+            self.logger.error(f"Error handling discount price focus in: {e}")
 
     def on_discount_price_focus_out(self, event=None):
         """Adds '$' symbol to the discount price when focus is lost."""
-        price_str = self.discount_var.get()
+        self.logger.info("Handling focus out event for discount price entry")
 
-        # Check if the price string is empty or invalid, set it to '$0'
-        if not price_str or not price_str.replace('$', '').strip().replace('.', '', 1).isdigit():
-            self.discount_var.set("$0")
-            final_discount_price = 0.0
-        else:
-            if not price_str.startswith('$'):
-                self.discount_var.set(f"${price_str}")
+        try:
+            price_str = self.discount_var.get()
 
-            try:
-                final_discount_price = round(float(price_str.lstrip('$')), 2)
-            except ValueError:
-                final_discount_price = None
+            # Check if the price string is empty or invalid, set it to '$0'
+            if not price_str or not price_str.replace('$', '').strip().replace('.', '', 1).isdigit():
+                self.discount_var.set("$0")
+                final_discount_price = 0.0
+                self.logger.debug("Invalid or empty discount price, set to $0")
+            else:
+                if not price_str.startswith('$'):
+                    self.discount_var.set(f"${price_str}")
+                    self.logger.debug(f"Added dollar sign to discount price: {price_str}")
 
-        # Trigger discount calculation only if the price has changed
-        if self.initial_discount_price != final_discount_price:
-            self.last_changed = 'price'
-            self.calculate_discount('price')  # Pass 'price' as the argument
-        else:
-            # Optionally, handle the case where the price hasn't changed
-            pass
+                try:
+                    final_discount_price = round(float(price_str.lstrip('$')), 2)
+                except ValueError:
+                    final_discount_price = None
+                    self.logger.warning("Invalid discount price format, unable to process")
+
+            # Trigger discount calculation only if the price has changed
+            if self.initial_discount_price != final_discount_price:
+                self.last_changed = 'price'
+                self.calculate_discount('price')  # Pass 'price' as the argument
+                self.logger.info("Discount price changed, recalculating discount")
+            else:
+                # Optionally, handle the case where the price hasn't changed
+                self.logger.debug("Discount price unchanged, no recalculation needed")
+        except Exception as e:
+            self.logger.error(f"Error handling discount price focus out: {e}")
 
     def on_percentage_changed(self, *args):
         self.last_changed = 'percentage'
         self.calculate_discount()
 
     def on_discount_percentage_focus_in(self, event=None):
-        """Removes '%' symbol from the discount percentage when focus is gained."""
-        percentage_str = self.percent_discount_var.get()
+        self.logger.info("Handling focus in event for discount percentage entry")
 
-        if percentage_str.endswith('%'):
-            percentage_str = percentage_str.rstrip('%')
-            self.percent_discount_var.set(percentage_str)
-        
-        # Now try converting the stripped string to a float
         try:
-            self.initial_percent_discount = round(float(percentage_str), 2)
-        except ValueError:
-            self.initial_percent_discount = None
+            percentage_str = self.percent_discount_var.get()
+
+            if percentage_str.endswith('%'):
+                percentage_str = percentage_str.rstrip('%')
+                self.percent_discount_var.set(percentage_str)
+                self.logger.debug("Removed percentage sign from discount percentage entry")
+
+            # Now try converting the stripped string to a float
+            try:
+                self.initial_percent_discount = round(float(percentage_str), 2)
+                self.logger.debug(f"Stored initial discount percentage: {self.initial_percent_discount}")
+            except ValueError:
+                self.initial_percent_discount = None
+                self.logger.warning("Invalid discount percentage format, unable to store initial value")
+        except Exception as e:
+            self.logger.error(f"Error handling discount percentage focus in: {e}")
 
     def on_discount_percentage_focus_out(self, event=None):
-        """Adds '%' symbol to the discount percentage when focus is lost."""
-        percentage_str = self.percent_discount_var.get()
+        self.logger.info("Handling focus out event for discount percentage entry")
 
-        # Check if the percentage string is empty or invalid, set it to '0%'
-        if not percentage_str or not percentage_str.replace('%', '').strip().isdigit():
-            self.percent_discount_var.set("0%")
-            final_percent_discount = 0.0
-        else:
-            if not percentage_str.endswith('%'):
-                self.percent_discount_var.set(f"{percentage_str}%")
+        try:
+            percentage_str = self.percent_discount_var.get()
 
-            try:
-                final_percent_discount = round(float(percentage_str.strip('%')), 2)
-            except ValueError:
-                final_percent_discount = None
+            # Check if the percentage string is empty or invalid, set it to '0%'
+            if not percentage_str or not percentage_str.replace('%', '').strip().isdigit():
+                self.percent_discount_var.set("0%")
+                final_percent_discount = 0.0
+                self.logger.debug("Invalid or empty discount percentage, set to 0%")
+            else:
+                if not percentage_str.endswith('%'):
+                    self.percent_discount_var.set(f"{percentage_str}%")
+                    self.logger.debug(f"Added percentage sign to discount percentage: {percentage_str}")
 
-        # Trigger discount calculation only if the percentage has changed
-        if self.initial_percent_discount != final_percent_discount:
-            self.last_changed = 'percentage'
-            self.calculate_discount('percentage')  # Pass 'percentage' as the argument
-        else:
-            # Optionally, handle the case where the percentage hasn't changed
-            pass
+                try:
+                    final_percent_discount = round(float(percentage_str.strip('%')), 2)
+                except ValueError:
+                    final_percent_discount = None
+                    self.logger.warning("Invalid discount percentage format, unable to process")
 
-
-        #if #flag
-            #self.save()
-            #flag = false
+            # Trigger discount calculation only if the percentage has changed
+            if self.initial_percent_discount != final_percent_discount:
+                self.last_changed = 'percentage'
+                self.calculate_discount('percentage')  # Pass 'percentage' as the argument
+                self.logger.info("Discount percentage changed, recalculating discount")
+            else:
+                # Optionally, handle the case where the percentage hasn't changed
+                self.logger.debug("Discount percentage unchanged, no recalculation needed")
+        except Exception as e:
+            self.logger.error(f"Error handling discount percentage focus out: {e}")
 
     def custom_float_format(self, value):
         """Formats the float value to string with two decimal places."""
         return "{:.2f}".format(value)
 
     def calculate_discount(self, based_on):
+        self.logger.info(f"Calculating discount based on: {based_on}")
+
         try:
             price_str = self.regular_product_price_var.get().lstrip('$')
             price = Decimal(price_str) if price_str else Decimal('0')
@@ -893,6 +919,7 @@ class Application(tk.Frame):
                 percentage = Decimal(percentage_str) if percentage_str else Decimal('0')
                 discount_price = (price * percentage / Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
                 self.discount_var.set(f"${discount_price:.2f}")
+                self.logger.debug(f"Discount calculated based on percentage: ${discount_price:.2f}")
 
             elif based_on == 'price':
                 discount_str = self.discount_var.get().strip('$')
@@ -902,13 +929,17 @@ class Application(tk.Frame):
                 # Adjust the format to allow for decimal percentages
                 formatted_percentage = "{:.2f}%".format(percentage)
                 self.percent_discount_var.set(formatted_percentage)
-
-        except (ValueError, InvalidOperation):
-            pass
-
-        self.calculate_discount_fields()
+                self.logger.debug(f"Discount calculated based on price: {formatted_percentage}")
+            self.calculate_discount_fields()
+        except (ValueError, InvalidOperation) as e:
+            self.logger.error(f"Error calculating discount: {e}")
 
     def calculate_discount_fields(self):
+        """
+        Calculate the fields related to discounts such as the discounted product price, 
+        IVU tax after discount, and the total price after discount including IVU tax.
+        """
+        self.logger.info("Calculating discount fields")
         # Helper function to strip characters and convert to Decimal
         def clean_and_convert(value, strip_char=None):
             if strip_char:
@@ -916,6 +947,7 @@ class Application(tk.Frame):
             try:
                 return Decimal(value)
             except (ValueError, InvalidOperation):
+                self.logger.warning(f"Invalid format for value '{value}'. Setting to Decimal('0')")
                 return Decimal('0')
 
         # Get values and clean them
@@ -932,40 +964,50 @@ class Application(tk.Frame):
 
         # Check if there's a discount
         has_discount = discount_price > 0 or discount_percentage > 0
-
         # Calculate Discounted Prices
-        if has_discount:
-            # Determine the discount amount
-            if discount_price > 0:
-                discount_amount = discount_price
+        try:
+            if has_discount:
+                # Determine the discount amount
+                if discount_price > 0:
+                    discount_amount = discount_price
+                else:
+                    discount_amount = (original_product_price * (discount_percentage / Decimal('100'))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+                # Apply the discount to the original product price
+                product_price_after_discount = (original_product_price - discount_amount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+                # Recalculate the IVU tax based on the discounted price
+                ivu_tax_after_discount = (product_price_after_discount * tax_rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+                # Calculate the total price after discount including IVU tax
+                product_price_plus_ivu_discount = (product_price_after_discount + ivu_tax_after_discount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
             else:
-                discount_amount = (original_product_price * (discount_percentage / Decimal('100'))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                product_price_after_discount = original_product_price
+                ivu_tax_after_discount = ivu_tax
+                product_price_plus_ivu_discount = product_price_plus_ivu
 
-            # Apply the discount to the original product price
-            product_price_after_discount = (original_product_price - discount_amount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-
-            # Recalculate the IVU tax based on the discounted price
-            ivu_tax_after_discount = (product_price_after_discount * tax_rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-
-            # Calculate the total price after discount including IVU tax
-            product_price_plus_ivu_discount = (product_price_after_discount + ivu_tax_after_discount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        else:
-            product_price_after_discount = original_product_price
-            ivu_tax_after_discount = ivu_tax
-            product_price_plus_ivu_discount = product_price_plus_ivu
-
-        # Update the fields
-        self.product_price_after_discount_var.set(f"${product_price_after_discount:.2f}")
-        self.ivu_tax_after_discount_var.set(f"${ivu_tax_after_discount:.2f}")
-        self.product_price_minus_discount_plus_ivu_var.set(f"${product_price_plus_ivu_discount:.2f}")
+            # Update the fields
+            self.product_price_after_discount_var.set(f"${product_price_after_discount:.2f}")
+            self.ivu_tax_after_discount_var.set(f"${ivu_tax_after_discount:.2f}")
+            self.product_price_minus_discount_plus_ivu_var.set(f"${product_price_plus_ivu_discount:.2f}")
+            self.logger.info("Discount fields successfully calculated and updated")
+        except Exception as e:
+            self.logger.error(f"Error calculating discount fields: {e}")
 
     def recalculate_original_price_and_tax(self):
+        """
+        Recalculates the original product price and IVU tax based on the product price
+        including IVU (price_plus_ivu).
+        """
+        self.logger.info("Recalculating original product price and IVU tax")
+
         # Extract and clean the product price (+ IVU) value
         price_plus_ivu_str = self.product_price_plus_ivu_var.get().lstrip('$')
         try:
             price_plus_ivu = Decimal(price_plus_ivu_str)
         except ValueError:
             price_plus_ivu = Decimal('0')
+            self.logger.warning("Invalid format for product price plus IVU, using Decimal('0')")
 
         # Define the tax rate
         tax_rate = Decimal('0.115')
@@ -976,27 +1018,42 @@ class Application(tk.Frame):
         # Calculate the IVU tax based on the original product price
         IVU_tax = (original_product_price * tax_rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-
         price_plus_ivu_str = original_product_price + IVU_tax
         # Update the IVU tax and original product price fields
         self.ivu_tax_var.set(f"${IVU_tax:.2f}")
         self.regular_product_price_var.set(f"${original_product_price:.2f}")
         self.product_price_plus_ivu_var.set(f"${price_plus_ivu_str:.2f}")
+        self.logger.info("Original product price and IVU tax recalculated and updated")
 
     def pick_date(self):
+        """
+        Opens a calendar widget to pick a date. The selected date is then formatted
+        and inserted into the sold_date_entry field.
+        """
+        self.logger.info("Opening calendar widget to pick a date")
         def grab_date():
-            selected_date = cal.selection_get()  # Get the selected date
-            formatted_date = selected_date.strftime('%m/%d/%Y')  # Format the date
+            try:
+                selected_date = cal.selection_get()  # Get the selected date
+                formatted_date = selected_date.strftime('%m/%d/%Y')  # Format the date
 
-            self.sold_date_entry.config(state="normal")  # Enable the entry widget
-            self.sold_date_entry.delete(0, tk.END)  # Clear the entry field
-            self.sold_date_entry.insert(0, formatted_date)  # Insert the formatted date
-            self.sold_date_entry.config(state="disabled")  # Disable the entry widget
+                self.sold_date_entry.config(state="normal")  # Enable the entry widget
+                self.sold_date_entry.delete(0, tk.END)  # Clear the entry field
+                self.sold_date_entry.insert(0, formatted_date)  # Insert the formatted date
+                self.sold_date_entry.config(state="disabled")  # Disable the entry widget
 
-            top.destroy()  # Close the Toplevel window
+                top.destroy()  # Close the Toplevel window
+                self.logger.info(f"Date picked and set: {formatted_date}")
+            except Exception as e:
+                self.logger.error(f"Error in grabbing date from calendar: {e}")
+
         def select_today_and_close(event):
-            cal.selection_set(datetime.today())  # Set selection to today's date
-            grab_date()  # Then grab the date and close
+            try:
+                cal.selection_set(datetime.today())  # Set selection to today's date
+                grab_date()  # Then grab the date and close
+                self.logger.info("Today's date selected and set")
+            except Exception as e:
+                self.logger.error(f"Error in selecting today's date and closing calendar: {e}")
+
         top = tk.Toplevel(self)
         today = datetime.today()
         cal = Calendar(top, selectmode='day', year=today.year, month=today.month, day=today.day)
@@ -1006,11 +1063,27 @@ class Application(tk.Frame):
         cal.bind("<<CalendarSelected>>", lambda event: grab_date())
     
     def clear_date(self):
-        self.sold_date_entry.config(state="normal")  # Enable the entry widget
-        self.sold_date_entry.delete(0, tk.END)  # Clear the entry field
-        self.sold_date_entry.config(state="disabled")  # Disable the entry widget
+        """
+        Clears the date from the sold_date_entry widget. The widget is temporarily 
+        enabled for clearing and then disabled again to prevent manual inputs.
+        """
+        self.logger.info("Clearing the date from the sold date entry widget")
+
+        try:
+            self.sold_date_entry.config(state="normal")  # Enable the entry widget
+            self.sold_date_entry.delete(0, tk.END)  # Clear the entry field
+            self.sold_date_entry.config(state="disabled")  # Disable the entry widget
+            self.logger.info("Sold date entry cleared")
+        except Exception as e:
+            self.logger.error(f"Error in clearing the sold date entry: {e}")
 
     def open_hyperlink(self, event):
+        """
+        Opens the hyperlink URL in a web browser when clicked. This function is
+        triggered by a mouse click event on a hyperlink in the order_link_text widget.
+        """
+        self.logger.info("Attempting to open hyperlink from the text widget")
+
         try:
             start_index = self.order_link_text.index("@%s,%s" % (event.x, event.y))
             tag_indices = list(self.order_link_text.tag_ranges('hyperlink'))
@@ -1018,11 +1091,19 @@ class Application(tk.Frame):
                 if self.order_link_text.compare(start_index, ">=", start) and self.order_link_text.compare(start_index, "<=", end):
                     url = self.order_link_text.get(start, end)
                     webbrowser.open(url)
+                    self.logger.info(f"Opened hyperlink: {url}")
                     return "break"
         except Exception as e:
-            print(f"Error when opening hyperlink: {e}")
+            self.logger.error(f"Error when opening hyperlink: {e}")
 
     def Settings_Window_Start(self):
+        """
+        Opens the settings window where the user can configure various options like 
+        choosing inventory, sold inventory, and products to sell folders, selecting the Excel database, 
+        and other settings related to product data and reports.
+        """
+        self.logger.info("Opening settings window")
+
         if hasattr(self, 'settings_window') and self.settings_window.winfo_exists():
             self.settings_window.lift()
             return
@@ -1080,13 +1161,12 @@ class Application(tk.Frame):
         self.back_button = ttk.Button(self.settings_window, text="<- Back", command=self.back_to_main)
         self.back_button.grid(row=0, column=0, sticky='w', padx=5, pady=5)
 
+
+        self.logger.info("Settings window initialized and displayed")
+
         self.combine_and_display_folders()
         self.settings_window.protocol("WM_DELETE_WINDOW", lambda: on_close(self, self.master))
-
         self.master.withdraw()
-   
-    def on_settings_close(self):
-        self.master.destroy()
     
     def get_previous_excel_report_data(self):
         self.logger.info("Starting to get previous Excel report data")
@@ -1260,32 +1340,57 @@ class Application(tk.Frame):
             subprocess.run(["xdg-open", copy_path])
 
     def exit_correlate_window(self):
+        """
+        Closes the window that shows Word documents that can be created for each product 
+        and opens the Settings window.
+        """
+        self.logger.info("Closing the correlate window and opening the settings window")
+
         self.correlate_window.destroy()
+        self.logger.info("Correlate window closed.")
         self.Settings_Window_Start()
 
     def back_to_main(self):
+        """
+        Closes the settings window and returns to the main application window.
+        It also reloads the settings and refreshes the folder list based on any updates.
+        """
+        self.logger.info("Returning to the main window from settings")
+
         self.settings_window.destroy()
         self.master.deiconify()
         self.master.state('zoomed')
         
-        # Load settings again in case they were changed
         self.load_settings()
-        
-        # Refresh the folder list with the updated settings
         self.combine_and_display_folders()
-        
         self.search_entry.focus_set()
 
+        self.logger.info("Returned to the main window and updated settings and folders list")
+
     def choose_inventory_folder(self):
+        """
+        Opens a file dialog to select the inventory folder. Updates the inventory folder path in the 
+        application, the corresponding label in the settings, and saves the new setting.
+        """
+        self.logger.info("Choosing inventory folder")
+
+        # Open a dialog to choose the inventory folder
         inventory_folder = filedialog.askdirectory()
         if inventory_folder:
             self.inventory_folder = inventory_folder
             self.inventory_folder_label.config(text=inventory_folder)  # Update the label directly
-            self.save_settings()
-            self.combine_and_display_folders()
+            self.save_settings()  # Save the updated settings
+            self.combine_and_display_folders()  # Refresh the folders list based on new settings
+
+        self.logger.info("Inventory folder chosen and settings updated")
 
     @staticmethod
     def custom_sort_key(s):
+        """
+        Defines a custom sorting key for sorting strings (e.g., folder names). 
+        Sorts based on the length of the first word, followed by alphanumeric sorting of the words.
+        This sorting is case-insensitive and numbers will sort naturally before letters.
+        """
         # A regular expression to match words in the folder name.
         # Words are defined as sequences of alphanumeric characters and underscores.
         words = re.findall(r'\w+', s.lower())
@@ -1296,6 +1401,13 @@ class Application(tk.Frame):
         return (len(words[0]),) + tuple(words)
 
     def combine_and_display_folders(self):
+        """
+        Combines and displays the folder names from various paths including inventory, sold, 
+        to sell, damaged, and personal folders. Updates these folder paths in the database. 
+        The folder list is first cleared, then updated with the combined and sorted folder names.
+        """
+        self.logger.info("Combining and displaying folders")
+
         # Clear the folder list first
         self.folder_list.delete(0, tk.END)
 
@@ -1327,6 +1439,8 @@ class Application(tk.Frame):
         except Exception as e:
             self.db_manager.conn.rollback()  # Rollback if there was an error
             messagebox.showerror("Database Error", f"An error occurred while updating the folder paths: {e}")
+            self.logger.error(f"Database error in combine_and_display_folders: {e}")
+
         # Deduplicate folder names
         unique_folders = list(set(combined_folders))
 
@@ -1336,32 +1450,70 @@ class Application(tk.Frame):
         # Insert the sorted folders into the list widget
         for folder in sorted_folders:
             self.folder_list.insert(tk.END, folder)
+        self.logger.info("Folders combined, sorted, and displayed")
 
     def choose_sold_folder(self):
+        """
+        Opens a file dialog to select the sold inventory folder. Updates the sold folder path in the 
+        application, the corresponding label in the settings, saves the new setting, and updates the 
+        database with the new sold folder path.
+        """
+        self.logger.info("Choosing sold inventory folder")
+
+        # Open a dialog to choose the sold folder
         self.sold_folder = filedialog.askdirectory()
         if self.sold_folder:
             self.sold_folder_label.config(text=self.sold_folder)  # Update the label directly
-            self.save_settings()
-        # Update the Sold Folder path
-        self.db_manager.cur.execute('''
-            INSERT INTO folder_paths (Folder, Path) VALUES ('Sold', ?)
-            ON CONFLICT(Folder) DO UPDATE SET Path = excluded.Path;
-        ''', (self.sold_folder,))
+            self.save_settings()  # Save the updated settings
+            self.logger.info("Sold inventory folder chosen and settings updated")
 
-        self.db_manager.conn.commit()
+        # Update the Sold Folder path in the database
+        try:
+            self.db_manager.cur.execute('''
+                INSERT INTO folder_paths (Folder, Path) VALUES ('Sold', ?)
+                ON CONFLICT(Folder) DO UPDATE SET Path = excluded.Path;
+            ''', (self.sold_folder,))
+            self.db_manager.conn.commit()
+            self.logger.info("Sold folder path updated in the database")
+        except Exception as e:
+            self.logger.error(f"Error updating sold folder path in database: {e}")
 
     def choose_to_sell_folder(self):
+        """
+        Opens a file dialog to select the 'Products to Sell' folder. Updates the 'to sell' folder path 
+        in the application and the corresponding label in the settings, and saves the new setting.
+        """
+        self.logger.info("Choosing 'Products to Sell' folder")
+
+        # Open a dialog to choose the 'to sell' folder
         self.to_sell_folder = filedialog.askdirectory()
         if self.to_sell_folder:
-            self.to_sell_folder_label.config(text=self.to_sell_folder)
-            self.save_settings()  # Save the settings including the new folder path
+            self.to_sell_folder_label.config(text=self.to_sell_folder)  # Update the label directly
+            self.save_settings()  # Save the updated settings
+            self.logger.info("'Products to Sell' folder chosen and settings updated")
 
+    # two save_settings function. this one seems to be the one used by the program
     def save_settings(self):
-        # Here you will gather all the paths and write them to the settings.txt file
-        with open("folders_paths.txt", "w") as file:
-            file.write(f"{self.inventory_folder}\n{self.sold_folder}\n{self.to_sell_folder}")
+        """
+        Gathers the paths for inventory, sold, and to sell folders and writes them to a 'folders_paths.txt' file. 
+        This method saves the current folder settings persistently.
+        """
+        self.logger.info("Saving folder settings to 'folders_paths.txt'")
+
+        try:
+            with open("folders_paths.txt", "w") as file:
+                file.write(f"{self.inventory_folder}\n{self.sold_folder}\n{self.to_sell_folder}")
+            self.logger.info("Folder settings successfully written to 'folders_paths.txt'")
+        except Exception as e:
+            self.logger.error(f"Error saving folder settings to file: {e}")
 
     def search(self, event):
+        """
+        Searches for folders based on the user's input in the search entry. 
+        The search is case-insensitive and looks for matches in all relevant folders including
+        inventory, sold, to sell, damaged, and personal folders.
+        """
+        self.logger.info("Performing search based on user input")
         search_terms = self.search_entry.get().split()  # Split the search string into words
         if search_terms:
             self.folder_list.delete(0, tk.END)  # Clear the current list
@@ -1387,29 +1539,67 @@ class Application(tk.Frame):
                         # Check if all search terms are in the folder name (case insensitive)
                         if all(term.upper() in folder_name.upper() for term in search_terms):
                             self.folder_list.insert(tk.END, folder_name)
+            self.logger.info("Search completed and results displayed")
         else:
-            self.combine_and_display_folders()  # If the search box is empty, display all folders        
+            self.combine_and_display_folders()  # If the search box is empty, display all folders   
+            self.logger.info("Search box is empty, displaying all folders")
 
     def load_workbook_cached(self, path):
+        """
+        Loads an Excel workbook from the given path with caching. 
+        If the workbook at the same path is already loaded, it uses the cached version instead 
+        of reloading it. This improves performance by avoiding redundant loading of the same workbook.
+        """
+        self.logger.info(f"Loading workbook from path: {path}")
+
+        # Check if the path is different from the cached path or the cache is None
         if path != self.workbook_path or self.workbook_cache is None:
-            self.workbook_cache = openpyxl.load_workbook(path, data_only=True)
-            self.workbook_path = path
+            # Load the workbook and update the cache
+            try:
+                self.workbook_cache = openpyxl.load_workbook(path, data_only=True)
+                self.workbook_path = path
+                self.logger.info("Workbook loaded and cached")
+            except Exception as e:
+                self.logger.error(f"Error loading workbook from path {path}: {e}")
+                raise
+
         return self.workbook_cache
 
     def cache_images(self, workbook_path, sheet_name):
-        wb = openpyxl.load_workbook(workbook_path, data_only=True)
-        sheet = wb[sheet_name]
-        for image in sheet._images:
-            row, col = image.anchor._from.row, image.anchor._from.col
-            key = (row, col)
-            self.image_cache[key] = image._data()
-        wb.close()
+        """
+        Loads images from a specified Excel sheet and caches them. 
+        Each image is associated with its cell position (row and column) in the sheet.
+        """
+        self.logger.info(f"Caching images from workbook '{workbook_path}', sheet '{sheet_name}'")
+
+        try:
+            wb = openpyxl.load_workbook(workbook_path, data_only=True)
+            sheet = wb[sheet_name]
+
+            for image in sheet._images:
+                row, col = image.anchor._from.row, image.anchor._from.col
+                key = (row, col)
+                self.image_cache[key] = image._data()
+                self.logger.debug(f"Cached image at row {row}, column {col}")
+
+            wb.close()
+            self.logger.info("Finished caching images")
+        except Exception as e:
+            self.logger.error(f"Error caching images from workbook: {e}")
 
     def get_image_data(self, row, col):
         key = (row, col)
         return self.image_cache.get(key, None)
 
     def display_product_details(self, event):
+        """
+        Displays the details of a selected product in the GUI. The details are fetched 
+        from an Excel sheet based on the selected product ID. This function updates various 
+        fields in the GUI with the product's information.
+        """
+
+        # Before fetching product details
+        self.logger.info("Displaying product details")
 
         selection = self.folder_list.curselection()
         # Get the index of the selected item
@@ -1589,10 +1779,10 @@ class Application(tk.Frame):
   
                     # 3. Print the column name and row number
                     if product_image_col_num is not None:
-                        self.load_and_display_image(current_row_num + 3, product_image_col_num, selected_product_id)
-                        # If images or other objects were embedded in or near the deleted row, their anchoring might have been affected. 
-                        # This could lead to a misalignment in how openpyxl identifies the position of these objects.
-                        # Thats why there's a +3 in current_row_num
+                        self.load_and_display_image(current_row_num + 1, product_image_col_num, selected_product_id)
+                        # IMAGES CHANGING POSITION IN THE EXCEL AFTER PRODUCT PRICES HAVE BEEN UPDATED THRU THE BUTTON function: update_prices
+                    
+                    self.logger.debug(f"Product details displayed for: {selected_product_id}")
                 else:
                     self.edit_button.config(state='disabled')
                     self.cancelled_order_var.set(False)
@@ -1639,6 +1829,7 @@ class Application(tk.Frame):
             except Exception as e:
                 messagebox.showerror("Error", f"An error occurred: {e}")
                 #print(f"Error retrieving product details: {e}")
+                self.logger.error(f"Error retrieving product details: {e}")
         else:
             messagebox.showerror("Error", "Excel file path or sheet name is not set.")
 
@@ -1648,13 +1839,22 @@ class Application(tk.Frame):
        
         # Bind the Enter key to the global enter handler
         self.master.bind('<Return>', self.edit_on_key_handler)
+        self.logger.info("Completed displaying product details")
 
     def load_and_display_image(self, current_row_num, product_image_col_num, product_id):
+        """
+        Loads and displays the product image in a separate thread. The image is fetched from the 
+        Excel workbook based on the row and column numbers. If the image is not in the cache, it 
+        is loaded from the workbook, cached, and then displayed.
+        """
+        # Before starting the thread for loading the image
+        self.logger.info(f"Starting thread to load image for product ID: {product_id}")
+
         def task():
-            print(f"Starting image loading task: Row {current_row_num}, Column {product_image_col_num}")
+            self.logger.debug(f"Starting image loading task: Row {current_row_num}, Column {product_image_col_num}")
 
             if not self.running or self.current_product_id != product_id:
-                print("Task exited: Application no longer running or product changed")
+                self.logger.info("Task exited: Application no longer running or product changed")
                 return
 
             try:
@@ -1665,9 +1865,10 @@ class Application(tk.Frame):
                     sheet = wb[self.excel_manager.sheet_name]
                     for image in sheet._images:
                         if image.anchor._from.row == current_row_num and image.anchor._from.col == product_image_col_num:
-                            print("Image found, caching...")
                             image_data = image._data()
                             self.image_cache[(current_row_num, product_image_col_num)] = image_data
+                            # Log when image is found and cached
+                            self.logger.debug("Image found and cached")
                             break
                     wb.close()
 
@@ -1682,17 +1883,17 @@ class Application(tk.Frame):
                         tk_photo = ImageTk.PhotoImage(resized_image)
 
                     if self.running and self.current_product_id == product_id:
-                        print("Scheduling image update in main thread")
+                        self.logger.info("Scheduling image update in main thread")
                         self.after(0, lambda: self.update_image_label(tk_photo))
                     else:
-                        print("Skipped image update: Application no longer running or product changed")
+                        self.logger.error("Skipped image update: Application no longer running or product changed")
                 else:
-                    print("Image not found in workbook or cache")
+                    self.logger.error("Image not found in workbook or cache")
                     if self.running and self.current_product_id == product_id:
                         self.after(0, lambda: self.product_image_label.config(text="Product image not found"))
 
             except Exception as e:
-                print(f"Error loading image: {e}")
+                self.logger.error(f"Error loading image: {e}")
                 if self.running and self.current_product_id == product_id:
                     self.after(0, lambda: self.product_image_label.config(text="Error loading image"))
 
@@ -1700,11 +1901,11 @@ class Application(tk.Frame):
 
     def update_image_label(self, tk_photo):
         if self.running:
-            print("Updating image label in main thread")
+            self.logger.info("Updating image label in main thread")
             self.product_image_label.config(image=tk_photo)
             self.product_image_label.image = tk_photo  # Keep a reference
         else:
-            print("Skipped updating image label: Application no longer running")
+            self.logger.error("Skipped updating image label: Application no longer running")
 
     def open_product_folder(self, folder_path):
         if sys.platform == "win32":
@@ -1715,16 +1916,39 @@ class Application(tk.Frame):
             subprocess.run(["xdg-open", folder_path])
 
     def excel_value_to_bool(self, value):
-        # Check for NaN explicitly and return False if found
+        """
+        Converts an Excel cell value to a boolean. The conversion considers string values 
+        like 'yes', 'true', '1', and numeric values, treating NaN and unrecognized formats as False.
+        """
+
+        # Before checking the value
+        self.logger.debug(f"Converting Excel value to boolean: {value}")
+
         if pd.isnull(value):
             return False
+
         if isinstance(value, str):
-            return value.strip().lower() in ['yes', 'true', '1']
+            result = value.strip().lower() in ['yes', 'true', '1']
+            self.logger.debug(f"Converted string '{value}' to boolean: {result}")
+            return result
         elif isinstance(value, (int, float)):
-            return bool(value)
+            result = bool(value)
+            self.logger.debug(f"Converted numeric value '{value}' to boolean: {result}")
+            return result
+
+        # Log the default case when the value doesn't match expected types or formats
+        self.logger.debug("Value format unrecognized, defaulting to False")
         return False
 
     def update_to_sell_after_color(self):
+        """
+        Updates the background color of the 'to sell after' label based on the date comparison. 
+        If the date has passed or is today, the background is set to green, otherwise, it's set to white.
+        """
+
+        # Log before starting the process
+        self.logger.info("Updating 'To Sell After' label color based on date comparison")
+
         # Get today's date
         today = date.today()
 
@@ -1734,40 +1958,54 @@ class Application(tk.Frame):
             try:
                 # Parse the date string to a date object
                 to_sell_after_date = datetime.strptime(to_sell_after_str, "%m/%d/%Y").date()
+                self.logger.debug(f"'To Sell After' date parsed: {to_sell_after_date}")
 
                 # If the to_sell_after date is today or has passed, change the label's background color to green
                 if to_sell_after_date <= today:
                     self.to_sell_after_label.config(background='light green')
+                    self.logger.debug("'To Sell After' label background set to green")
                 else:
                     self.to_sell_after_label.config(background='white')
+                    self.logger.debug("'To Sell After' label background reset to white")
             except ValueError:
                 # If there's a ValueError, it means the string was not in the expected format
                 # Handle incorrect date format or clear the background
                 self.to_sell_after_label.config(background='white')
+                self.logger.warning("Incorrect date format in 'To Sell After', resetting background color")
     
     def checkbox_click_control(self, var):
-        """Controls the checkbox click based on edit mode."""
+        """
+        Controls the checkbox click event based on the current edit mode. 
+        If not in edit mode, it prevents changing the checkbox's state.
+        """
+
+        # Log before checking the edit mode
+        self.logger.debug(f"Checkbox click control invoked, edit mode: {self.edit_mode}")
+
         if not self.edit_mode:
-            # If not in edit mode, prevent changing the checkbox's state
+            # Log preventing checkbox state change
+            self.logger.info("Checkbox state change prevented due to non-edit mode")
             return "break"  # Stop the event from propagating further
-        # If in edit mode, allow the checkbox to change state
+
+        # Log allowing checkbox state change
+        self.logger.debug("In edit mode, allowing checkbox state change")
 
     def toggle_edit_mode(self):
+        """
+        Toggles the edit mode of the application. When in edit mode, certain widgets are made editable, 
+        and key bindings are set for saving and editing. When not in edit mode, the widgets are set to 
+        non-editable, and key bindings are removed.
+        """
 
-        # Toggle the edit mode
-        print("toggling edit mode")
-        
-        # Toggle the edit mode state. Switch self.edit_mode to True if it's currently False, and vice versa. 
-        # This line essentially switches between edit and view modes for the application.
+        # Log before toggling the edit mode
+        self.logger.info("Toggling edit mode")
+
         self.edit_mode = not self.edit_mode
-        # Set the state variable depending on self.edit_mode. 
-        # When in edit mode (self.edit_mode is True), state is set to 'normal', enabling interaction and editing of widgets. 
-        # When not in edit mode (self.edit_mode is False), state is set to 'disabled', making widgets non-interactive and uneditable.
         state = 'normal' if self.edit_mode else 'disabled' 
-        # Set the readonly_state variable based on self.edit_mode. 
-        # Use 'readonly' for specific widgets when in edit mode to allow viewing but restrict modification. 
-        # Set to 'disabled' when not in edit mode to make these widgets non-interactive.
-        readonly_state = 'readonly' if self.edit_mode else 'disabled'  # Use 'readonly' when in edit mode, 'disabled' otherwise        
+        readonly_state = 'readonly' if self.edit_mode else 'disabled'
+
+        # Log the state of the edit mode after toggling
+        self.logger.debug(f"Edit mode set to: {self.edit_mode}")   
         
         self.order_date_entry.config(state='disabled')
         self.sold_date_button.config(state=state)
@@ -1788,23 +2026,27 @@ class Application(tk.Frame):
         self.comments_text.config(state=state)
 
         if self.edit_mode:
-            self.product_name_text.bind("<Button-1>", lambda e: None)
+            self.logger.debug("Edit mode enabled, setting widget states and bindings")
 
-            # When in edit mode, bind the Enter key to the save_button's command
+            self.product_name_text.bind("<Button-1>", lambda e: None)
             self.master.bind('<Return>', self.save_on_key_handler)
-            
-            # When in edit mode, bind the Escape key to the edit_button's command
             self.master.bind('<Escape>', self.edit_on_key_handler)
         else:
+            self.logger.debug("Edit mode disabled, resetting widget states and unbinding keys")
             self.product_name_text.bind("<Button-1>", lambda e: "break")
 
-            # When not in edit mode, unbind the Enter and Escape keys
             self.master.unbind('<Return>')
             self.master.unbind('<Escape>')
-            # When in edit mode, bind the Enter key to the save_button's command
             self.master.bind('<Return>', self.edit_on_key_handler)
 
     def save(self):
+        """
+        Saves the updated product information from the form into the Excel file and moves the 
+        product folder to the appropriate location based on the current status (sold, damaged, personal, etc.).
+        """
+
+        # Log before starting the save process
+        self.logger.info("Saving product information")
         # Extract values from the widgets
         sold_price = self.sold_price_entry.get()
         sold_date = self.sold_date_var.get()  # Assuming it's a StringVar associated with an Entry
@@ -1815,6 +2057,7 @@ class Application(tk.Frame):
             # Check if all required fields are filled
             if not (sold_price and sold_date and payment_type):
                 messagebox.showwarning("Incomplete Data", "Please fill in Sold Price, Sold Date, and Payment Type.")
+                self.logger.warning("Incomplete data for saving")
                 return  # Return without saving
 
         # Update the 'Sold' checkbox based on the 'Sold Date' entry
@@ -1877,10 +2120,13 @@ class Application(tk.Frame):
 
         # Use the ExcelManager method to save the data.
         try:
+            self.logger.debug("Attempting to save data to Excel")
             self.excel_manager.save_product_info(product_id, product_data)
             messagebox.showinfo("Success", "Product information updated successfully.")
+            self.logger.info("Product information updated successfully in Excel")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save changes to Excel file: {e}")
+            self.logger.error(f"Failed to save changes to Excel file: {e}")
             return
         
         # Folder movement logic
@@ -1943,10 +2189,10 @@ class Application(tk.Frame):
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to move the folder: {e}")
                 self.refresh_and_select_product(product_id)
-                
+        
+        self.logger.info("Product information saved and folder moved successfully")
         doc_data = (product_id, product_id, self.product_name_var.get())  # Construct the doc_data tuple
         self.create_word_doc(doc_data, iid="dummy", show_message=True)  # Call create_word_doc with dummy iid
-
         self.toggle_edit_mode()
         self.search_entry.focus_set()
         # Unbind the Enter and Escape keys
@@ -1958,11 +2204,22 @@ class Application(tk.Frame):
         #self.master.bind('<Return>', lambda e: self.edit_on_key_handler.invoke())
 
     def refresh_and_select_product(self, product_id):
+        """
+        Refreshes the list of products and selects the specified product. 
+        This function is typically called after updating product information to reflect changes in the UI.
+        """
+
+        # Log before starting the refresh process
+        self.logger.info(f"Refreshing and selecting product with ID: {product_id}")
+
         # Refresh the list of products
         self.combine_and_display_folders()
         
         # Convert the product_id to uppercase for case-insensitive comparison
         product_id_upper = product_id.upper()
+
+        # Log after refreshing the list
+        self.logger.debug("Product list refreshed")
 
         # Find the index of the product that was just edited
         product_index = None
@@ -1977,26 +2234,61 @@ class Application(tk.Frame):
             self.folder_list.selection_set(product_index)
             self.folder_list.see(product_index)  # Ensure the product is visible in the list
             self.folder_list.event_generate("<<ListboxSelect>>")  # Trigger the event to display product details
+            self.logger.info(f"Selected and displayed details for product ID: {product_id}")
+            
+        self.logger.debug("Completed product selection process")
         self.toggle_edit_mode()
         self.search_entry.focus_set()
 
     def get_folder_names_from_db(self):
+        """
+        Retrieves all folder names from the database and returns them as a list. 
+        This function queries the 'folder_paths' table to get the names of folders.
+        """
+
+        # Log before executing the database query
+        self.logger.info("Fetching folder names from the database")
+
         self.db_manager.cur.execute("SELECT Folder FROM folder_paths")
-        return [row[0] for row in self.db_manager.cur.fetchall()]
+        folder_names = [row[0] for row in self.db_manager.cur.fetchall()]
+
+        # Log after successfully fetching the data
+        self.logger.info("Successfully fetched folder names from the database")
+
+        return folder_names
 
     def get_folder_path_from_db(self, product_id):
-        # This query assumes that the folder name starts with the product ID followed by a space
+        """
+        Retrieves the folder path for a given product ID from the database. 
+        The function assumes that the folder name in the database starts with the product ID followed by a space.
+        """
+
+        # Log before executing the database query
+        self.logger.debug(f"Fetching folder path for product ID: {product_id} from the database")
+
         self.db_manager.cur.execute("SELECT Path FROM folder_paths WHERE Folder LIKE ?", (product_id + ' %',))
         result = self.db_manager.cur.fetchone()
+
+
         return result[0] if result else None
 
     def select_excel_database(self):
+        """
+        Opens a file dialog for the user to select an Excel database file. 
+        It updates the ExcelManager instance with the selected file path and sheet name, 
+        saves these settings, and loads the data from the selected Excel file.
+        """
+
+        # Log before opening the file dialog
+        self.logger.info("Opening file dialog to select Excel database")
+
         filepath = filedialog.askopenfilename(
             title="Select Excel Database",
             filetypes=[("Excel Files", "*.xlsx *.xls *.xlsm")]
         )
         if filepath:
             self.excel_manager.filepath = filepath  # Save the filepath to the ExcelManager instance
+            self.logger.info(f"Excel database selected: {filepath}")
             xls = pd.ExcelFile(filepath)
             sheet_names = xls.sheet_names
             if sheet_names:
@@ -2005,15 +2297,35 @@ class Application(tk.Frame):
                 self.save_excel_settings(filepath, sheet_names[0])  # Save settings
                 self.excel_manager.load_data()  # Load the data
                 self.update_excel_label()  # Update the label
-        xls = pd.ExcelFile(filepath)
-        sheet_names = xls.sheet_names
+                self.logger.info(f"Excel sheet selected and data loaded: {sheet_names[0]}")
+        xls = pd.ExcelFile(filepath) # delete ?
+        sheet_names = xls.sheet_names # delete ?
         self.ask_sheet_name(sheet_names, filepath)  # Pass filepath here
+        self.logger.debug("Asked for sheet name selection")
 
     def update_excel_label(self):
+        """
+        Updates the label in the GUI to display the current Excel file path and the selected sheet name.
+        """
+
+        # Log before updating the label
+        self.logger.info("Updating Excel database label in the GUI")
+
         excel_db_text = f"{self.excel_manager.filepath} - Sheet: {self.excel_manager.sheet_name}"
         self.excel_db_label.config(text=excel_db_text)
 
+        # Log after successfully updating the label
+        self.logger.info("Excel database label updated")
+
     def ask_sheet_name(self, sheet_names, filepath):
+        """
+        Opens a new window for the user to select a sheet from the given Excel file. 
+        The window displays a list of sheet names and allows the user to make a selection.
+        """
+
+        # Log before opening the sheet selection window
+        self.logger.info("Opening window to select a sheet from the Excel file")
+
         sheet_window = tk.Toplevel(self)
         sheet_window.title("Select a Sheet")
 
@@ -2035,50 +2347,104 @@ class Application(tk.Frame):
         confirm_button = ttk.Button(sheet_window, text="Confirm", command=lambda: self.confirm_sheet_selection(None, listbox, filepath))
         confirm_button.pack(pady=(0, 10))
 
+        # Log after setting up the sheet selection window
+        self.logger.debug("Sheet selection window set up")
         sheet_window.wait_window()
+        # Log after the sheet selection window is closed
+        self.logger.info("Sheet selection window closed")
 
     def confirm_sheet_selection(self, event, listbox, filepath):
+        """
+        Confirms the user's sheet selection from the listbox and updates the ExcelManager instance 
+        with the selected sheet. Closes the sheet selection window after the selection is confirmed.
+        """
+
+        # Log before confirming sheet selection
+        self.logger.info("Confirming sheet selection from the listbox")
+
         selection_index = listbox.curselection()
         if selection_index:
             selected_sheet = listbox.get(selection_index[0])
+            # Log the selected sheet
+            self.logger.debug(f"Selected sheet: {selected_sheet}")
+
             self.select_excel_sheet(selected_sheet, filepath)
             listbox.master.destroy()  # Closes the sheet_window
 
+            # Log after successfully selecting the sheet and closing the window
+            self.logger.info("Sheet selected and sheet selection window closed")
+
     def select_excel_sheet(self, selected_sheet, filepath):
-        # Code to update the ExcelManager with the new sheet and load data
+        """
+        Updates the ExcelManager with the newly selected sheet and file path. 
+        Loads data from the selected sheet and updates the Excel file and sheet label in the GUI.
+        """
+        # Log before updating ExcelManager with the new sheet
+        self.logger.info(f"Selecting Excel sheet: {selected_sheet}")
+
         self.excel_manager.filepath = filepath
         self.excel_manager.sheet_name = selected_sheet
         self.excel_manager.load_data()
         self.update_excel_label()
         self.save_excel_settings(filepath, selected_sheet)
 
+        # Log after successfully updating the ExcelManager and saving settings
+        self.logger.info("Excel sheet selected and data loaded")
+
     def save_excel_settings(self, filepath, sheet_name):
+        """
+        Saves the current Excel file path and sheet name to a text file for persistence.
+        """
+        # Log before attempting to save settings
+        self.logger.info("Saving Excel settings to file")
+
         try:
             with open('excel_and_sheet_path.txt', 'w') as f:
                 f.write(f"{filepath}\n{sheet_name}")
             self.update_excel_label()  # Update the label when settings are saved
+            self.logger.info("Excel settings saved successfully")
         except Exception as e:
             messagebox.showerror("Error", f"Unable to save settings: {str(e)}")
+            self.logger.error(f"Failed to save Excel settings: {e}")
 
     def load_excel_settings(self):
+        """
+        Loads the saved Excel file path and sheet name from a text file. 
+        If the settings file is not found or an error occurs, it returns None for both filepath and sheet_name.
+        """
+
+        # Log before attempting to load Excel settings
+        self.logger.info("Loading Excel settings from file")
+
         try:
             with open('excel_and_sheet_path.txt', 'r') as f:
                 filepath, sheet_name = f.read().strip().split('\n', 1)
+                self.logger.info("Excel settings loaded successfully")
                 return filepath, sheet_name
         except FileNotFoundError:
+            self.logger.warning("Excel settings file not found")
             return None, None
         except Exception as e:
             messagebox.showerror("Error", f"Unable to load settings: {str(e)}")
+            self.logger.error(f"Failed to load Excel settings: {e}")
             return None, None
 
     def correlate_data(self):
-        #print("Correlate button pressed")
+        """
+        Correlates data between the Excel file and Word documents. 
+        It checks if each product in the Excel file has an associated Word document in its respective folder.
+        Notifies if any Word documents are missing for the products listed in the Excel file.
+        """
+
+        # Log when correlation process is initiated
+        self.logger.info("Initiating data correlation between Excel file and Word documents")
         
         filepath, sheet_name = self.load_excel_settings()
 
         # Check if the Excel settings are properly loaded
         if not filepath or not sheet_name:
             messagebox.showerror("Error", "Excel database settings not found.")
+            self.logger.warning("Excel database settings not found, correlation aborted")
             return
 
         # Load the data into the ExcelManager instance
@@ -2089,11 +2455,13 @@ class Application(tk.Frame):
         try:
             # Load Excel data
             df = pd.read_excel(filepath, sheet_name=sheet_name)
-            #print("Excel data loaded successfully.")
+            self.logger.debug("Excel data loaded successfully")
             product_ids = df['Product ID'].tolist()
             #print(f"Product IDs from Excel: {product_ids}")
         except Exception as e:
             messagebox.showerror("Error", f"Unable to load Excel file: {str(e)}")
+            self.logger.error(f"Unable to load Excel file: {e}")
+
             return
             # Filter out nan values from the product_ids list using pandas notnull function
             
@@ -2118,12 +2486,23 @@ class Application(tk.Frame):
 
         #print(f"Missing documents: {missing_docs}")
         if missing_docs:
-            self.prompt_correlation(missing_docs)
+            self.prompt_correlation(missing_docs)            
+            self.logger.info("Missing Word documents found, prompting user for action")
         else:
             messagebox.showinfo("Check complete", "No missing Word documents found.")
+            self.logger.info("No missing Word documents found, check complete")
         # Filter out nan values from the product_ids list
 
     def update_links_in_excel(self):
+        """
+        Updates the 'Order Link' column in the Excel file based on hyperlinks in the 'Product Name' column. 
+        This function assumes the existence of a settings file with Excel path and sheet name, 
+        and the specific structure of the Excel sheet.
+        """
+
+        # Log the start of the link update process
+        self.logger.info("Starting the process to update links in the Excel file")
+
         try:
             with open('excel_and_sheet_path.txt', 'r') as file:
                 lines = file.readlines()
@@ -2132,6 +2511,9 @@ class Application(tk.Frame):
 
             workbook = openpyxl.load_workbook(excel_path)
             sheet = workbook[sheet_name]
+
+            # Log the successful loading of the workbook
+            self.logger.debug("Excel workbook loaded for link updating")
 
             # Find the index of the columns
             header_row = sheet[1]
@@ -2146,6 +2528,7 @@ class Application(tk.Frame):
 
             if product_name_col_index is None or order_link_col_index is None:
                 messagebox.showerror("Error", "Necessary columns not found.")
+                self.logger.error("Necessary columns not found.")
                 return
 
             # Iterate through all the rows and update hyperlinks in 'Order Link' column
@@ -2161,15 +2544,27 @@ class Application(tk.Frame):
 
             workbook.save(excel_path)
             messagebox.showinfo("Success", "Links have been updated in the Excel file.")
+            self.logger.info("Links updated successfully in the Excel file")
 
         except Exception as e:
             messagebox.showerror("Error", f"An error occurred while updating links: {e}")
+            self.logger.error(f"Error updating links in Excel: {e}")
         
         self.db_manager.delete_all_folders()
         self.db_manager.setup_database()
         self.update_asin_in_excel()
+        self.logger.info("Additional database operations completed after updating links")
 
     def update_asin_in_excel(self):
+        """
+        Updates the 'ASIN' column in the Excel file based on values in the 'Order Link' column. 
+        This function assumes the existence of a settings file with Excel path and sheet name, 
+        and the specific structure of the Excel sheet.
+        """
+
+        # Log the start of the ASIN update process
+        self.logger.info("Starting the process to update ASINs in the Excel file")
+
         try:
             with open('excel_and_sheet_path.txt', 'r') as file:
                 lines = file.readlines()
@@ -2178,6 +2573,9 @@ class Application(tk.Frame):
 
             workbook = openpyxl.load_workbook(excel_path)
             sheet = workbook[sheet_name]
+
+            # Log the successful loading of the workbook
+            self.logger.debug("Excel workbook loaded for ASIN updating")
 
             # Find the index of the columns
             header_row = sheet[1]
@@ -2191,7 +2589,7 @@ class Application(tk.Frame):
                     asin_col_index = index + 1
 
             if order_link_col_index is None or asin_col_index is None:
-                print("Order Link or ASIN columns not found.")  # Debug print
+                self.logger.error("Order Link or ASIN columns not found.")  # Debug print
                 messagebox.showerror("Error", "Order Link or ASIN columns not found.")
                 return
 
@@ -2204,20 +2602,30 @@ class Application(tk.Frame):
                     # Add condition here to check if the ASIN cell is empty
                     if not asin_cell.value:  # Only update if the ASIN cell is empty
                         asin_cell.value = asin_value
-                        print(f"Updated ASIN for row {order_link_cell.row}: {asin_value}")  # Debug print
 
             workbook.save(excel_path)
-            print("Excel file saved with updated ASINs.")  # Debug print
+            self.logger.info("ASINs updated successfully in the Excel file")
             messagebox.showinfo("Success", "ASINs have been updated in the Excel file.")
 
         except Exception as e:
-            print(f"An error occurred while updating ASINs: {e}")  # Debug print
+            self.logger.error(f"An error occurred while updating ASINs: {e}")  # Debug print
             messagebox.showerror("Error", f"An error occurred while updating ASINs: {e}")
+
         self.db_manager.delete_all_folders()
         self.db_manager.setup_database()
         self.update_to_sell_after_in_excel()
 
+        self.logger.info("Additional database operations completed after updating ASINs")
+
     def update_to_sell_after_in_excel(self):
+        """
+        Updates the 'To Sell After' column in the Excel file based on dates in the 'Order Date' column. 
+        This function adds six months to each order date to calculate the 'To Sell After' date.
+        """
+
+        # Log the start of the 'To Sell After' update process
+        self.logger.info("Starting the process to update 'To Sell After' dates in the Excel file")
+
         try:
             with open('excel_and_sheet_path.txt', 'r') as file:
                 lines = file.readlines()
@@ -2226,6 +2634,8 @@ class Application(tk.Frame):
 
             workbook = openpyxl.load_workbook(excel_path)
             sheet = workbook[sheet_name]
+
+            self.logger.debug("Excel workbook loaded for 'To Sell After' updating")
 
             # Find the index of the columns
             header_row = sheet[1]
@@ -2239,7 +2649,7 @@ class Application(tk.Frame):
                     to_sell_after_col_index = index + 1
 
             if order_date_col_index is None or to_sell_after_col_index is None:
-                print("Order Date or To Sell After columns not found.")  # Debug print
+                self.logger.error("Order Date or To Sell After columns not found.")  # Debug print
                 messagebox.showerror("Error", "Order Date or To Sell After columns not found.")
                 return
 
@@ -2253,21 +2663,32 @@ class Application(tk.Frame):
                     # Add condition here to check if the 'To Sell After' cell is empty
                     if not to_sell_after_cell.value:  # Only update if the 'To Sell After' cell is empty
                         to_sell_after_cell.value = to_sell_after_date
-                        print(f"Updated To Sell After for row {order_date_cell.row}: {to_sell_after_date}")  # Debug print
 
             workbook.save(excel_path)
-            print("Excel file saved with updated To Sell After dates.")  # Debug print
             messagebox.showinfo("Success", "To Sell After dates have been updated in the Excel file.")
+            self.logger.info("'To Sell After' dates updated successfully in the Excel file")
+
 
         except Exception as e:
-            print(f"An error occurred while updating To Sell After dates: {e}")  # Debug print
+            self.logger.error(f"Error updating 'To Sell After' dates in Excel: {e}")
             messagebox.showerror("Error", f"An error occurred while updating To Sell After dates: {e}")
 
         self.db_manager.delete_all_folders()
         self.db_manager.setup_database()
         self.combine_and_display_folders()
 
+        self.logger.info("Additional database operations completed after updating 'To Sell After' dates")
+
     def update_folder_names(self):
+        """
+        Renames the folders in the inventory, sold, to sell, damaged, and personal directories based 
+        on the corresponding product information from the Excel file. This includes adding the product 
+        name to the folder name for easy identification.
+        """
+
+        # Log the start of the folder renaming process
+        self.logger.info("Starting the folder renaming process")
+
         # Load folder paths from folders_paths.txt
         with open("folders_paths.txt", "r") as file:
             lines = file.read().splitlines()
@@ -2286,8 +2707,8 @@ class Application(tk.Frame):
         
         # Load Excel data
         df = pd.read_excel(excel_path, sheet_name)
-
-        print("Starting the folder renaming process...")
+        self.logger.debug("Excel data loaded for folder renaming")
+        self.logger.info("Finding and renaming folders")
 
         # Iterate over each folder in the inventory, sold, and to sell folders
         for folder_path in [self.inventory_folder, self.sold_folder, self.to_sell_folder, self.damaged_folder, self.personal_folder]:
@@ -2333,49 +2754,73 @@ class Application(tk.Frame):
                         else:
                             print((f"No matching product info found for folder: {item}").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
         messagebox.showinfo("Done", "Moved and renamed folders")
+        self.logger.info("Folder renaming process completed")
+
         self.db_manager.delete_all_folders()
         self.db_manager.setup_database()
         self.combine_and_display_folders()
+
+        self.logger.info("Additional database operations completed after folder renaming")
         
     def replace_invalid_chars(self, filename):
-        # Windows filename invalid characters
+        """
+        Replaces invalid characters in a filename with a safe character ('x'). 
+        This is especially useful for ensuring compatibility with Windows file system limitations.
+        """
+
+        # Log before starting the replacement process
+        self.logger.debug(f"Replacing invalid characters in filename: {filename}")
+
         invalid_chars = '<>:"/\\|?*'
         for ch in invalid_chars:
             if ch in filename:
                 filename = filename.replace(ch, "x")
+
+        # Log after completing the replacement
+        self.logger.debug(f"Filename after replacing invalid characters: {filename}")
+
         return filename
 
     def shorten_path(self, product_id, product_name, base_path):
-        # Windows MAX_PATH is 260 characters
+        """
+        Shortens the path by truncating the product name to fit within the Windows MAX_PATH limit.
+        """
+
+        # Log before starting the path shortening process
+        self.logger.debug(f"Shortening path for product ID: {product_id}")
+
         MAX_PATH = 260
-        # Initial maximum length for the product name
         max_name_length = 60
 
         while max_name_length > 0:
-            # Truncate product name to fit
             truncated_product_name = product_name[:max_name_length]
-
             new_folder_name = f"{product_id} - {truncated_product_name}"
             new_full_path = os.path.join(base_path, new_folder_name)
 
-            # Check if the full path length is within the limit
             if len(new_full_path) <= MAX_PATH:
+                # Log the successfully shortened path
+                self.logger.debug(f"Path shortened successfully: {new_full_path}")
                 return new_full_path
             else:
-                # Decrement the maximum name length for the next iteration
                 max_name_length -= 1
 
-        # If the loop ends without finding a suitable length, return None or handle appropriately
-        print("Unable to shorten the product name sufficiently.")
+        # Log if unable to shorten the path sufficiently
+        self.logger.warning("Unable to shorten the product name sufficiently for path limitations")
         return None
 
     def update_folders_paths(self):
-        print("Updating folder paths based on Excel data...")
+        """
+        Updates the folder paths based on the product data from the Excel file. 
+        It moves product folders to appropriate locations (sold, damaged, personal, etc.) based on their status.
+        """
+
+        # Log the start of updating folder paths
+        self.logger.info("Updating folder paths based on Excel data")
 
         # Ensure the Excel file path and sheet name are set
         filepath, sheet_name = self.load_excel_settings()
         if not filepath or not sheet_name:
-            print("Excel file path or sheet name is not set.")
+            self.logger.warning("Excel file path or sheet name is not set, unable to update folder paths")
             return
 
         # Load the Excel data
@@ -2417,67 +2862,85 @@ class Application(tk.Frame):
                             self.move_product_folder(root, dir_name, self.to_sell_folder)
                         else:
                             print(f"Keeping {dir_name} in Inventory")
-
-
+            self.logger.debug(f"Processed folder: {dir_name}")
         else:
-            print(f"Inventory folder not found: {self.inventory_folder}")
+            self.logger.warning(f"Inventory folder not found: {self.inventory_folder}")
         self.db_manager.delete_all_folders()
         self.db_manager.setup_database()
         self.update_folder_names()
+        self.logger.info("Completed updating folder paths")
 
     def move_product_folder(self, current_path, folder_name, target_folder):
+        """
+        Moves and renames a product folder to the target folder based on the specified criteria.
+        The new folder name includes the product ID and a truncated version of the product name.
+        """
+
+        # Log before attempting to move the folder
+        self.logger.info(f"Moving folder '{folder_name}' to '{target_folder}'")
+
         if target_folder and os.path.exists(target_folder):
             full_path = os.path.join(current_path, folder_name)
-
-            # Extracting the part of the folder name before the first '-' and keeping the hyphen
             new_folder_name = folder_name.split('-', 1)[0].strip() + ' -'
             new_full_path = os.path.join(target_folder, new_folder_name)
 
             try:
-                # Check if a folder with the new name already exists in the target directory
                 if os.path.exists(new_full_path):
-                    print(f"Folder with name '{new_folder_name}' already exists in the target directory.")
+                    self.logger.warning(f"Folder with name '{new_folder_name}' already exists in the target directory")
                     return
 
-                # Rename and move the folder
                 os.rename(full_path, new_full_path)
-                print(f"Moved and renamed folder '{folder_name}' to '{new_folder_name}' in '{target_folder}'")
+                # Log the successful move and rename of the folder
+                self.logger.info(f"Moved and renamed folder '{folder_name}' to '{new_folder_name}' in '{target_folder}'")
             except Exception as e:
-                print(f"Error moving folder '{folder_name}': {e}")
+                self.logger.error(f"Error moving folder '{folder_name}': {e}")
         else:
-            print(f"Target folder not found: {target_folder}")
+            self.logger.warning(f"Target folder not found: {target_folder}")
 
     def is_date_today_or_before(self, date_input):
+        """
+        Checks if the given date is today's date or a past date. 
+        Returns True if the date is today or before, otherwise False.
+        """
+
+        # Log before processing the date input
+        self.logger.debug(f"Checking if the date '{date_input}' is today or before")
+
         if pd.isnull(date_input):
             return False
 
-        # Check if the input is already a datetime object
         if isinstance(date_input, datetime):
             to_sell_date = date_input.date()
         else:
             try:
-                # If it's a string, parse it into a datetime object
                 to_sell_date = datetime.strptime(date_input, "%m/%d/%Y").date()
             except ValueError:
-                print(f"Invalid date format: {date_input}")
+                self.logger.warning(f"Invalid date format: {date_input}")
                 return False
 
-        return to_sell_date <= datetime.today().date()
+        result = to_sell_date <= datetime.today().date()
+        # Log the result of the date comparison
+        self.logger.debug(f"Date '{date_input}' is today or before: {result}")
+        return result
 
     def rpc_formula(self, fair_market_value):
+        """
+        Calculates the regular product price, total price, IVU tax, and price discount 
+        from the given fair market value. Applies a formula to account for tax rates 
+        and rounding rules.
+        """
+
+        # Log the calculation process with the given fair market value
+        self.logger.debug(f"Calculating RPC formula for fair market value: {fair_market_value}")
+
         tax_rate = Decimal('0.115')
         original_value = (Decimal(fair_market_value) / (1 - tax_rate)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
         # Round up to the nearest 5 or 0
         total_price = -(-original_value // Decimal('5')) * Decimal('5')
 
-        # Calculate the regular product price by subtracting the IVU tax from the total price
         regular_product_price = (total_price / (1 + tax_rate)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-
-        # Calculate the IVU tax from the total price
         IVU_tax = (regular_product_price * tax_rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-
-        # Calculate the 10% reseller earnings of the regular product price
         price_discount = (regular_product_price * Decimal('0.10')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
         total_price = regular_product_price + IVU_tax
@@ -2485,77 +2948,104 @@ class Application(tk.Frame):
         return regular_product_price, total_price, IVU_tax, price_discount
 
     def update_prices(self):
-        # Read the Excel path and sheet name from the file
-        with open('excel_and_sheet_path.txt', 'r') as file:
-            excel_path, sheet_name = file.read().strip().split('\n')
-        
-        # Load the workbook and the specific sheet
-        workbook = load_workbook(excel_path)
-        sheet = workbook[sheet_name]
+        """
+        Updates the prices in the Excel sheet based on the calculated values using the RPC formula. 
+        It reads the existing Excel file, updates the price-related columns, and saves the changes back to the file.
+        """
 
-        # Convert the sheet into a DataFrame
-        data = sheet.values
-        columns = next(data)[0:]  # The first row of the sheet contains column names
-        df = pd.DataFrame(data, columns=columns)
-        df = df[1:]  # Skip the header row
+        # Log the start of the price update process
+        self.logger.info("Starting the process to update prices in the Excel file")
 
-        # Convert columns to 'object' type to avoid FutureWarning
-        object_columns = ['Product Price', 'Product Price After IVU', 'IVU Tax', 'Discount']
-        for col in object_columns:
-            df[col] = df[col].astype('object')
+        try:
+            # Read the Excel path and sheet name from the file
+            with open('excel_and_sheet_path.txt', 'r') as file:
+                excel_path, sheet_name = file.read().strip().split('\n')
+            
+            # Load the workbook and the specific sheet
+            workbook = load_workbook(excel_path)
+            sheet = workbook[sheet_name]
 
-        # Define inner functions for conversions inside update_prices to keep them scoped
-        def to_currency(value):
-            return "${:,.2f}".format(value)
+            # Convert the sheet into a DataFrame
+            data = sheet.values
+            columns = next(data)[0:]  # The first row of the sheet contains column names
+            df = pd.DataFrame(data, columns=columns)
+            #df = df[1:]  # Skip the header row
+            # Include this check if you want to retain initial empty rows in Excel
+            # Adjust 'n_initial_empty_rows' based on the number of initial empty rows in your Excel sheet
+            n_initial_empty_rows = 1  # Example value, adjust as needed
+            df = df.iloc[n_initial_empty_rows - 1:]  # Adjust DataFrame to include initial empty rows
 
-        def currency_to_float(value):
-            if pd.isna(value):
-                return 0  # or some other sensible default value
-            elif isinstance(value, str) and value.startswith('$'):
-                value = value.replace('$', '').replace(',', '')
-                try:
-                    return float(value)
-                except ValueError:
+            self.logger.debug("Prices updated in the DataFrame")
+
+            # Convert columns to 'object' type to avoid FutureWarning
+            object_columns = ['Product Price', 'Product Price After IVU', 'IVU Tax', 'Discount']
+            for col in object_columns:
+                df[col] = df[col].astype('object')
+
+            # Define inner functions for conversions inside update_prices to keep them scoped
+            def to_currency(value):
+                return "${:,.2f}".format(value)
+
+            def currency_to_float(value):
+                if pd.isna(value):
                     return 0  # or some other sensible default value
-            return value
+                elif isinstance(value, str) and value.startswith('$'):
+                    value = value.replace('$', '').replace(',', '')
+                    try:
+                        return float(value)
+                    except ValueError:
+                        return 0  # or some other sensible default value
+                return value
+            # Iterate through the DataFrame and update the prices
+            for index, row in df.iterrows():
+                if pd.isna(row['Product Price']) or pd.isna(row['Product Price After IVU']) or pd.isna(row['IVU Tax']):
+                    fair_market_value_raw = row['Fair Market Value']
+                    fair_market_value = Decimal(currency_to_float(fair_market_value_raw))
+                    regular_product_price, total_price, IVU_tax, price_discount = self.rpc_formula(fair_market_value)
+                    
+                    # Calculate the discounted prices using Decimal
+                    product_price_after_discount = (regular_product_price - price_discount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                    ivu_tax_after_discount = (product_price_after_discount * Decimal('0.115')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                    product_price_plus_ivu_discount = (product_price_after_discount + ivu_tax_after_discount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
+                    df.at[index, 'Product Price'] = float(regular_product_price)
+                    df.at[index, 'Product Price After IVU'] = float(total_price)
+                    df.at[index, 'IVU Tax'] = float(IVU_tax)
+                    df.at[index, 'Discount'] = float(price_discount)
+                    df.at[index, 'Discount Percentage'] = 10  # Assuming a fixed 10% discount
+                    df.at[index, 'Product Price After Discount'] = float(product_price_after_discount)
+                    df.at[index, 'IVU Tax After Discount'] = float(ivu_tax_after_discount)
+                    df.at[index, 'Product Price After IVU and Discount'] = float(product_price_plus_ivu_discount)
 
-        # Iterate through the DataFrame and update the prices
-        for index, row in df.iterrows():
-            if pd.isna(row['Product Price']) or pd.isna(row['Product Price After IVU']) or pd.isna(row['IVU Tax']):
-                fair_market_value_raw = row['Fair Market Value']
-                fair_market_value = Decimal(currency_to_float(fair_market_value_raw))
-                regular_product_price, total_price, IVU_tax, price_discount = self.rpc_formula(fair_market_value)
-                
-                # Calculate the discounted prices using Decimal
-                product_price_after_discount = (regular_product_price - price_discount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                ivu_tax_after_discount = (product_price_after_discount * Decimal('0.115')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                product_price_plus_ivu_discount = (product_price_after_discount + ivu_tax_after_discount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            # Clear the existing data in the sheet starting from the first row of actual data
+            for row in sheet.iter_rows(min_row=n_initial_empty_rows + 1, max_col=sheet.max_column, max_row=sheet.max_row):
+                for cell in row:
+                    cell.value = None
 
-                df.at[index, 'Product Price'] = float(regular_product_price)
-                df.at[index, 'Product Price After IVU'] = float(total_price)
-                df.at[index, 'IVU Tax'] = float(IVU_tax)
-                df.at[index, 'Discount'] = float(price_discount)
-                df.at[index, 'Discount Percentage'] = 10  # Assuming a fixed 10% discount
-                df.at[index, 'Product Price After Discount'] = float(product_price_after_discount)
-                df.at[index, 'IVU Tax After Discount'] = float(ivu_tax_after_discount)
-                df.at[index, 'Product Price After IVU and Discount'] = float(product_price_plus_ivu_discount)
+            # Write the updated DataFrame back to the sheet
+            # Start enumeration based on where actual data begins in the Excel sheet
+            for r_idx, df_row in enumerate(dataframe_to_rows(df, index=False, header=False), start=n_initial_empty_rows + 1):
+                for c_idx, value in enumerate(df_row, start=1):
+                    sheet.cell(row=r_idx, column=c_idx, value=value)
 
-        # Clear the existing data in the sheet
-        for row in sheet.iter_rows(min_row=2, max_col=sheet.max_column, max_row=sheet.max_row):
-            for cell in row:
-                cell.value = None
-
-        # Write the updated DataFrame back to the sheet
-        for r_idx, df_row in enumerate(dataframe_to_rows(df, index=False, header=False), start=2):
-            for c_idx, value in enumerate(df_row, start=1):
-                sheet.cell(row=r_idx, column=c_idx, value=value)
-
-        # Save the workbook
-        workbook.save(excel_path)
-        messagebox.showinfo("Success", "Prices updated successfully in the Excel file.")
+            # Save the workbook
+            workbook.save(excel_path)
+            messagebox.showinfo("Success", "Prices updated successfully in the Excel file.")
+            self.logger.info("Prices updated successfully in the Excel file")
+        except Exception as e:
+            messagebox.showerror("Error", f"An error occurred while updating prices: {e}")
+            # Log the error encountered during the price update process
+            self.logger.error(f"Error updating prices in Excel: {e}")
 
     def prompt_correlation(self, missing_docs):
+        """
+        Opens a window displaying a list of products for which Word documents are missing. 
+        Provides options to create missing documents or exit the process.
+        """
+
+        # Log the start of the prompt for missing Word documents
+        self.logger.info("Prompting for missing Word documents")
+
         self.correlate_window = Toplevel(self)
         self.correlate_window.title("Correlate Data")
 
@@ -2579,6 +3069,8 @@ class Application(tk.Frame):
         for i, (folder_name, product_id, product_name) in enumerate(missing_docs):
             self.correlate_tree.insert('', 'end', iid=str(i), values=(folder_name, product_id, product_name))
 
+        self.logger.debug("Treeview setup completed with missing document entries")
+
         # Bind double-click event to an item
         self.correlate_tree.bind('<Double-1>', self.on_item_double_click)
         
@@ -2586,31 +3078,62 @@ class Application(tk.Frame):
         yes_to_all_button = ttk.Button(self.correlate_window, text="Yes to All", command=self.create_all_word_docs)
         yes_to_all_button.pack()
 
-
         exit_button = ttk.Button(self.correlate_window, text="Exit", command=self.exit_correlate_window)
         exit_button.pack()
 
+        self.logger.info("Correlation prompt window setup completed")
+
     def on_item_double_click(self, event):
-        item_id = self.correlate_tree.selection()[0]  # Get selected item ID (iid)
+        """
+        Handles the double-click event on a tree item in the correlation window. 
+        Initiates the creation of a Word document for the selected item.
+        """
+
+        # Log when an item is double-clicked
+        self.logger.info("Item double-clicked in the correlation window")
+
+        item_id = self.correlate_tree.selection()[0]
         item_values = self.correlate_tree.item(item_id, 'values')
-        
-        # Convert item values to a doc_data tuple (folder_name, product_id, product_name)
         doc_data = (item_values[0], item_values[1], item_values[2])
 
-        # Call the create_word_doc function with doc_data and the item's iid
-        self.create_word_doc(doc_data, item_id)  # show_message is True by default
+        # Log the data of the item being processed
+        self.logger.debug(f"Processing item for Word document creation: {doc_data}")
+
+        self.create_word_doc(doc_data, item_id)
 
     def create_all_word_docs(self):
-        #print("Create all word docs function called")  # Debug #print statement
+        """
+        Creates Word documents for all items listed in the correlation window.
+        """
+
+        # Log the start of creating all Word documents
+        self.logger.info("Starting the creation of all Word documents")
+
         for iid in self.correlate_tree.get_children():
             item_values = self.correlate_tree.item(iid, 'values')
             doc_data = (item_values[0], item_values[1], item_values[2])
+
+            # Log the data of each item being processed
+            self.logger.debug(f"Creating Word document for item: {doc_data}")
+
             self.create_word_doc(doc_data, iid, show_message=False)
+
         messagebox.showinfo("Success", "All Word documents have been created.")
         self.correlate_window.destroy()
         self.Settings_Window_Start()
 
+        # Log the completion of creating all Word documents
+        self.logger.info("All Word documents created successfully")
+
     def create_word_doc(self, doc_data, iid, show_message=True):
+        """
+        Creates a Word document for a specific product, pulling relevant information from the Excel data. 
+        The document includes details like product ID, name, price, link, and comments.
+        """
+
+        # Log the start of the Word document creation process
+        self.logger.info(f"Creating Word document for product ID {doc_data[1]}")
+
         # Unpack the data tuple
         folder_name, product_id, product_name = doc_data
         # Retrieve the folder path from the database
@@ -2654,7 +3177,7 @@ class Application(tk.Frame):
                     discount = "N/A"  # Default to "N/A" 
 
             except Exception as e:
-                print(f"Error retrieving data: {e}")  # Debugging print statement
+                self.logger.debug(f"Error retrieving data: {e}")  # Debugging print statement
 
             # Path for the new Word document
             doc_path = os.path.join(folder_path, f"{product_id}.docx")
@@ -2673,26 +3196,35 @@ class Application(tk.Frame):
 
                 if show_message:
                     messagebox.showinfo("Document Created", f"Word document for '{product_id}' has been created successfully.")
-
+                    self.logger.info(f"Word document for product ID {product_id} created successfully")
                 # Additional logic (if any)
                 if hasattr(self, 'correlate_tree') and not self.correlate_tree.get_children():
                     self.correlate_window.destroy()
                     self.Settings_Window_Start()
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to create document for Product ID {product_id}: {e}")
+                self.logger.error(f"Failed to create document for product ID {product_id}: {e}")
         else:
             messagebox.showerror("Error", f"No folder found for Product ID {product_id}")
+            self.logger.warning(f"No folder found for product ID {product_id}")
 
     def backup_excel_database(self):
-        print("Starting the backup process.")
+        """
+        Creates a backup of the current Excel database. The backup is stored in a separate folder 
+        alongside the inventory folder.
+        """
+
+        # Log the start of the backup process
+        self.logger.info("Starting the backup process for the Excel database")
+
         # Check if the Excel filepath is set
         if not self.excel_manager.filepath:
-            print("No Excel filepath is set.")
+            self.logger.warning("No Excel filepath is set. Backup process aborted.")
             return
         
         # Check if inventory folder exists
         if not self.inventory_folder or not os.path.exists(self.inventory_folder):
-            print(f"Inventory folder is not set or does not exist: {self.inventory_folder}")
+            self.logger.warning(f"Inventory folder is not set or does not exist: {self.inventory_folder}")
             return
         
         # Define backup folder, which is alongside the inventory folder
@@ -2704,9 +3236,9 @@ class Application(tk.Frame):
             # Create the backup folder if it doesn't exist
             if not os.path.exists(backup_folder):
                 os.makedirs(backup_folder)
-                print(f"Backup folder '{backup_folder}' created.")
+                self.logger.info(f"Backup folder '{backup_folder}' created.")
             else:
-                print(f"Backup folder '{backup_folder}' already exists.")
+                self.logger.debug(f"Backup folder '{backup_folder}' already exists.")
             
             # Generate backup file name
             date_time_str = datetime.now().strftime("%Y-%m-%d - %H-%M-%S")
@@ -2715,50 +3247,78 @@ class Application(tk.Frame):
             
             # Copy the Excel file to the backup location
             shutil.copy2(self.excel_manager.filepath, backup_path)
-            print(f"Backup created at: {backup_path}")
+            self.logger.info(f"Backup created at: {backup_path}")
             
             # Double check if the file was actually created
             if not os.path.isfile(backup_path):
                 raise FileNotFoundError(f"Backup file not found after copy operation: {backup_path}")
+            self.logger.info("Excel database backup completed successfully")
         except Exception as e:
-            print(f"Failed to create backup: {e}")
+            self.logger.error(f"Failed to create backup: {e}")
             raise  # Reraise the exception to see the full traceback
 
     def __del__(self):
-        self.db_manager.conn.close()
+        """
+        Destructor for the class. It ensures that the database connection is closed properly 
+        when an instance of the class is destroyed.
+        """
+
+        # Log the attempt to close the database connection
+        self.logger.debug("Attempting to close database connection")
+
+        try:
+            self.db_manager.conn.close()
+            # Log the successful closure of the database connection
+            self.logger.info("Database connection closed successfully")
+        except Exception as e:
+            # Log any errors encountered during the closure
+            self.logger.error(f"Error occurred while closing database connection: {e}")
 
 def exit_application(app, root):
-    on_close(app)  # Perform backup
-    app.running = False
+    """
+    Handles the process of exiting the application. This includes performing any necessary 
+    cleanup operations like backing up data and closing the database connection.
+    """
+    app.logger.info("Initiating application exit process")
 
-    root.destroy()  # Exit the application
+    try:
+        on_close(app, root)  # Perform necessary backup and cleanup
+        if app.running:
+            app.running = False
+            root.destroy()  # Exit the application
+            app.logger.info("Application closed successfully")
+    except Exception as e:
+        app.logger.error(f"Error during application exit: {e}")
 
 def main():
-    root = ThemedTk(theme="breeze")  # Use any available theme, e.g., "arc"
+    """
+    The main function to initialize and run the application.
+    """
+    root = ThemedTk(theme="breeze")
     root.title("Improved Inventory Manager")
     root.state('zoomed')
+
     app = Application(master=root)
-    
-    app.excel_manager.filepath, _ = app.load_excel_settings()
 
-
-    # Use a lambda to pass 'app' and 'root' to the 'on_close' function
-    root.protocol("WM_DELETE_WINDOW", lambda: on_close(app, root))
-    
-    app.mainloop()
+    try:
+        app.excel_manager.filepath, _ = app.load_excel_settings()
+        root.protocol("WM_DELETE_WINDOW", lambda: exit_application(app, root))
+        app.mainloop()
+    except Exception as e:
+        app.logger.error(f"Error during application initialization: {e}")
 
 def on_close(app, root):
     
-    print("Closing the application and attempting to backup the database.")
+    app.logger.info("Closing the application and attempting to backup the database.")
     if hasattr(app, 'excel_manager') and app.excel_manager.filepath:
-        print(f"Excel file path at time of backup: {app.excel_manager.filepath}")
+        app.logger.info(f"Excel file path at time of backup: {app.excel_manager.filepath}")
         try:
             app.backup_excel_database()  # Perform the backup
-            print("Backup should now be complete.")
+            app.logger.info("Backup should now be complete.")
         except Exception as e:
-            print(f"An error occurred during backup: {e}")
+            app.logger.debug(f"An error occurred during backup: {e}")
     else:
-        print("Excel manager not set or no filepath available.")
+        app.logger.error("Excel manager not set or no filepath available.")
     app.running = False
     root.destroy()  # Call the destroy method to close the application
 
