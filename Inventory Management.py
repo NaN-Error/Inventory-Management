@@ -198,7 +198,8 @@ class Application(tk.Frame):
         
         # Call the methods associated with the settings buttons
         #self.update_links_in_excel()  # This corresponds to 'Autofill Excel Data(link, asin, tosellafter)'
-        #self.update_folders_paths()   # This corresponds to 'Update folder names and paths'
+        #self.update_folders_paths()   # This corresponds to 'Update folder names and paths' 
+        #remove update_folders_path function?
 
     def configure_logger(self):
         # Set up a logger
@@ -217,7 +218,6 @@ class Application(tk.Frame):
         self.logger.addHandler(handler)
 
         # Log the start of the application
-        self.logger.info("\n")
         self.logger.info("----Inventory Management Application started----")
 
     def cache_images_on_load(self):
@@ -1438,7 +1438,6 @@ class Application(tk.Frame):
             self.db_manager.conn.commit()  # Commit the transaction if all is well
         except Exception as e:
             self.db_manager.conn.rollback()  # Rollback if there was an error
-            messagebox.showerror("Database Error", f"An error occurred while updating the folder paths: {e}")
             self.logger.error(f"Database error in combine_and_display_folders: {e}")
 
         # Deduplicate folder names
@@ -1780,7 +1779,6 @@ class Application(tk.Frame):
                     # 3. Print the column name and row number
                     if product_image_col_num is not None:
                         self.load_and_display_image(current_row_num + 1, product_image_col_num, selected_product_id)
-                        # IMAGES CHANGING POSITION IN THE EXCEL AFTER PRODUCT PRICES HAVE BEEN UPDATED THRU THE BUTTON function: update_prices
                     
                     self.logger.debug(f"Product details displayed for: {selected_product_id}")
                 else:
@@ -2739,20 +2737,19 @@ class Application(tk.Frame):
 
                             # Check if the current folder name is already in the correct format
                             if comparable_item == comparable_new_name:
-                                print((f"Folder '{item}' already contains the product name.").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
                                 continue
 
                             # Check if the new full path length is within the limit
                             if len(new_full_path) < 260:
                                 try:
                                     os.rename(item_path, new_full_path)
-                                    print((f"Renamed '{item}' to '{new_folder_name}'").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
+                                    self.logger.info((f"Renamed '{item}' to '{new_folder_name}'").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
                                 except OSError as e:
-                                    print((f"Error renaming {item_path} to {new_full_path}: {e}").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
+                                    self.logger.error((f"Error renaming {item_path} to {new_full_path}: {e}").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
                             else:
-                                print((f"Skipped renaming {item_path} due to path length restrictions.").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
+                                self.logger.error((f"Skipped renaming {item_path} due to path length restrictions.").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
                         else:
-                            print((f"No matching product info found for folder: {item}").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
+                            self.logger.error((f"No matching product info found for folder: {item}").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
         messagebox.showinfo("Done", "Moved and renamed folders")
         self.logger.info("Folder renaming process completed")
 
@@ -2837,7 +2834,7 @@ class Application(tk.Frame):
         for folder in [damaged_folder, personal_folder]:
             if not os.path.exists(folder):
                 os.makedirs(folder)
-                print(f"Created folder: {folder}")
+                self.logger.info(f"Created folder: {folder}")
 
         # Iterate through Inventory folders
         if self.inventory_folder and os.path.exists(self.inventory_folder):
@@ -2862,7 +2859,6 @@ class Application(tk.Frame):
                             self.move_product_folder(root, dir_name, self.to_sell_folder)
                         else:
                             print(f"Keeping {dir_name} in Inventory")
-            self.logger.debug(f"Processed folder: {dir_name}")
         else:
             self.logger.warning(f"Inventory folder not found: {self.inventory_folder}")
         self.db_manager.delete_all_folders()
@@ -3141,7 +3137,21 @@ class Application(tk.Frame):
 
         if folder_path:
             try:
-                # Retrieve 'To Sell Prices' from the Excel data
+                # Retrieve the product link
+                product_price_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Product Price']
+                if not product_price_series.empty:
+                    product_price = product_price_series.iloc[0]
+                else:
+                    product_price = "N/A"  # Default to "N/A" if not found
+
+                # Retrieve the product link
+                ivu_tax_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'IVU Tax']
+                if not ivu_tax_series.empty:
+                    ivu_tax = ivu_tax_series.iloc[0]
+                else:
+                    ivu_tax = "N/A"  # Default to "N/A" if not found
+
+                # Retrieve the product link
                 product_price_after_ivu_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Product Price After IVU']
                 if not product_price_after_ivu_series.empty:
                     product_price_after_ivu = product_price_after_ivu_series.iloc[0]
@@ -3176,6 +3186,13 @@ class Application(tk.Frame):
                 else:
                     discount = "N/A"  # Default to "N/A" 
 
+                    # Retrieve the product 
+                discount_percentage_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Discount Percentage']
+                if not discount_percentage_series.empty:
+                    discount_percentage = discount_percentage_series.iloc[0]
+                else:
+                    discount_percentage = "N/A"  # Default to "N/A" 
+
             except Exception as e:
                 self.logger.debug(f"Error retrieving data: {e}")  # Debugging print statement
 
@@ -3186,8 +3203,11 @@ class Application(tk.Frame):
                 doc = Document()
                 doc.add_paragraph(f"Product ID: {product_id}")
                 doc.add_paragraph(f"Product Name: {product_name}")
-                doc.add_paragraph(f"Product Price After IVU: ${product_price_after_ivu}")
-                doc.add_paragraph(f"Reseller Earnings: ${discount}")
+                doc.add_paragraph(f"Product Price: {product_price}")
+                doc.add_paragraph(f"IVU Tax: {ivu_tax}")
+                doc.add_paragraph(f"Product Price After IVU (Sale Price): ${product_price_after_ivu}")
+                doc.add_paragraph(f"Reseller Earnings = {discount_percentage}% of {product_price} (Product Price)") 
+                doc.add_paragraph(f"Reseller Earnings: ${discount}") 
                 doc.add_paragraph(f"Amazon Link(to get the product description and pictures, if needed): {order_link}")
                 doc.add_paragraph(f"Comments: {comments}")
 
@@ -3270,6 +3290,7 @@ class Application(tk.Frame):
             self.db_manager.conn.close()
             # Log the successful closure of the database connection
             self.logger.info("Database connection closed successfully")
+            self.logger.info("----Inventory Management Application ended----\n")
         except Exception as e:
             # Log any errors encountered during the closure
             self.logger.error(f"Error occurred while closing database connection: {e}")
@@ -3285,8 +3306,8 @@ def exit_application(app, root):
         on_close(app, root)  # Perform necessary backup and cleanup
         if app.running:
             app.running = False
-            root.destroy()  # Exit the application
             app.logger.info("Application closed successfully")
+            root.destroy()  # Exit the application
     except Exception as e:
         app.logger.error(f"Error during application exit: {e}")
 
