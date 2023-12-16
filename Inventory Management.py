@@ -196,8 +196,27 @@ class Application(tk.Frame):
         self.Main_Window_Widgets() 
         self.load_settings()
         self.combine_and_display_folders()
+        self.update_excel_file_on_start_question()
         #self.first_run()
         #remove update_folders_path function?
+
+    def update_excel_file_on_start_question(self):
+        root = tk.Tk()
+        root.withdraw()  # Hide the main window
+        user_response = messagebox.askyesno("Update Excel Data", "Do you want to update the Excel empty fields?")
+        root.destroy()  # Destroy the root window
+
+        if user_response:
+            self.first_run()
+        else:
+            pass
+
+    def first_run(self):
+        self.update_excel_data()
+        self.update_prices()
+        self.update_folders_paths()
+        self.products_to_sell_report()
+        self.check_for_missing_word_docs()
 
     def configure_logger(self):
         # Set up a logger
@@ -1169,13 +1188,6 @@ class Application(tk.Frame):
         self.settings_window.protocol("WM_DELETE_WINDOW", lambda: on_close(self, self.master))
         self.master.withdraw()
     
-    def first_run(self):
-        self.update_excel_data()
-        self.update_prices()
-        self.update_folders_paths()
-        self.products_to_sell_report()
-        self.check_for_missing_word_docs()
-
     def get_previous_excel_report_data(self):
         self.logger.info("Starting to get previous Excel report data")
 
@@ -3299,6 +3311,11 @@ class Application(tk.Frame):
                         self.correlate_tree.delete(iid)
                     except Exception as e:
                         self.logger.error(f"Error while updating the Treeview: {e}")
+                # Bring the correlate_window back to the top
+
+                if hasattr(self, 'correlate_window'):
+                    self.correlate_window.lift()
+                    
                 if hasattr(self, 'correlate_tree') and not self.correlate_tree.get_children():
                     self.correlate_window.destroy()
                     self.Settings_Window_Start()
