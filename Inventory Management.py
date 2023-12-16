@@ -196,10 +196,7 @@ class Application(tk.Frame):
         self.Main_Window_Widgets() 
         self.load_settings()
         self.combine_and_display_folders()
-        
-        # Call the methods associated with the settings buttons
-        #self.update_links_in_excel()  # This corresponds to 'Autofill Excel Data(link, asin, tosellafter)'
-        #self.update_folders_paths()   # This corresponds to 'Update folder names and paths' 
+        #self.first_run()
         #remove update_folders_path function?
 
     def configure_logger(self):
@@ -1144,10 +1141,10 @@ class Application(tk.Frame):
         self.excel_db_label = ttk.Label(self.settings_frame, text=excel_db_text)
         self.excel_db_label.grid(row=4, column=1, padx=5, pady=5, sticky='w')
 
-        self.create_word_files_button = ttk.Button(self.settings_frame, text="Create Word Files for Products", command=self.correlate_data)
+        self.create_word_files_button = ttk.Button(self.settings_frame, text="Create Word Files for Products", command=self.check_for_missing_word_docs)
         self.create_word_files_button.grid(row=5, column=0, padx=5, pady=5, sticky='w')
 
-        self.autofill_links_asin_tosellafter_data_button = ttk.Button(self.settings_frame, text="Autofill Excel Data(link, asin, tosellafter)", command=self.update_links_in_excel)
+        self.autofill_links_asin_tosellafter_data_button = ttk.Button(self.settings_frame, text="Autofill Excel Data(link, asin, tosellafter)", command=self.update_excel_data)
         self.autofill_links_asin_tosellafter_data_button.grid(row=6, column=0, padx=5, pady=5, sticky='w')
 
         self.update_foldersnames_folderpaths_button = ttk.Button(self.settings_frame, text="Update folder names and paths", command=self.update_folders_paths)
@@ -1173,11 +1170,11 @@ class Application(tk.Frame):
         self.master.withdraw()
     
     def first_run(self):
-        self.update_links_in_excel()
+        self.update_excel_data()
         self.update_prices()
         self.update_folders_paths()
         self.products_to_sell_report()
-        self.correlate_data()
+        self.check_for_missing_word_docs()
 
     def get_previous_excel_report_data(self):
         self.logger.info("Starting to get previous Excel report data")
@@ -2442,191 +2439,257 @@ class Application(tk.Frame):
             self.logger.error(f"Failed to load Excel settings: {e}")
             return None, None
 
-    def update_links_in_excel(self):
-        """
-        Updates the 'Order Link' column in the Excel file based on hyperlinks in the 'Product Name' column. 
-        This function assumes the existence of a settings file with Excel path and sheet name, 
-        and the specific structure of the Excel sheet.
-        """
+    # def update_links_in_excel(self):
+    #     """
+    #     Updates the 'Order Link' column in the Excel file based on hyperlinks in the 'Product Name' column. 
+    #     This function assumes the existence of a settings file with Excel path and sheet name, 
+    #     and the specific structure of the Excel sheet.
+    #     """
 
-        # Log the start of the link update process
-        self.logger.info("Starting the process to update links in the Excel file")
+    #     # Log the start of the link update process
+    #     self.logger.info("Starting the process to update links in the Excel file")
 
-        try:
-            with open('excel_and_sheet_path.txt', 'r') as file:
-                lines = file.readlines()
-                excel_path = lines[0].strip()
-                sheet_name = lines[1].strip()
+    #     try:
+    #         with open('excel_and_sheet_path.txt', 'r') as file:
+    #             lines = file.readlines()
+    #             excel_path = lines[0].strip()
+    #             sheet_name = lines[1].strip()
 
-            workbook = openpyxl.load_workbook(excel_path)
-            sheet = workbook[sheet_name]
+    #         workbook = openpyxl.load_workbook(excel_path)
+    #         sheet = workbook[sheet_name]
 
-            # Log the successful loading of the workbook
-            self.logger.debug("Excel workbook loaded for link updating")
+    #         # Log the successful loading of the workbook
+    #         self.logger.debug("Excel workbook loaded for link updating")
 
-            # Find the index of the columns
-            header_row = sheet[1]
-            product_name_col_index = None
-            order_link_col_index = None
+    #         # Find the index of the columns
+    #         header_row = sheet[1]
+    #         product_name_col_index = None
+    #         order_link_col_index = None
 
-            for index, cell in enumerate(header_row):
-                if cell.value == 'Product Name':
-                    product_name_col_index = index + 1
-                elif cell.value == 'Order Link':
-                    order_link_col_index = index + 1
+    #         for index, cell in enumerate(header_row):
+    #             if cell.value == 'Product Name':
+    #                 product_name_col_index = index + 1
+    #             elif cell.value == 'Order Link':
+    #                 order_link_col_index = index + 1
 
-            if product_name_col_index is None or order_link_col_index is None:
-                messagebox.showerror("Error", "Necessary columns not found.")
-                self.logger.error("Necessary columns not found.")
-                return
+    #         if product_name_col_index is None or order_link_col_index is None:
+    #             messagebox.showerror("Error", "Necessary columns not found.")
+    #             self.logger.error("Necessary columns not found.")
+    #             return
 
-            # Iterate through all the rows and update hyperlinks in 'Order Link' column
-            for row in sheet.iter_rows(min_row=2, max_row=sheet.max_row, max_col=product_name_col_index):
-                product_name_cell = row[product_name_col_index - 1]
-                order_link_cell = sheet.cell(row=product_name_cell.row, column=order_link_col_index)
-                # Add condition here to check if the 'Order Link' cell already has a hyperlink
-                if not order_link_cell.hyperlink:  # Only update if the 'Order Link' cell is empty
-                    # Copy only the hyperlink URL
-                    if product_name_cell.hyperlink:
-                        order_link_cell.hyperlink = product_name_cell.hyperlink
-                        order_link_cell.value = product_name_cell.hyperlink.target  # Set the cell value to the hyperlink URL
+    #         # Iterate through all the rows and update hyperlinks in 'Order Link' column
+    #         for row in sheet.iter_rows(min_row=2, max_row=sheet.max_row, max_col=product_name_col_index):
+    #             product_name_cell = row[product_name_col_index - 1]
+    #             order_link_cell = sheet.cell(row=product_name_cell.row, column=order_link_col_index)
+    #             # Add condition here to check if the 'Order Link' cell already has a hyperlink
+    #             if not order_link_cell.hyperlink:  # Only update if the 'Order Link' cell is empty
+    #                 # Copy only the hyperlink URL
+    #                 if product_name_cell.hyperlink:
+    #                     order_link_cell.hyperlink = product_name_cell.hyperlink
+    #                     order_link_cell.value = product_name_cell.hyperlink.target  # Set the cell value to the hyperlink URL
 
-            workbook.save(excel_path)
-            messagebox.showinfo("Success", "Links have been updated in the Excel file.")
-            self.logger.info("Links updated successfully in the Excel file")
+    #         workbook.save(excel_path)
+    #         messagebox.showinfo("Success", "Links have been updated in the Excel file.")
+    #         self.logger.info("Links updated successfully in the Excel file")
 
-        except Exception as e:
-            messagebox.showerror("Error", f"An error occurred while updating links: {e}")
-            self.logger.error(f"Error updating links in Excel: {e}")
+    #     except Exception as e:
+    #         messagebox.showerror("Error", f"An error occurred while updating links: {e}")
+    #         self.logger.error(f"Error updating links in Excel: {e}")
         
-        self.db_manager.delete_all_folders()
-        self.db_manager.setup_database()
-        self.update_asin_in_excel()
-        self.logger.info("Additional database operations completed after updating links")
+    #     self.db_manager.delete_all_folders()
+    #     self.db_manager.setup_database()
+    #     self.update_asin_in_excel()
+    #     self.logger.info("Additional database operations completed after updating links")
 
-    def update_asin_in_excel(self):
-        """
-        Updates the 'ASIN' column in the Excel file based on values in the 'Order Link' column. 
-        This function assumes the existence of a settings file with Excel path and sheet name, 
-        and the specific structure of the Excel sheet.
-        """
+    # def update_asin_in_excel(self):
+    #     """
+    #     Updates the 'ASIN' column in the Excel file based on values in the 'Order Link' column. 
+    #     This function assumes the existence of a settings file with Excel path and sheet name, 
+    #     and the specific structure of the Excel sheet.
+    #     """
 
-        # Log the start of the ASIN update process
-        self.logger.info("Starting the process to update ASINs in the Excel file")
+    #     # Log the start of the ASIN update process
+    #     self.logger.info("Starting the process to update ASINs in the Excel file")
 
-        try:
-            with open('excel_and_sheet_path.txt', 'r') as file:
-                lines = file.readlines()
-                excel_path = lines[0].strip()
-                sheet_name = lines[1].strip()
+    #     try:
+    #         with open('excel_and_sheet_path.txt', 'r') as file:
+    #             lines = file.readlines()
+    #             excel_path = lines[0].strip()
+    #             sheet_name = lines[1].strip()
 
-            workbook = openpyxl.load_workbook(excel_path)
-            sheet = workbook[sheet_name]
+    #         workbook = openpyxl.load_workbook(excel_path)
+    #         sheet = workbook[sheet_name]
 
-            # Log the successful loading of the workbook
-            self.logger.debug("Excel workbook loaded for ASIN updating")
+    #         # Log the successful loading of the workbook
+    #         self.logger.debug("Excel workbook loaded for ASIN updating")
 
-            # Find the index of the columns
-            header_row = sheet[1]
-            order_link_col_index = None
-            asin_col_index = None
+    #         # Find the index of the columns
+    #         header_row = sheet[1]
+    #         order_link_col_index = None
+    #         asin_col_index = None
 
-            for index, cell in enumerate(header_row):
-                if cell.value == 'Order Link':
-                    order_link_col_index = index + 1
-                elif cell.value == 'ASIN':
-                    asin_col_index = index + 1
+    #         for index, cell in enumerate(header_row):
+    #             if cell.value == 'Order Link':
+    #                 order_link_col_index = index + 1
+    #             elif cell.value == 'ASIN':
+    #                 asin_col_index = index + 1
 
-            if order_link_col_index is None or asin_col_index is None:
-                self.logger.error("Order Link or ASIN columns not found.")  # Debug print
-                messagebox.showerror("Error", "Order Link or ASIN columns not found.")
-                return
+    #         if order_link_col_index is None or asin_col_index is None:
+    #             self.logger.error("Order Link or ASIN columns not found.")  # Debug print
+    #             messagebox.showerror("Error", "Order Link or ASIN columns not found.")
+    #             return
 
-            # Iterate through all the rows and update ASIN based on 'Order Link'
-            for row in sheet.iter_rows(min_row=2, max_row=sheet.max_row, max_col=order_link_col_index):
-                order_link_cell = row[order_link_col_index - 1]
-                if order_link_cell.value and '/' in order_link_cell.value:
-                    asin_value = order_link_cell.value.split('/')[-1]
-                    asin_cell = sheet.cell(row=order_link_cell.row, column=asin_col_index)
-                    # Add condition here to check if the ASIN cell is empty
-                    if not asin_cell.value:  # Only update if the ASIN cell is empty
-                        asin_cell.value = asin_value
+    #         # Iterate through all the rows and update ASIN based on 'Order Link'
+    #         for row in sheet.iter_rows(min_row=2, max_row=sheet.max_row, max_col=order_link_col_index):
+    #             order_link_cell = row[order_link_col_index - 1]
+    #             if order_link_cell.value and '/' in order_link_cell.value:
+    #                 asin_value = order_link_cell.value.split('/')[-1]
+    #                 asin_cell = sheet.cell(row=order_link_cell.row, column=asin_col_index)
+    #                 # Add condition here to check if the ASIN cell is empty
+    #                 if not asin_cell.value:  # Only update if the ASIN cell is empty
+    #                     asin_cell.value = asin_value
 
-            workbook.save(excel_path)
-            self.logger.info("ASINs updated successfully in the Excel file")
-            messagebox.showinfo("Success", "ASINs have been updated in the Excel file.")
+    #         workbook.save(excel_path)
+    #         self.logger.info("ASINs updated successfully in the Excel file")
+    #         messagebox.showinfo("Success", "ASINs have been updated in the Excel file.")
 
-        except Exception as e:
-            self.logger.error(f"An error occurred while updating ASINs: {e}")  # Debug print
-            messagebox.showerror("Error", f"An error occurred while updating ASINs: {e}")
+    #     except Exception as e:
+    #         self.logger.error(f"An error occurred while updating ASINs: {e}")  # Debug print
+    #         messagebox.showerror("Error", f"An error occurred while updating ASINs: {e}")
 
-        self.db_manager.delete_all_folders()
-        self.db_manager.setup_database()
-        self.update_to_sell_after_in_excel()
+    #     self.db_manager.delete_all_folders()
+    #     self.db_manager.setup_database()
+    #     self.update_to_sell_after_in_excel()
 
-        self.logger.info("Additional database operations completed after updating ASINs")
+    #     self.logger.info("Additional database operations completed after updating ASINs")
 
-    def update_to_sell_after_in_excel(self):
-        """
-        Updates the 'To Sell After' column in the Excel file based on dates in the 'Order Date' column. 
-        This function adds six months to each order date to calculate the 'To Sell After' date.
-        """
+    # def update_to_sell_after_in_excel(self):
+    #     """
+    #     Updates the 'To Sell After' column in the Excel file based on dates in the 'Order Date' column. 
+    #     This function adds six months to each order date to calculate the 'To Sell After' date.
+    #     """
 
-        # Log the start of the 'To Sell After' update process
-        self.logger.info("Starting the process to update 'To Sell After' dates in the Excel file")
+    #     # Log the start of the 'To Sell After' update process
+    #     self.logger.info("Starting the process to update 'To Sell After' dates in the Excel file")
 
-        try:
-            with open('excel_and_sheet_path.txt', 'r') as file:
-                lines = file.readlines()
-                excel_path = lines[0].strip()
-                sheet_name = lines[1].strip()
+    #     try:
+    #         with open('excel_and_sheet_path.txt', 'r') as file:
+    #             lines = file.readlines()
+    #             excel_path = lines[0].strip()
+    #             sheet_name = lines[1].strip()
 
-            workbook = openpyxl.load_workbook(excel_path)
-            sheet = workbook[sheet_name]
+    #         workbook = openpyxl.load_workbook(excel_path)
+    #         sheet = workbook[sheet_name]
 
-            self.logger.debug("Excel workbook loaded for 'To Sell After' updating")
+    #         self.logger.debug("Excel workbook loaded for 'To Sell After' updating")
 
-            # Find the index of the columns
-            header_row = sheet[1]
-            order_date_col_index = None
-            to_sell_after_col_index = None
+    #         # Find the index of the columns
+    #         header_row = sheet[1]
+    #         order_date_col_index = None
+    #         to_sell_after_col_index = None
 
-            for index, cell in enumerate(header_row):
-                if cell.value == 'Order Date':
-                    order_date_col_index = index + 1
-                elif cell.value == 'To Sell After':
-                    to_sell_after_col_index = index + 1
+    #         for index, cell in enumerate(header_row):
+    #             if cell.value == 'Order Date':
+    #                 order_date_col_index = index + 1
+    #             elif cell.value == 'To Sell After':
+    #                 to_sell_after_col_index = index + 1
 
-            if order_date_col_index is None or to_sell_after_col_index is None:
-                self.logger.error("Order Date or To Sell After columns not found.")  # Debug print
-                messagebox.showerror("Error", "Order Date or To Sell After columns not found.")
-                return
+    #         if order_date_col_index is None or to_sell_after_col_index is None:
+    #             self.logger.error("Order Date or To Sell After columns not found.")  # Debug print
+    #             messagebox.showerror("Error", "Order Date or To Sell After columns not found.")
+    #             return
 
-            # Iterate through all the rows and update 'To Sell After' based on 'Order Date'
-            for row in sheet.iter_rows(min_row=2, max_row=sheet.max_row, max_col=order_date_col_index):
-                order_date_cell = row[order_date_col_index - 1]
-                if order_date_cell.value and isinstance(order_date_cell.value, datetime):
-                    to_sell_after_date = order_date_cell.value + relativedelta(months=+6)
-                    to_sell_after_cell = sheet.cell(row=order_date_cell.row, column=to_sell_after_col_index)
+    #         # Iterate through all the rows and update 'To Sell After' based on 'Order Date'
+    #         for row in sheet.iter_rows(min_row=2, max_row=sheet.max_row, max_col=order_date_col_index):
+    #             order_date_cell = row[order_date_col_index - 1]
+    #             if order_date_cell.value and isinstance(order_date_cell.value, datetime):
+    #                 to_sell_after_date = order_date_cell.value + relativedelta(months=+6)
+    #                 to_sell_after_cell = sheet.cell(row=order_date_cell.row, column=to_sell_after_col_index)
                     
-                    # Add condition here to check if the 'To Sell After' cell is empty
-                    if not to_sell_after_cell.value:  # Only update if the 'To Sell After' cell is empty
-                        to_sell_after_cell.value = to_sell_after_date
+    #                 # Add condition here to check if the 'To Sell After' cell is empty
+    #                 if not to_sell_after_cell.value:  # Only update if the 'To Sell After' cell is empty
+    #                     to_sell_after_cell.value = to_sell_after_date
+
+    #         workbook.save(excel_path)
+    #         messagebox.showinfo("Success", "To Sell After dates have been updated in the Excel file.")
+    #         self.logger.info("'To Sell After' dates updated successfully in the Excel file")
+
+
+    #     except Exception as e:
+    #         self.logger.error(f"Error updating 'To Sell After' dates in Excel: {e}")
+    #         messagebox.showerror("Error", f"An error occurred while updating To Sell After dates: {e}")
+
+    #     self.db_manager.delete_all_folders()
+    #     self.db_manager.setup_database()
+    #     self.combine_and_display_folders()
+
+    #     self.logger.info("Additional database operations completed after updating 'To Sell After' dates")
+
+    def update_excel_data(self):
+        self.logger.info("Starting the process to update Excel file")
+        
+        try:
+            with open('excel_and_sheet_path.txt', 'r') as file:
+                lines = file.readlines()
+                excel_path = lines[0].strip()
+                sheet_name = lines[1].strip()
+
+            workbook = openpyxl.load_workbook(excel_path)
+            sheet = workbook[sheet_name]
+
+            self.logger.debug("Excel workbook loaded")
+
+            # Find the index of the columns
+            col_indexes = self.find_column_indexes(sheet, ['Product Name', 'Order Link', 'ASIN', 'Order Date', 'To Sell After'])
+
+            if not all(col_indexes.values()):
+                self.logger.error("Necessary columns not found.")
+                messagebox.showerror("Error", "Necessary columns not found.")
+                return
+
+            # Update process
+            for row in sheet.iter_rows(min_row=2, max_row=sheet.max_row):
+                self.update_row_links(row, col_indexes)
+                self.update_row_asin(row, col_indexes)
+                self.update_row_to_sell_after(row, col_indexes)
 
             workbook.save(excel_path)
-            messagebox.showinfo("Success", "To Sell After dates have been updated in the Excel file.")
-            self.logger.info("'To Sell After' dates updated successfully in the Excel file")
-
+            messagebox.showinfo("Success", "Excel file has been updated.")
+            self.logger.info("Excel file updated successfully")
 
         except Exception as e:
-            self.logger.error(f"Error updating 'To Sell After' dates in Excel: {e}")
-            messagebox.showerror("Error", f"An error occurred while updating To Sell After dates: {e}")
+            self.logger.error(f"An error occurred: {e}")
+            messagebox.showerror("Error", f"An error occurred: {e}")
 
+        # Additional database operations
         self.db_manager.delete_all_folders()
         self.db_manager.setup_database()
         self.combine_and_display_folders()
+        self.logger.info("Additional database operations completed")
 
-        self.logger.info("Additional database operations completed after updating 'To Sell After' dates")
+    def find_column_indexes(self, sheet, column_names):
+        header_row = sheet[1]
+        return {col_name: next((i + 1 for i, cell in enumerate(header_row) if cell.value == col_name), None) for col_name in column_names}
+
+    def update_row_links(self, row, col_indexes):
+        product_name_cell = row[col_indexes['Product Name'] - 1]
+        order_link_cell = row[col_indexes['Order Link'] - 1]
+        if product_name_cell.hyperlink and not order_link_cell.hyperlink:
+            order_link_cell.hyperlink = product_name_cell.hyperlink
+            order_link_cell.value = product_name_cell.hyperlink.target
+
+    def update_row_asin(self, row, col_indexes):
+        order_link_cell = row[col_indexes['Order Link'] - 1]
+        asin_cell = row[col_indexes['ASIN'] - 1]
+        if order_link_cell.value and '/' in order_link_cell.value and not asin_cell.value:
+            asin_cell.value = order_link_cell.value.split('/')[-1]
+
+    def update_row_to_sell_after(self, row, col_indexes):
+        order_date_cell = row[col_indexes['Order Date'] - 1]
+        to_sell_after_cell = row[col_indexes['To Sell After'] - 1]
+        if isinstance(order_date_cell.value, datetime) and not to_sell_after_cell.value:
+            to_sell_after_cell.value = order_date_cell.value + relativedelta(months=+6)
+
 
     def update_folder_names(self):
         """
@@ -2984,7 +3047,7 @@ class Application(tk.Frame):
             # Log the error encountered during the price update process
             self.logger.error(f"Error updating prices in Excel: {e}")
 
-    def correlate_data(self):
+    def check_for_missing_word_docs(self):
         """
         Correlates data between the Excel file and Word documents. 
         It checks if each product in the Excel file has an associated Word document in its respective folder.
@@ -3039,14 +3102,14 @@ class Application(tk.Frame):
 
         #print(f"Missing documents: {missing_docs}")
         if missing_docs:
-            self.prompt_correlation(missing_docs)            
+            self.prompt_missing_word_docs(missing_docs)            
             self.logger.info("Missing Word documents found, prompting user for action")
         else:
             messagebox.showinfo("Check complete", "No missing Word documents found.")
             self.logger.info("No missing Word documents found, check complete")
         # Filter out nan values from the product_ids list
 
-    def prompt_correlation(self, missing_docs):
+    def prompt_missing_word_docs(self, missing_docs):
         """
         Opens a window displaying a list of products for which Word documents are missing. 
         Provides options to create missing documents or exit the process.
@@ -3219,8 +3282,7 @@ class Application(tk.Frame):
                 doc.add_paragraph(f"Product Price: {product_price}")
                 doc.add_paragraph(f"IVU Tax: {ivu_tax}")
                 doc.add_paragraph(f"Product Price After IVU (Sale Price): ${product_price_after_ivu}")
-                doc.add_paragraph(f"Reseller Earnings: ${discount}") 
-                doc.add_paragraph(f"(Reseller Earnings = {discount_percentage}% of {product_price} (Product Price))") 
+                doc.add_paragraph(f"Reseller Earnings: ${discount}     [Reseller Earnings = {discount_percentage}% of {product_price} (Product Price)]") 
                 doc.add_paragraph(f"Amazon Link(to get the product description and pictures, if needed): {order_link}")
                 doc.add_paragraph(f"Comments: {comments}")
 
@@ -3230,7 +3292,13 @@ class Application(tk.Frame):
                 if show_message:
                     messagebox.showinfo("Document Created", f"Word document for '{product_id}' has been created successfully.")
                     self.logger.info(f"Word document for product ID {product_id} created successfully")
-                self.correlate_tree.delete(iid)
+
+                # Check if 'correlate_tree' exists before trying to delete an item
+                if hasattr(self, 'correlate_tree'):
+                    try:
+                        self.correlate_tree.delete(iid)
+                    except Exception as e:
+                        self.logger.error(f"Error while updating the Treeview: {e}")
                 if hasattr(self, 'correlate_tree') and not self.correlate_tree.get_children():
                     self.correlate_window.destroy()
                     self.Settings_Window_Start()
@@ -3398,5 +3466,10 @@ def on_close(app, root):
     root.destroy()  # Call the destroy method to close the application
 
 if __name__ == '__main__':
-    animation()
+    # Create a thread for the animation function
+    animation_thread = threading.Thread(target=animation)
+
+    # Start the animation thread
+    animation_thread.start()
+
     main()
