@@ -1159,6 +1159,9 @@ class Application(tk.Frame):
         self.update_prices_button = ttk.Button(self.settings_frame, text="Update empty product prices based on Fair Market Value.", command=self.update_prices)
         self.update_prices_button.grid(row=9, column=0, padx=5, pady=5, sticky='w')
 
+        self.update_prices_button = ttk.Button(self.settings_frame, text="First run.", command=self.first_run)
+        self.update_prices_button.grid(row=10, column=0, padx=5, pady=5, sticky='w')
+
         self.back_button = ttk.Button(self.settings_window, text="<- Back", command=self.back_to_main)
         self.back_button.grid(row=0, column=0, sticky='w', padx=5, pady=5)
 
@@ -1169,6 +1172,13 @@ class Application(tk.Frame):
         self.settings_window.protocol("WM_DELETE_WINDOW", lambda: on_close(self, self.master))
         self.master.withdraw()
     
+    def first_run(self):
+        self.update_links_in_excel()
+        self.update_prices()
+        self.update_folders_paths()
+        self.products_to_sell_report()
+        self.correlate_data()
+
     def get_previous_excel_report_data(self):
         self.logger.info("Starting to get previous Excel report data")
 
@@ -2432,70 +2442,6 @@ class Application(tk.Frame):
             self.logger.error(f"Failed to load Excel settings: {e}")
             return None, None
 
-    def correlate_data(self):
-        """
-        Correlates data between the Excel file and Word documents. 
-        It checks if each product in the Excel file has an associated Word document in its respective folder.
-        Notifies if any Word documents are missing for the products listed in the Excel file.
-        """
-
-        # Log when correlation process is initiated
-        self.logger.info("Initiating data correlation between Excel file and Word documents")
-        
-        filepath, sheet_name = self.load_excel_settings()
-
-        # Check if the Excel settings are properly loaded
-        if not filepath or not sheet_name:
-            messagebox.showerror("Error", "Excel database settings not found.")
-            self.logger.warning("Excel database settings not found, correlation aborted")
-            return
-
-        # Load the data into the ExcelManager instance
-        self.excel_manager.filepath = filepath  # Set the filepath
-        self.excel_manager.sheet_name = sheet_name  # Set the sheet name
-        self.excel_manager.load_data()  # Load the data
-        
-        try:
-            # Load Excel data
-            df = pd.read_excel(filepath, sheet_name=sheet_name)
-            self.logger.debug("Excel data loaded successfully")
-            product_ids = df['Product ID'].tolist()
-            #print(f"Product IDs from Excel: {product_ids}")
-        except Exception as e:
-            messagebox.showerror("Error", f"Unable to load Excel file: {str(e)}")
-            self.logger.error(f"Unable to load Excel file: {e}")
-
-            return
-            # Filter out nan values from the product_ids list using pandas notnull function
-            
-        # Sort the DataFrame based on 'Product ID'
-        df_sorted = df.sort_values('Product ID').dropna(subset=['Product ID'])
-
-        # Filter out nan values from the product_ids list
-        product_ids = df_sorted['Product ID'].tolist()
-        #print(f"Sorted and Filtered Product IDs from Excel: {product_ids}")
-        
-        missing_docs = []
-        for product_id in product_ids:
-            folder_path = self.get_folder_path_from_db(str(product_id))
-            #print(f"Checking folder for Product ID {product_id}: {folder_path}")
-            if folder_path:
-                word_docs = [f for f in os.listdir(folder_path) if f.endswith('.docx')]
-                #print(f"Word documents in folder: {word_docs}")
-                if not word_docs:  # If there's no Word document
-                    product_name = df.loc[df['Product ID'] == product_id, 'Product Name'].iloc[0]
-                    missing_docs.append((os.path.basename(folder_path), product_id, product_name))
-
-
-        #print(f"Missing documents: {missing_docs}")
-        if missing_docs:
-            self.prompt_correlation(missing_docs)            
-            self.logger.info("Missing Word documents found, prompting user for action")
-        else:
-            messagebox.showinfo("Check complete", "No missing Word documents found.")
-            self.logger.info("No missing Word documents found, check complete")
-        # Filter out nan values from the product_ids list
-
     def update_links_in_excel(self):
         """
         Updates the 'Order Link' column in the Excel file based on hyperlinks in the 'Product Name' column. 
@@ -3038,6 +2984,68 @@ class Application(tk.Frame):
             # Log the error encountered during the price update process
             self.logger.error(f"Error updating prices in Excel: {e}")
 
+    def correlate_data(self):
+        """
+        Correlates data between the Excel file and Word documents. 
+        It checks if each product in the Excel file has an associated Word document in its respective folder.
+        Notifies if any Word documents are missing for the products listed in the Excel file.
+        """
+
+        # Log when correlation process is initiated
+        self.logger.info("Initiating data correlation between Excel file and Word documents")
+        
+        filepath, sheet_name = self.load_excel_settings()
+
+        # Check if the Excel settings are properly loaded
+        if not filepath or not sheet_name:
+            messagebox.showerror("Error", "Excel database settings not found.")
+            self.logger.warning("Excel database settings not found, correlation aborted")
+            return
+
+        # Load the data into the ExcelManager instance
+        self.excel_manager.filepath = filepath  # Set the filepath
+        self.excel_manager.sheet_name = sheet_name  # Set the sheet name
+        self.excel_manager.load_data()  # Load the data
+        
+        try:
+            # Load Excel data
+            df = pd.read_excel(filepath, sheet_name=sheet_name)
+            self.logger.debug("Excel data loaded successfully")
+            product_ids = df['Product ID'].tolist()
+            #print(f"Product IDs from Excel: {product_ids}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Unable to load Excel file: {str(e)}")
+            self.logger.error(f"Unable to load Excel file: {e}")
+
+            return
+            # Filter out nan values from the product_ids list using pandas notnull function
+            
+        # Sort the DataFrame based on 'Product ID'
+        df_sorted = df.sort_values('Product ID').dropna(subset=['Product ID'])
+
+        # Filter out nan values from the product_ids list
+        product_ids = df_sorted['Product ID'].tolist()
+        #print(f"Sorted and Filtered Product IDs from Excel: {product_ids}")
+        
+        missing_docs = []
+        for product_id in product_ids:
+            folder_path = self.get_folder_path_from_db(str(product_id))
+            if folder_path:
+                # Check specifically for 'Product Information.docx' file
+                if not os.path.isfile(os.path.join(folder_path, 'Product Information.docx')):
+                    product_name = df.loc[df['Product ID'] == product_id, 'Product Name'].iloc[0]
+                    missing_docs.append((os.path.basename(folder_path), product_id, product_name))
+
+
+        #print(f"Missing documents: {missing_docs}")
+        if missing_docs:
+            self.prompt_correlation(missing_docs)            
+            self.logger.info("Missing Word documents found, prompting user for action")
+        else:
+            messagebox.showinfo("Check complete", "No missing Word documents found.")
+            self.logger.info("No missing Word documents found, check complete")
+        # Filter out nan values from the product_ids list
+
     def prompt_correlation(self, missing_docs):
         """
         Opens a window displaying a list of products for which Word documents are missing. 
@@ -3201,8 +3209,8 @@ class Application(tk.Frame):
             except Exception as e:
                 self.logger.debug(f"Error retrieving data: {e}")  # Debugging print statement
 
-            # Path for the new Word document
-            doc_path = os.path.join(folder_path, f"{product_id}.docx")
+            # Path for the new Word document named 'Product Information.docx'
+            doc_path = os.path.join(folder_path, 'Product Information.docx')
             try:
                 # Create a new Word document
                 doc = Document()
@@ -3211,8 +3219,8 @@ class Application(tk.Frame):
                 doc.add_paragraph(f"Product Price: {product_price}")
                 doc.add_paragraph(f"IVU Tax: {ivu_tax}")
                 doc.add_paragraph(f"Product Price After IVU (Sale Price): ${product_price_after_ivu}")
-                doc.add_paragraph(f"Reseller Earnings = {discount_percentage}% of {product_price} (Product Price)") 
                 doc.add_paragraph(f"Reseller Earnings: ${discount}") 
+                doc.add_paragraph(f"(Reseller Earnings = {discount_percentage}% of {product_price} (Product Price))") 
                 doc.add_paragraph(f"Amazon Link(to get the product description and pictures, if needed): {order_link}")
                 doc.add_paragraph(f"Comments: {comments}")
 
@@ -3222,7 +3230,7 @@ class Application(tk.Frame):
                 if show_message:
                     messagebox.showinfo("Document Created", f"Word document for '{product_id}' has been created successfully.")
                     self.logger.info(f"Word document for product ID {product_id} created successfully")
-                # Additional logic (if any)
+                self.correlate_tree.delete(iid)
                 if hasattr(self, 'correlate_tree') and not self.correlate_tree.get_children():
                     self.correlate_window.destroy()
                     self.Settings_Window_Start()
