@@ -37,6 +37,7 @@ from openpyxl_image_loader import SheetImageLoader
 from tkinter import Label, Toplevel
 import logging
 from logging.handlers import RotatingFileHandler
+import time
 
 # Prototyping (make it work, then make it pretty.)
 
@@ -1231,12 +1232,16 @@ class Application(tk.Frame):
         columns = next(data)[0:]
         df = pd.DataFrame(data, columns=columns)
 
-        # Filter out unwanted products and keep only necessary columns
+        # Get the names of the folders in the to_sell_folder and extract product IDs
+        folder_names = os.listdir(to_sell_folder)
+        folder_product_ids = set(folder_name.split(' ', 1)[0] for folder_name in folder_names)
 
         self.logger.info("Filtering and processing product data")
-        # Log the number of products before and after filtering
+
+        # Filter out unwanted products and keep only necessary columns
         initial_count = len(df)
         df = df[(df['Damaged'] != 'YES') & (df['Cancelled Order'] != 'YES') & (df['Personal'] != 'YES') & (df['Sold'] != 'YES') & (~pd.isna(df['Product ID']))]
+        df = df[df['Product ID'].isin(folder_product_ids)]
         df = df[['Product ID', 'To Sell After', 'Product Name', 'Product Price After IVU']]
         filtered_count = len(df)
         self.logger.info(f"Filtered from {initial_count} products to {filtered_count} products")
@@ -3295,6 +3300,47 @@ class Application(tk.Frame):
             # Log any errors encountered during the closure
             self.logger.error(f"Error occurred while closing database connection: {e}")
 
+def animation():
+    def clear_screen():
+        """Clear the terminal screen."""
+        os.system('cls' if os.name == 'nt' else 'clear')
+
+    def print_moving(states, num_iterations, delay=0.2):
+        """
+        Print moving animation in the terminal with conditional text.
+
+        Args:
+        states (list of str): List of strings representing moving's mouth states.
+        num_iterations (int): Number of iterations for the animation.
+        delay (float): Delay between each state in seconds.
+        """
+        for iteration in range(num_iterations):
+            for index, state in enumerate(states):
+                clear_screen()
+                conditional_text = "   \033[3mMe" if iteration == 1 else "   \033[3mCode" if iteration == 2 else "   \033[3mGive"
+                print(state + conditional_text)
+                time.sleep(delay)
+
+    def animation_main():
+        """
+        Main function to run the moving animation.
+        """
+        moving_states = [
+            "  /-----\ \n /  x    \\\n|  . .   |\n \\  --- /\n",  # Open mouth
+            "  /-----\ \n /  x    \\\n|  . .   |\n \\   -  /\n",  # Half open mouth
+            "  /-----\ \n /  x    \\\n|  . .   |\n \\      /\n"   # Closed mouth
+        ]
+
+        # Define the number of cycles for the animation
+        num_cycles = 3
+
+        # Run the animation
+        print_moving(moving_states, num_cycles)
+
+        # Clear screen at the end
+        clear_screen()
+    animation_main()
+
 def exit_application(app, root):
     """
     Handles the process of exiting the application. This includes performing any necessary 
@@ -3344,5 +3390,5 @@ def on_close(app, root):
     root.destroy()  # Call the destroy method to close the application
 
 if __name__ == '__main__':
-    
+    animation()
     main()
