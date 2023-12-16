@@ -1,3 +1,31 @@
+"""
+Inventory Management System
+
+This program provides a comprehensive solution for managing and tracking inventory. It is built with a graphical user interface (GUI) using tkinter, making it user-friendly and accessible. The key features include:
+
+- Database Management: Features a `DatabaseManager` class that handles all database operations using sqlite3. It includes functions to setup the database and manage folder paths, ensuring organized data storage and retrieval.
+- GUI Development: Utilizes tkinter for creating interactive windows, dialogs, and widgets, facilitating user interaction for various inventory tasks.
+- File Handling: Supports operations with different file formats (e.g., Excel, Word) using libraries like pandas, openpyxl, and python-docx, enabling users to import and export inventory data.
+- Date and Time Functions: Incorporates datetime and dateutil modules for managing dates, essential for tracking inventory timelines.
+- Regular Expressions: Uses the re module for text processing, ensuring data validation and formatting.
+- Image Processing: Implements PIL and openpyxl_image_loader for handling and displaying images, useful in visual inventory management.
+- Multithreading: Applies threading to enhance performance and responsiveness of the application.
+- Logging: Includes logging functionality to track and record application activities, aiding in debugging and maintenance.
+
+This system is designed to be robust and versatile, suitable for various inventory management needs. It is especially beneficial for small to medium-sized businesses or personal inventory tracking.
+
+Dependencies:
+- tkinter, pandas, sqlite3, openpyxl, python-docx, Pillow, tkcalendar, ttkthemes, and additional Python standard libraries.
+
+Usage:
+Execute the script to start the inventory management application. Use the GUI to perform operations like adding, updating, deleting, and viewing inventory items.
+
+Author: [WB]
+Version: [Your Version]
+
+Note: The docstring provides a general overview. Detailed documentation for each class and function within the code is recommended for better understanding and maintenance.
+"""
+
 import os
 import shutil
 import tkinter as tk
@@ -3315,7 +3343,7 @@ class Application(tk.Frame):
 
                 if hasattr(self, 'correlate_window'):
                     self.correlate_window.lift()
-                    
+
                 if hasattr(self, 'correlate_tree') and not self.correlate_tree.get_children():
                     self.correlate_window.destroy()
                     self.Settings_Window_Start()
