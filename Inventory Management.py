@@ -93,6 +93,16 @@ class DatabaseManager: #DB practice(use txt/json to store folder paths when prog
         ''', (folder, path))
         self.conn.commit()
 
+    def delete_folder_path(self, old_folder_name):
+        """
+        Deletes the folder path record with the given old_folder_name from the database.
+        """
+        try:
+            self.cur.execute('DELETE FROM folder_paths WHERE Folder = ?', (old_folder_name,))
+            self.conn.commit()
+        except Exception as e:
+            print(f"Error deleting folder {old_folder_name}: {e}")
+
     def get_folder_path(self, folder_name):
         self.cur.execute('SELECT Path FROM folder_paths WHERE Folder = ?', (folder_name,))
         result = self.cur.fetchone()
@@ -229,22 +239,35 @@ class Application(tk.Frame):
         #remove update_folders_path function?
 
     def update_excel_file_on_start_question(self):
+        """
+        Displays a dialog asking the user if they want to update Excel empty fields.
+        Calls first_run if the user responds affirmatively.
+        """
         root = tk.Tk()
-        root.withdraw()  # Hide the main window
+        root.withdraw()
+        self.logger.info("Asking user to update Excel data.")
         user_response = messagebox.askyesno("Update Excel Data", "Do you want to update the Excel empty fields?")
-        root.destroy()  # Destroy the root window
+        root.destroy()
 
         if user_response:
+            self.logger.info("User chose to update Excel data.")
             self.first_run()
         else:
+            self.logger.info("User chose not to update Excel data.")
             pass
 
     def first_run(self):
+        """
+        Executes a series of operations including updating Excel data, updating prices,
+        updating folder paths, generating a report of products to sell, and checking for missing Word documents.
+        """
+        self.logger.info("Starting first run operations.")
         self.update_excel_data()
         self.update_prices()
-        self.update_folders_paths()
+        self.update_all_folder_paths_and_names
         self.products_to_sell_report()
         self.check_for_missing_word_docs()
+        self.logger.info("Completed first run operations.")
 
     def configure_logger(self):
         # Set up a logger
@@ -252,7 +275,7 @@ class Application(tk.Frame):
         self.logger.setLevel(logging.INFO)  # Set the logging level
 
         # Create a rotating file handler
-        handler = RotatingFileHandler('inventory_management.log', maxBytes=1000000, backupCount=5)
+        handler = RotatingFileHandler('inventory_management.log', maxBytes=10000000, backupCount=5, encoding='utf-8')
         handler.setLevel(logging.INFO)
 
         # Create a logging format
@@ -275,7 +298,7 @@ class Application(tk.Frame):
             self.cache_images(filepath, sheet_name)
             self.logger.info("Images have been successfully cached")
         else:
-            self.logger.warning("Failed to load Excel settings or they are incomplete. Skipping image caching.")
+            self.logger.error("Failed to load Excel settings or they are incomplete. Skipping image caching.")
 
     def close_application(self):
         self.logger.info("Closing application.")
@@ -293,7 +316,7 @@ class Application(tk.Frame):
 
                 self.logger.info(f"Loaded paths: Inventory - {self.inventory_folder}, Sold - {self.sold_folder}, To Sell - {self.to_sell_folder}")
         except FileNotFoundError:
-            self.logger.warning("folders_paths.txt not found. Paths not loaded.")
+            self.logger.error("folders_paths.txt not found. Paths not loaded.")
 
     # def save_settings(self):
     #     self.logger.info("Saving settings for inventory and sold folders")
@@ -653,27 +676,8 @@ class Application(tk.Frame):
             self.reviewed_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.reviewed_var))
             self.pictures_downloaded_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.pictures_downloaded_var))
 
-            # Add focus in and focus out bindings for price-related entry fields
-            self.fair_market_value_entry.bind("<FocusIn>", self.on_price_focus_in)
-            self.fair_market_value_entry.bind("<FocusOut>", self.on_price_focus_out)
-
-            self.regular_product_price_entry.bind("<FocusIn>", self.on_price_focus_in)
-            self.regular_product_price_entry.bind("<FocusOut>", self.on_price_focus_out)
-
-            self.ivu_tax_entry.bind("<FocusIn>", self.on_price_focus_in)
-            self.ivu_tax_entry.bind("<FocusOut>", self.on_price_focus_out)
-
             self.product_price_plus_ivu_entry.bind("<FocusIn>", self.on_price_focus_in)
             self.product_price_plus_ivu_entry.bind("<FocusOut>", self.on_price_focus_out)
-
-            self.product_price_after_discount_entry.bind("<FocusIn>", self.on_price_focus_in)
-            self.product_price_after_discount_entry.bind("<FocusOut>", self.on_price_focus_out)
-
-            self.ivu_tax_after_discount_entry.bind("<FocusIn>", self.on_price_focus_in)
-            self.ivu_tax_after_discount_entry.bind("<FocusOut>", self.on_price_focus_out)
-
-            self.product_price_minus_discount_plus_ivu_entry.bind("<FocusIn>", self.on_price_focus_in)
-            self.product_price_minus_discount_plus_ivu_entry.bind("<FocusOut>", self.on_price_focus_out)
 
             self.sold_price_entry.bind("<FocusIn>", self.on_price_focus_in)
             self.sold_price_entry.bind("<FocusOut>", self.on_price_focus_out)
@@ -699,7 +703,6 @@ class Application(tk.Frame):
                         self.combine_and_display_folders()
             except FileNotFoundError:
                 pass
-            self.search_entry.focus_set()
             self.logger.info("Product form initialized")
 
         except Exception as e:
@@ -721,10 +724,10 @@ class Application(tk.Frame):
 
         # Check if all characters are digits or a decimal point
         if all(ch.isdigit() or ch == '.' for ch in input_value):
-            self.logger.debug("Input is valid")
+            self.logger.info("Input is valid")
             return True
         else:
-            self.logger.warning("Input contains invalid characters")
+            self.logger.error("Input contains invalid characters")
             return False
 
     def on_price_focus_in(self, event):
@@ -742,8 +745,6 @@ class Application(tk.Frame):
             self.logger.error(f"Error handling on price focus in: {e}")
 
     def on_price_focus_out(self, event):
-        self.logger.info("Handling focus out event for price entry")
-
         if self.edit_mode:
             if self.trigger_price_focus_out_flag:
                 entry_widget = event.widget
@@ -752,9 +753,26 @@ class Application(tk.Frame):
                 entry_widget.config(validate='none')
 
                 try:
+                    # Check if the widget is sold_price_entry
+                    if entry_widget == self.sold_price_entry:
+                        if current_price.strip():
+                            try:
+                                # Check if it's a valid number
+                                float(current_price)
+                                # If it's a number, add the $ sign
+                                entry_widget.delete(0, tk.END)
+                                entry_widget.insert(0, f"${current_price}")
+                            except ValueError:
+                                # If not a valid number, do not modify the value
+                                pass
+                        # For sold_price_entry, no further action is needed
+                        return
+                    # Convert current_price to a float for comparison
+                    current_price_float = float(current_price) if current_price.strip() else 0.0
+
                     # Check if the price string is empty and set it and related fields to default values
-                    if not current_price.strip():
-                        self.logger.debug("Price string is empty, resetting to default values")
+                    if not current_price.strip() or current_price_float == 0.0:
+                        self.logger.info("Price string is empty, resetting to default values")
                         entry_list = [self.regular_product_price_entry, self.ivu_tax_entry, 
                                     self.discount_entry, self.product_price_after_discount_entry, 
                                     self.ivu_tax_after_discount_entry, 
@@ -763,15 +781,57 @@ class Application(tk.Frame):
 
                         for widget in entry_list:
                             widget.config(validate='none', state='normal')
-                            # [Rest of the widget resetting code...]
 
+                            # Set the current widget to $0
+                            self.product_price_plus_ivu_entry.delete(0, tk.END)
+                            self.product_price_plus_ivu_entry.insert(0, "$0")
+
+                            # Set related fields to their default values
+
+                            self.regular_product_price_entry.delete(0, tk.END)
+                            self.regular_product_price_entry.insert(0, "$0")
+
+                            self.ivu_tax_entry.delete(0, tk.END)
+                            self.ivu_tax_entry.insert(0, "$0")
+
+                            # Temporarily disable validation and change state to normal
+                            self.discount_entry.config(validate='none', state='normal')
+
+                            # Set the widget to '$0'
+                            self.discount_entry.delete(0, tk.END)
+                            self.discount_entry.insert(0, "$0")
+
+                            # Re-enable validation and change state back to disabled
+                            self.discount_entry.config(validate='key', state='disabled')
+
+
+                            self.product_price_after_discount_entry.delete(0, tk.END)
+                            self.product_price_after_discount_entry.insert(0, "$0")
+
+                            self.ivu_tax_after_discount_entry.delete(0, tk.END)
+                            self.ivu_tax_after_discount_entry.insert(0, "$0")
+
+                            self.product_price_minus_discount_plus_ivu_entry.delete(0, tk.END)
+                            self.product_price_minus_discount_plus_ivu_entry.insert(0, "$0")
+
+                            self.percent_discount_entry.delete(0, tk.END)
+                            self.percent_discount_entry.insert(0, "0%")
+
+                            # Re-enable validation and update widget state, disable all except specific widgets
+                            for widget in entry_list:
+                                if widget not in [self.discount_entry, self.percent_discount_entry, self.product_price_plus_ivu_entry]:
+                                    widget.config(validate='key', state='disabled')
+                                else:
+                                    widget.config(validate='key', state='normal')  # Keep these widgets editable
+                        # Update GUI
+                        self.update_idletasks()
                         self.logger.info("Reset all price related fields to default values")
+                        return 
 
-                    # Handling non-empty current_price
                     if not current_price.startswith('$'):
                         entry_widget.delete(0, tk.END)
                         entry_widget.insert(0, f"${current_price}")
-                        self.logger.debug("Added dollar sign to the price entry")
+                        self.logger.info("Added dollar sign to the price entry")
 
                     entry_widget.config(validate='key')
 
@@ -807,7 +867,7 @@ class Application(tk.Frame):
                 # Flag set for triggering save operation
                 # self.trigger_save_flag = True 
                 self.product_id_entry.focus_set()
-                self.logger.debug("Focus set to product ID entry, preparing for save operation")
+                self.logger.info("Focus set to product ID entry, preparing for save operation")
             else:
                 self.save()
                 self.logger.info("Save function called directly due to key press on a different widget")
@@ -824,11 +884,11 @@ class Application(tk.Frame):
                 self.search_entry.focus_set()
                 self.trigger_price_focus_out_flag = True
                 self.refresh_and_select_product(productid)
-                self.logger.debug(f"Edit mode toggled for product ID: {productid}")
+                self.logger.info(f"Edit mode toggled for product ID: {productid}")
                 self.toggle_edit_mode()
             else:
                 self.toggle_edit_mode()
-                self.logger.debug("Edit mode toggled for a different widget")
+                self.logger.info("Edit mode toggled for a different widget")
         except Exception as e:
             self.logger.error(f"Error in edit on key handler: {e}")
 
@@ -844,15 +904,15 @@ class Application(tk.Frame):
             if price_str.startswith('$'):
                 price_str = price_str.lstrip('$')
                 self.discount_var.set(price_str)
-                self.logger.debug("Removed dollar sign from discount price entry")
+                self.logger.info("Removed dollar sign from discount price entry")
 
             # Store the rounded numerical value
             try:
                 self.initial_discount_price = round(float(price_str), 2)
-                self.logger.debug(f"Stored initial discount price: {self.initial_discount_price}")
+                self.logger.info(f"Stored initial discount price: {self.initial_discount_price}")
             except ValueError:
                 self.initial_discount_price = None
-                self.logger.warning("Invalid discount price format, unable to store initial value")
+                self.logger.error("Invalid discount price format, unable to store initial value")
         except Exception as e:
             self.logger.error(f"Error handling discount price focus in: {e}")
 
@@ -867,17 +927,17 @@ class Application(tk.Frame):
             if not price_str or not price_str.replace('$', '').strip().replace('.', '', 1).isdigit():
                 self.discount_var.set("$0")
                 final_discount_price = 0.0
-                self.logger.debug("Invalid or empty discount price, set to $0")
+                self.logger.info("Invalid or empty discount price, set to $0")
             else:
                 if not price_str.startswith('$'):
                     self.discount_var.set(f"${price_str}")
-                    self.logger.debug(f"Added dollar sign to discount price: {price_str}")
+                    self.logger.info(f"Added dollar sign to discount price: {price_str}")
 
                 try:
                     final_discount_price = round(float(price_str.lstrip('$')), 2)
                 except ValueError:
                     final_discount_price = None
-                    self.logger.warning("Invalid discount price format, unable to process")
+                    self.logger.error("Invalid discount price format, unable to process")
 
             # Trigger discount calculation only if the price has changed
             if self.initial_discount_price != final_discount_price:
@@ -886,7 +946,7 @@ class Application(tk.Frame):
                 self.logger.info("Discount price changed, recalculating discount")
             else:
                 # Optionally, handle the case where the price hasn't changed
-                self.logger.debug("Discount price unchanged, no recalculation needed")
+                self.logger.info("Discount price unchanged, no recalculation needed")
         except Exception as e:
             self.logger.error(f"Error handling discount price focus out: {e}")
 
@@ -903,15 +963,15 @@ class Application(tk.Frame):
             if percentage_str.endswith('%'):
                 percentage_str = percentage_str.rstrip('%')
                 self.percent_discount_var.set(percentage_str)
-                self.logger.debug("Removed percentage sign from discount percentage entry")
+                self.logger.info("Removed percentage sign from discount percentage entry")
 
             # Now try converting the stripped string to a float
             try:
                 self.initial_percent_discount = round(float(percentage_str), 2)
-                self.logger.debug(f"Stored initial discount percentage: {self.initial_percent_discount}")
+                self.logger.info(f"Stored initial discount percentage: {self.initial_percent_discount}")
             except ValueError:
                 self.initial_percent_discount = None
-                self.logger.warning("Invalid discount percentage format, unable to store initial value")
+                self.logger.error("Invalid discount percentage format, unable to store initial value")
         except Exception as e:
             self.logger.error(f"Error handling discount percentage focus in: {e}")
 
@@ -925,17 +985,17 @@ class Application(tk.Frame):
             if not percentage_str or not percentage_str.replace('%', '').strip().isdigit():
                 self.percent_discount_var.set("0%")
                 final_percent_discount = 0.0
-                self.logger.debug("Invalid or empty discount percentage, set to 0%")
+                self.logger.info("Invalid or empty discount percentage, set to 0%")
             else:
                 if not percentage_str.endswith('%'):
                     self.percent_discount_var.set(f"{percentage_str}%")
-                    self.logger.debug(f"Added percentage sign to discount percentage: {percentage_str}")
+                    self.logger.info(f"Added percentage sign to discount percentage: {percentage_str}")
 
                 try:
                     final_percent_discount = round(float(percentage_str.strip('%')), 2)
                 except ValueError:
                     final_percent_discount = None
-                    self.logger.warning("Invalid discount percentage format, unable to process")
+                    self.logger.error("Invalid discount percentage format, unable to process")
 
             # Trigger discount calculation only if the percentage has changed
             if self.initial_percent_discount != final_percent_discount:
@@ -944,7 +1004,7 @@ class Application(tk.Frame):
                 self.logger.info("Discount percentage changed, recalculating discount")
             else:
                 # Optionally, handle the case where the percentage hasn't changed
-                self.logger.debug("Discount percentage unchanged, no recalculation needed")
+                self.logger.info("Discount percentage unchanged, no recalculation needed")
         except Exception as e:
             self.logger.error(f"Error handling discount percentage focus out: {e}")
 
@@ -964,7 +1024,7 @@ class Application(tk.Frame):
                 percentage = Decimal(percentage_str) if percentage_str else Decimal('0')
                 discount_price = (price * percentage / Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
                 self.discount_var.set(f"${discount_price:.2f}")
-                self.logger.debug(f"Discount calculated based on percentage: ${discount_price:.2f}")
+                self.logger.info(f"Discount calculated based on percentage: ${discount_price:.2f}")
 
             elif based_on == 'price':
                 discount_str = self.discount_var.get().strip('$')
@@ -974,7 +1034,7 @@ class Application(tk.Frame):
                 # Adjust the format to allow for decimal percentages
                 formatted_percentage = "{:.2f}%".format(percentage)
                 self.percent_discount_var.set(formatted_percentage)
-                self.logger.debug(f"Discount calculated based on price: {formatted_percentage}")
+                self.logger.info(f"Discount calculated based on price: {formatted_percentage}")
             self.calculate_discount_fields()
         except (ValueError, InvalidOperation) as e:
             self.logger.error(f"Error calculating discount: {e}")
@@ -992,7 +1052,7 @@ class Application(tk.Frame):
             try:
                 return Decimal(value)
             except (ValueError, InvalidOperation):
-                self.logger.warning(f"Invalid format for value '{value}'. Setting to Decimal('0')")
+                self.logger.error(f"Invalid format for value '{value}'. Setting to Decimal('0')")
                 return Decimal('0')
 
         # Get values and clean them
@@ -1052,7 +1112,7 @@ class Application(tk.Frame):
             price_plus_ivu = Decimal(price_plus_ivu_str)
         except ValueError:
             price_plus_ivu = Decimal('0')
-            self.logger.warning("Invalid format for product price plus IVU, using Decimal('0')")
+            self.logger.error("Invalid format for product price plus IVU, using Decimal('0')")
 
         # Define the tax rate
         tax_rate = Decimal('0.115')
@@ -1194,7 +1254,7 @@ class Application(tk.Frame):
         self.autofill_links_asin_tosellafter_data_button = ttk.Button(self.settings_frame, text="Autofill Excel Data(link, asin, tosellafter)", command=self.update_excel_data)
         self.autofill_links_asin_tosellafter_data_button.grid(row=6, column=0, padx=5, pady=5, sticky='w')
 
-        self.update_foldersnames_folderpaths_button = ttk.Button(self.settings_frame, text="Update folder names and paths", command=self.update_folders_paths)
+        self.update_foldersnames_folderpaths_button = ttk.Button(self.settings_frame, text="Update folder names and paths", command=self.update_all_folder_paths_and_names)
         self.update_foldersnames_folderpaths_button.grid(row=7, column=0, padx=5, pady=5, sticky='w')
 
         self.products_to_sell_list_button = ttk.Button(self.settings_frame, text="Show list of products available to sell", command=self.products_to_sell_report)
@@ -1228,7 +1288,7 @@ class Application(tk.Frame):
         for file in os.listdir(to_sell_folder):
             if file.startswith("Products To Sell -") and file.endswith(".xlsx"):
                 file_date_str = file[len("Products To Sell - "):-len(".xlsx")]
-                self.logger.debug(f"Extracted date string: '{file_date_str}' from file name: '{file}'")
+                self.logger.info(f"Extracted date string: '{file_date_str}' from file name: '{file}'")
                 try:
                     file_date = datetime.strptime(file_date_str, "%Y-%m-%d").date()
                     if file_date < today and (latest_file_date is None or file_date > latest_file_date):
@@ -1300,9 +1360,9 @@ class Application(tk.Frame):
         df = df[df['To Sell After'] <= today]
         self.logger.info("Converted 'To Sell After' dates and performed additional filtering")
 
-        # Sort the DataFrame
-        sorted_df = df.sort_values(by='To Sell After', ascending=False)
-        self.logger.info("Sorted the DataFrame based on 'To Sell After' dates")
+        # Sort the DataFrame by 'Product ID'
+        sorted_df = df.sort_values(by='Product ID', ascending=True)
+        self.logger.info("Sorted the DataFrame based on 'Product ID'")
 
         # Call get_previous_excel_report_data and assign the return value to listx
         previous_product_ids, latest_file_date = self.get_previous_excel_report_data()
@@ -1415,7 +1475,6 @@ class Application(tk.Frame):
         
         self.load_settings()
         self.combine_and_display_folders()
-        self.search_entry.focus_set()
 
         self.logger.info("Returned to the main window and updated settings and folders list")
 
@@ -1631,7 +1690,6 @@ class Application(tk.Frame):
                 row, col = image.anchor._from.row, image.anchor._from.col
                 key = (row, col)
                 self.image_cache[key] = image._data()
-                self.logger.debug(f"Cached image at row {row}, column {col}")
 
             wb.close()
             self.logger.info("Finished caching images")
@@ -1832,7 +1890,7 @@ class Application(tk.Frame):
                     if product_image_col_num is not None:
                         self.load_and_display_image(current_row_num + 1, product_image_col_num, selected_product_id)
                     
-                    self.logger.debug(f"Product details displayed for: {selected_product_id}")
+                    self.logger.info(f"Product details displayed for: {selected_product_id}")
                 else:
                     self.edit_button.config(state='disabled')
                     self.cancelled_order_var.set(False)
@@ -1901,7 +1959,7 @@ class Application(tk.Frame):
         self.logger.info(f"Starting thread to load image for product ID: {product_id}")
 
         def task():
-            self.logger.debug(f"Starting image loading task: Row {current_row_num}, Column {product_image_col_num}")
+            self.logger.info(f"Starting image loading task: Row {current_row_num}, Column {product_image_col_num}")
 
             if not self.running or self.current_product_id != product_id:
                 self.logger.info("Task exited: Application no longer running or product changed")
@@ -1918,7 +1976,7 @@ class Application(tk.Frame):
                             image_data = image._data()
                             self.image_cache[(current_row_num, product_image_col_num)] = image_data
                             # Log when image is found and cached
-                            self.logger.debug("Image found and cached")
+                            self.logger.info("Image found and cached")
                             break
                     wb.close()
 
@@ -1972,22 +2030,22 @@ class Application(tk.Frame):
         """
 
         # Before checking the value
-        self.logger.debug(f"Converting Excel value to boolean: {value}")
+        self.logger.info(f"Converting Excel value to boolean: {value}")
 
         if pd.isnull(value):
             return False
 
         if isinstance(value, str):
             result = value.strip().lower() in ['yes', 'true', '1']
-            self.logger.debug(f"Converted string '{value}' to boolean: {result}")
+            self.logger.info(f"Converted string '{value}' to boolean: {result}")
             return result
         elif isinstance(value, (int, float)):
             result = bool(value)
-            self.logger.debug(f"Converted numeric value '{value}' to boolean: {result}")
+            self.logger.info(f"Converted numeric value '{value}' to boolean: {result}")
             return result
 
         # Log the default case when the value doesn't match expected types or formats
-        self.logger.debug("Value format unrecognized, defaulting to False")
+        self.logger.info("Value format unrecognized, defaulting to False")
         return False
 
     def update_to_sell_after_color(self):
@@ -2008,20 +2066,20 @@ class Application(tk.Frame):
             try:
                 # Parse the date string to a date object
                 to_sell_after_date = datetime.strptime(to_sell_after_str, "%m/%d/%Y").date()
-                self.logger.debug(f"'To Sell After' date parsed: {to_sell_after_date}")
+                self.logger.info(f"'To Sell After' date parsed: {to_sell_after_date}")
 
                 # If the to_sell_after date is today or has passed, change the label's background color to green
                 if to_sell_after_date <= today:
                     self.to_sell_after_label.config(background='light green')
-                    self.logger.debug("'To Sell After' label background set to green")
+                    self.logger.info("'To Sell After' label background set to green")
                 else:
                     self.to_sell_after_label.config(background='white')
-                    self.logger.debug("'To Sell After' label background reset to white")
+                    self.logger.info("'To Sell After' label background reset to white")
             except ValueError:
                 # If there's a ValueError, it means the string was not in the expected format
                 # Handle incorrect date format or clear the background
                 self.to_sell_after_label.config(background='white')
-                self.logger.warning("Incorrect date format in 'To Sell After', resetting background color")
+                self.logger.error("Incorrect date format in 'To Sell After', resetting background color")
     
     def checkbox_click_control(self, var):
         """
@@ -2030,7 +2088,7 @@ class Application(tk.Frame):
         """
 
         # Log before checking the edit mode
-        self.logger.debug(f"Checkbox click control invoked, edit mode: {self.edit_mode}")
+        self.logger.info(f"Checkbox click control invoked, edit mode: {self.edit_mode}")
 
         if not self.edit_mode:
             # Log preventing checkbox state change
@@ -2038,7 +2096,7 @@ class Application(tk.Frame):
             return "break"  # Stop the event from propagating further
 
         # Log allowing checkbox state change
-        self.logger.debug("In edit mode, allowing checkbox state change")
+        self.logger.info("In edit mode, allowing checkbox state change")
 
     def toggle_edit_mode(self):
         """
@@ -2055,7 +2113,7 @@ class Application(tk.Frame):
         readonly_state = 'readonly' if self.edit_mode else 'disabled'
 
         # Log the state of the edit mode after toggling
-        self.logger.debug(f"Edit mode set to: {self.edit_mode}")   
+        self.logger.info(f"Edit mode set to: {self.edit_mode}")   
         
         self.order_date_entry.config(state='disabled')
         self.sold_date_button.config(state=state)
@@ -2076,13 +2134,13 @@ class Application(tk.Frame):
         self.comments_text.config(state=state)
 
         if self.edit_mode:
-            self.logger.debug("Edit mode enabled, setting widget states and bindings")
+            self.logger.info("Edit mode enabled, setting widget states and bindings")
 
             self.product_name_text.bind("<Button-1>", lambda e: None)
             self.master.bind('<Return>', self.save_on_key_handler)
             self.master.bind('<Escape>', self.edit_on_key_handler)
         else:
-            self.logger.debug("Edit mode disabled, resetting widget states and unbinding keys")
+            self.logger.info("Edit mode disabled, resetting widget states and unbinding keys")
             self.product_name_text.bind("<Button-1>", lambda e: "break")
 
             self.master.unbind('<Return>')
@@ -2107,7 +2165,7 @@ class Application(tk.Frame):
             # Check if all required fields are filled
             if not (sold_price and sold_date and payment_type):
                 messagebox.showwarning("Incomplete Data", "Please fill in Sold Price, Sold Date, and Payment Type.")
-                self.logger.warning("Incomplete data for saving")
+                self.logger.error("Incomplete data for saving")
                 return  # Return without saving
 
         # Update the 'Sold' checkbox based on the 'Sold Date' entry
@@ -2170,7 +2228,7 @@ class Application(tk.Frame):
 
         # Use the ExcelManager method to save the data.
         try:
-            self.logger.debug("Attempting to save data to Excel")
+            self.logger.info("Attempting to save data to Excel")
             self.excel_manager.save_product_info(product_id, product_data)
             messagebox.showinfo("Success", "Product information updated successfully.")
             self.logger.info("Product information updated successfully in Excel")
@@ -2185,6 +2243,8 @@ class Application(tk.Frame):
             messagebox.showerror("Error", f"No current folder path found for Product ID {product_id}")
             return
         
+        folder_name = os.path.basename(current_folder_path)
+
         # Initialize variables for folder paths
         damaged_folder_path = os.path.join(os.path.dirname(self.inventory_folder), "Damaged")
         personal_folder_path = os.path.join(os.path.dirname(self.inventory_folder), "Personal")
@@ -2194,13 +2254,16 @@ class Application(tk.Frame):
             if not os.path.exists(folder):
                 os.makedirs(folder)
 
+        product_name = self.product_name_text.get ("1.0", tk.END).strip()
+
+
         # Decide target folder based on checkbox statuses and other conditions
         if self.sold_var.get():
             target_folder_path = self.sold_folder
-        elif self.personal_var.get():
-            target_folder_path = personal_folder_path
         elif self.damaged_var.get():
             target_folder_path = damaged_folder_path
+        elif self.personal_var.get():
+            target_folder_path = personal_folder_path
         else:
             to_sell_after_str = self.to_sell_after_var.get()
             try:
@@ -2217,34 +2280,39 @@ class Application(tk.Frame):
         # Use #print statements to debug the current and target folder paths
         #print(f"Current folder path: {current_folder_path}")
         #print(f"Target folder path: {target_folder_path}")
+
         # Check if the target folder is determined and it's not the same as the current folder
         if target_folder_path and os.path.isdir(current_folder_path) and current_folder_path != target_folder_path:
             try:
                 # Perform the move operation
-                new_folder_path = shutil.move(current_folder_path, target_folder_path)
+                new_folder_path = self.move_product_folder(current_folder_path, folder_name, target_folder_path, product_name)
+                # folder_name is not defined. not sure how to get the folder_name
                 
+                new_folder_name = os.path.basename(new_folder_path).strip()  # Extract folder name from the path
+
+                self.db_manager.delete_folder_path(folder_name)
+
                 # Save the new folder path in the database
-                self.db_manager.save_folder_path(product_id, new_folder_path)
-                
-                # Refresh the product folder path attribute to the new path
-                self.product_folder_path = new_folder_path
-                
-                # Ensure that changes are committed to the database
-                self.db_manager.commit_changes()
+                self.db_manager.save_folder_path(new_folder_name, new_folder_path)
                 
                 messagebox.showinfo("Folder Moved", f"Folder for '{product_id}' moved successfully to the new location.")
                 #print(f"Folder for '{product_id}' moved from {current_folder_path} to {new_folder_path}")
-                self.refresh_and_select_product(product_id)
 
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to move the folder: {e}")
-                self.refresh_and_select_product(product_id)
         
+
+
+        #self.update_folder_path_and_name(product_id, product_name, current_folder_path, target_folder_path)
+
+        self.refresh_and_select_product(product_id)
         self.logger.info("Product information saved and folder moved successfully")
         doc_data = (product_id, product_id, self.product_name_var.get())  # Construct the doc_data tuple
         self.create_word_doc(doc_data, iid="dummy", show_message=True)  # Call create_word_doc with dummy iid
         self.toggle_edit_mode()
-        self.search_entry.focus_set()
+
+
+
         # Unbind the Enter and Escape keys
         #self.master.unbind('<Return>')
         #self.master.unbind('<Escape>')
@@ -2269,7 +2337,7 @@ class Application(tk.Frame):
         product_id_upper = product_id.upper()
 
         # Log after refreshing the list
-        self.logger.debug("Product list refreshed")
+        self.logger.info("Product list refreshed")
 
         # Find the index of the product that was just edited
         product_index = None
@@ -2286,9 +2354,8 @@ class Application(tk.Frame):
             self.folder_list.event_generate("<<ListboxSelect>>")  # Trigger the event to display product details
             self.logger.info(f"Selected and displayed details for product ID: {product_id}")
             
-        self.logger.debug("Completed product selection process")
+        self.logger.info("Completed product selection process")
         self.toggle_edit_mode()
-        self.search_entry.focus_set()
 
     def get_folder_names_from_db(self):
         """
@@ -2314,7 +2381,7 @@ class Application(tk.Frame):
         """
 
         # Log before executing the database query
-        self.logger.debug(f"Fetching folder path for product ID: {product_id} from the database")
+        self.logger.info(f"Fetching folder path for product ID: {product_id} from the database")
 
         self.db_manager.cur.execute("SELECT Path FROM folder_paths WHERE Folder LIKE ?", (product_id + ' %',))
         result = self.db_manager.cur.fetchone()
@@ -2351,7 +2418,7 @@ class Application(tk.Frame):
         xls = pd.ExcelFile(filepath) # delete ?
         sheet_names = xls.sheet_names # delete ?
         self.ask_sheet_name(sheet_names, filepath)  # Pass filepath here
-        self.logger.debug("Asked for sheet name selection")
+        self.logger.info("Asked for sheet name selection")
 
     def update_excel_label(self):
         """
@@ -2398,7 +2465,7 @@ class Application(tk.Frame):
         confirm_button.pack(pady=(0, 10))
 
         # Log after setting up the sheet selection window
-        self.logger.debug("Sheet selection window set up")
+        self.logger.info("Sheet selection window set up")
         sheet_window.wait_window()
         # Log after the sheet selection window is closed
         self.logger.info("Sheet selection window closed")
@@ -2416,7 +2483,7 @@ class Application(tk.Frame):
         if selection_index:
             selected_sheet = listbox.get(selection_index[0])
             # Log the selected sheet
-            self.logger.debug(f"Selected sheet: {selected_sheet}")
+            self.logger.info(f"Selected sheet: {selected_sheet}")
 
             self.select_excel_sheet(selected_sheet, filepath)
             listbox.master.destroy()  # Closes the sheet_window
@@ -2472,7 +2539,7 @@ class Application(tk.Frame):
                 self.logger.info("Excel settings loaded successfully")
                 return filepath, sheet_name
         except FileNotFoundError:
-            self.logger.warning("Excel settings file not found")
+            self.logger.error("Excel settings file not found")
             return None, None
         except Exception as e:
             messagebox.showerror("Error", f"Unable to load settings: {str(e)}")
@@ -2499,7 +2566,7 @@ class Application(tk.Frame):
     #         sheet = workbook[sheet_name]
 
     #         # Log the successful loading of the workbook
-    #         self.logger.debug("Excel workbook loaded for link updating")
+    #         self.logger.info("Excel workbook loaded for link updating")
 
     #         # Find the index of the columns
     #         header_row = sheet[1]
@@ -2561,7 +2628,7 @@ class Application(tk.Frame):
     #         sheet = workbook[sheet_name]
 
     #         # Log the successful loading of the workbook
-    #         self.logger.debug("Excel workbook loaded for ASIN updating")
+    #         self.logger.info("Excel workbook loaded for ASIN updating")
 
     #         # Find the index of the columns
     #         header_row = sheet[1]
@@ -2621,7 +2688,7 @@ class Application(tk.Frame):
     #         workbook = openpyxl.load_workbook(excel_path)
     #         sheet = workbook[sheet_name]
 
-    #         self.logger.debug("Excel workbook loaded for 'To Sell After' updating")
+    #         self.logger.info("Excel workbook loaded for 'To Sell After' updating")
 
     #         # Find the index of the columns
     #         header_row = sheet[1]
@@ -2677,7 +2744,7 @@ class Application(tk.Frame):
             workbook = openpyxl.load_workbook(excel_path)
             sheet = workbook[sheet_name]
 
-            self.logger.debug("Excel workbook loaded")
+            self.logger.info("Excel workbook loaded")
 
             # Find the index of the columns
             col_indexes = self.find_column_indexes(sheet, ['Product Name', 'Order Link', 'ASIN', 'Order Date', 'To Sell After'])
@@ -2701,9 +2768,6 @@ class Application(tk.Frame):
             self.logger.error(f"An error occurred: {e}")
             messagebox.showerror("Error", f"An error occurred: {e}")
 
-        # Additional database operations
-        self.db_manager.delete_all_folders()
-        self.db_manager.setup_database()
         self.combine_and_display_folders()
         self.logger.info("Additional database operations completed")
 
@@ -2730,107 +2794,113 @@ class Application(tk.Frame):
         if isinstance(order_date_cell.value, datetime) and not to_sell_after_cell.value:
             to_sell_after_cell.value = order_date_cell.value + relativedelta(months=+6)
 
-
-    def update_folder_names(self):
-        """
-        Renames the folders in the inventory, sold, to sell, damaged, and personal directories based 
-        on the corresponding product information from the Excel file. This includes adding the product 
-        name to the folder name for easy identification.
-        """
-
-        # Log the start of the folder renaming process
-        self.logger.info("Starting the folder renaming process")
-
-        # Load folder paths from folders_paths.txt
-        with open("folders_paths.txt", "r") as file:
-            lines = file.read().splitlines()
-            self.inventory_folder = lines[0]
-            self.sold_folder = lines[1]
-            self.to_sell_folder = lines[2] if len(lines) > 2 else None
-        
-        # Ensure the paths for Damaged and Personal folders are set
-        parent_dir = os.path.dirname(self.inventory_folder)
-        self.damaged_folder = os.path.join(parent_dir, "Damaged")
-        self.personal_folder = os.path.join(parent_dir, "Personal")
-        
-        # Load Excel path and sheet name from excel_and_sheet_path.txt
-        with open('excel_and_sheet_path.txt', 'r') as f:
-            excel_path, sheet_name = f.read().strip().split('\n', 1)
-        
+    def update_all_folder_paths_and_names(self):
         # Load Excel data
-        df = pd.read_excel(excel_path, sheet_name)
-        self.logger.debug("Excel data loaded for folder renaming")
-        self.logger.info("Finding and renaming folders")
+        filepath, sheet_name = self.load_excel_settings()
+        df = pd.read_excel(filepath, sheet_name)  # Replace with the actual path to your Excel file
 
-        # Iterate over each folder in the inventory, sold, and to sell folders
-        for folder_path in [self.inventory_folder, self.sold_folder, self.to_sell_folder, self.damaged_folder, self.personal_folder]:
-            if folder_path and os.path.exists(folder_path):
-                # Instead of comparing folder names directly, create a set for more efficient checks
+        # Define all folder paths
+        folder_paths = {
+            "Inventory": self.inventory_folder,
+            "Sold": self.sold_folder,
+            "To Sell": self.to_sell_folder,
+            "Personal": os.path.join(os.path.dirname(self.inventory_folder), "Personal"),
+            "Damaged": os.path.join(os.path.dirname(self.inventory_folder), "Damaged")
+        }
 
-                for item in os.listdir(folder_path):
-                    item_path = os.path.join(folder_path, item)
-                    if os.path.isdir(item_path):
-                        # Extract the presumed product_id from the folder name
-                        presumed_product_id = item.split(' ')[0]
+        # Create Damaged and Personal folders if they do not exist
+        for folder in [folder_paths["Damaged"], folder_paths["Personal"]]:
+            if not os.path.exists(folder):
+                os.makedirs(folder)
 
-                        # Find the matching product_id in the DataFrame
-                        product_info = df[df['Product ID'].str.upper() == presumed_product_id.upper()]
-                        if not product_info.empty:
-                            # Extract the actual product_id and product_name
-                            product_id = product_info['Product ID'].iloc[0]
-                            product_name = product_info['Product Name'].iloc[0]
-                            
-                            # Generate the new folder name and sanitize it
-                            new_folder_name = self.replace_invalid_chars(f"{product_id} - {product_name}")
-                            new_full_path = self.shorten_path(product_id, product_name, folder_path)
-                            new_folder_name_from_path = os.path.basename(new_full_path)
+        # Iterate through each folder
+        for path in folder_paths.values():
+            for folder_name in os.listdir(path):
+                full_path = os.path.join(path, folder_name)
+                if os.path.isdir(full_path):
+                    product_id = folder_name.split(' ')[0].upper()
 
-                            # Convert both names to a comparable format
-                            comparable_item = self.replace_invalid_chars(item).lower().strip()
-                            comparable_new_name = new_folder_name_from_path.lower().strip()
+                    # Find matching row in Excel
+                    row = df[df['Product ID'].str.upper() == product_id]
+                    if not row.empty:
+                        # Extract product name
+                        product_name = row['Product Name'].iloc[0]
 
-                            # Check if the current folder name is already in the correct format
-                            if comparable_item == comparable_new_name:
-                                continue
+                        # Decide target folder based on Excel data
+                        target_folder_path = self.get_target_folder_path(row, folder_paths)
 
-                            # Check if the new full path length is within the limit
-                            if len(new_full_path) < 260:
-                                try:
-                                    os.rename(item_path, new_full_path)
-                                    self.logger.info((f"Renamed '{item}' to '{new_folder_name}'").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
-                                except OSError as e:
-                                    self.logger.error((f"Error renaming {item_path} to {new_full_path}: {e}").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
-                            else:
-                                self.logger.error((f"Skipped renaming {item_path} due to path length restrictions.").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
-                        else:
-                            self.logger.error((f"No matching product info found for folder: {item}").encode('utf-8', errors='ignore').decode('cp1252', errors='ignore'))
-        messagebox.showinfo("Done", "Moved and renamed folders")
-        self.logger.info("Folder renaming process completed")
+                        if target_folder_path and full_path != target_folder_path:
+                            try:
+                                # Move the folder
+                                new_folder_path = self.move_product_folder(full_path, folder_name, target_folder_path, product_name)
+                                # Optional: Log or show message about the successful move
+                                # Save the new folder path in the database
+                                new_folder_name = os.path.basename(new_folder_path).strip()  # Extract folder name from the path
 
-        self.db_manager.delete_all_folders()
-        self.db_manager.setup_database()
-        self.combine_and_display_folders()
+                                self.db_manager.delete_folder_path(folder_name)
 
-        self.logger.info("Additional database operations completed after folder renaming")
-        
-    def replace_invalid_chars(self, filename):
+                                self.db_manager.save_folder_path(new_folder_name, new_folder_path)
+
+                                #print(f"Folder for '{product_id}' moved from {current_folder_path} to {new_folder_path}")
+                            except Exception as e:
+                                # Optional: Log or show error message
+                                pass
+        messagebox.showinfo("Folder Moved", f"Folders moved successfully to the new location.")
+        self.refresh_and_select_product(product_id)
+
+    def get_target_folder_path(self, row, folder_paths):
+        if row['Sold'].iloc[0] == 'YES':
+            return folder_paths['Sold']
+        elif row['Damaged'].iloc[0] == 'YES':
+            return folder_paths['Damaged']
+        elif row['Personal'].iloc[0] == 'YES':
+            return folder_paths['Personal']
+        else:
+            to_sell_after = row['To Sell After'].iloc[0]
+            if pd.notnull(to_sell_after):
+                # Check if 'to_sell_after' is already a datetime object
+                if isinstance(to_sell_after, datetime):
+                    to_sell_after_date = to_sell_after.date()
+                else:
+                    try:
+                        to_sell_after_date = datetime.strptime(to_sell_after, "%m/%d/%Y").date()
+                    except ValueError:
+                        # Handle invalid date format
+                        pass
+
+                if to_sell_after_date <= datetime.today().date():
+                    return folder_paths['To Sell']
+
+            return folder_paths['Inventory']
+
+    def move_product_folder(self, current_path, folder_name, target_folder, product_name):
         """
-        Replaces invalid characters in a filename with a safe character ('x'). 
-        This is especially useful for ensuring compatibility with Windows file system limitations.
+        Moves and renames a product folder to the target folder based on the specified criteria.
+        The new folder name includes the product ID and a truncated version of the product name if necessary.
         """
+        # Log before attempting to move the folder
+        self.logger.info(f"Attempting to move folder '{folder_name}' to '{target_folder}'")
 
-        # Log before starting the replacement process
-        self.logger.debug(f"Replacing invalid characters in filename: {filename}")
+        if target_folder and os.path.exists(target_folder):
+            product_id = folder_name.split(' - ')[0].upper()
+            sanitized_product_name = self.replace_invalid_chars(product_name)
 
-        invalid_chars = '<>:"/\\|?*'
-        for ch in invalid_chars:
-            if ch in filename:
-                filename = filename.replace(ch, "x")
+            # Utilize shorten_path to get a valid path
+            new_full_path = self.shorten_path(product_id, sanitized_product_name, target_folder)
 
-        # Log after completing the replacement
-        self.logger.debug(f"Filename after replacing invalid characters: {filename}")
-
-        return filename
+            if new_full_path:
+                try:
+                    os.rename(current_path, new_full_path)  # Corrected this line
+                    # Log the successful move and rename of the folder
+                    new_folder_name = os.path.basename(new_full_path)
+                    self.logger.info(f"Moved and renamed folder '{folder_name}' to '{new_folder_name}' in '{target_folder}'")
+                    return new_full_path  # Return the new full path
+                except Exception as e:
+                    self.logger.error(f"Error moving folder '{folder_name}': {e}")
+            else:
+                self.logger.error(f"Unable to shorten the path sufficiently for '{folder_name}'")
+        else:
+            self.logger.error(f"Target folder not found: {target_folder}")
 
     def shorten_path(self, product_id, product_name, base_path):
         """
@@ -2838,114 +2908,53 @@ class Application(tk.Frame):
         """
 
         # Log before starting the path shortening process
-        self.logger.debug(f"Shortening path for product ID: {product_id}")
+        self.logger.info(f"Shortening path for product ID: {product_id}")
 
         MAX_PATH = 260
+        base_path_length = len(base_path)
+        product_id_length = len(product_id)
+        separator_length = 3  # Length of ' - '
+
+        # Initially set max_name_length to a reasonable value
         max_name_length = 60
+        product_name = str(product_name)
 
         while max_name_length > 0:
-            truncated_product_name = product_name[:max_name_length]
-            new_folder_name = f"{product_id} - {truncated_product_name}"
-            new_full_path = os.path.join(base_path, new_folder_name)
+            total_length = base_path_length + product_id_length + separator_length + max_name_length
 
-            if len(new_full_path) <= MAX_PATH:
-                # Log the successfully shortened path
-                self.logger.debug(f"Path shortened successfully: {new_full_path}")
+            if total_length <= MAX_PATH:
+                truncated_product_name = product_name[:max_name_length]
+                self.logger.info(f"Truncated product name: {truncated_product_name}")
+                new_folder_name = f"{product_id} - {truncated_product_name}"
+                self.logger.info(f"Folder Name: {new_folder_name}")
+                new_full_path = os.path.join(base_path, new_folder_name)
+
+                self.logger.info(f"Path shortened successfully: {new_full_path}")
                 return new_full_path
             else:
-                max_name_length -= 1
+                self.logger.info(f"Total path length with max_name_length {max_name_length}: {total_length}")
+                max_name_length -= 1  # Reduce the length and try again
 
         # Log if unable to shorten the path sufficiently
-        self.logger.warning("Unable to shorten the product name sufficiently for path limitations")
+        self.logger.error("Unable to shorten the product name sufficiently for path limitations")
         return None
 
-    def update_folders_paths(self):
+    def replace_invalid_chars(self, filename):
         """
-        Updates the folder paths based on the product data from the Excel file. 
-        It moves product folders to appropriate locations (sold, damaged, personal, etc.) based on their status.
-        """
-
-        # Log the start of updating folder paths
-        self.logger.info("Updating folder paths based on Excel data")
-
-        # Ensure the Excel file path and sheet name are set
-        filepath, sheet_name = self.load_excel_settings()
-        if not filepath or not sheet_name:
-            self.logger.warning("Excel file path or sheet name is not set, unable to update folder paths")
-            return
-
-        # Load the Excel data
-        self.excel_manager.filepath = filepath
-        self.excel_manager.sheet_name = sheet_name
-        self.excel_manager.load_data()
-
-        # Create and define paths for Damaged and Personal folders
-        parent_dir = os.path.dirname(self.inventory_folder)
-        damaged_folder = os.path.join(parent_dir, "Damaged")
-        personal_folder = os.path.join(parent_dir, "Personal")
-
-        # Ensure Damaged and Personal folders exist
-        for folder in [damaged_folder, personal_folder]:
-            if not os.path.exists(folder):
-                os.makedirs(folder)
-                self.logger.info(f"Created folder: {folder}")
-
-        # Iterate through Inventory folders
-        if self.inventory_folder and os.path.exists(self.inventory_folder):
-            for root, dirs, _ in os.walk(self.inventory_folder):
-                for dir_name in dirs:
-                    product_id = dir_name.split(' ')[0]  # Assuming Product ID is the first part of the name
-                    product_info = self.excel_manager.get_product_info(product_id)
-
-                    if product_info:
-                        sold_status = product_info.get('Sold')
-                        damaged_status = product_info.get('Damaged')
-                        personal_status = product_info.get('Personal')
-                        to_sell_after = product_info.get('To Sell After')
-
-                        if sold_status and isinstance(sold_status, str) and sold_status.upper() == 'YES':
-                            self.move_product_folder(root, dir_name, self.sold_folder)
-                        elif personal_status and isinstance(personal_status, str) and personal_status.upper() == 'YES':
-                            self.move_product_folder(root, dir_name, personal_folder)
-                        elif damaged_status and isinstance(damaged_status, str) and damaged_status.upper() == 'YES':
-                            self.move_product_folder(root, dir_name, damaged_folder)
-                        elif self.is_date_today_or_before(to_sell_after):
-                            self.move_product_folder(root, dir_name, self.to_sell_folder)
-                        else:
-                            print(f"Keeping {dir_name} in Inventory")
-        else:
-            self.logger.warning(f"Inventory folder not found: {self.inventory_folder}")
-        self.db_manager.delete_all_folders()
-        self.db_manager.setup_database()
-        self.update_folder_names()
-        self.logger.info("Completed updating folder paths")
-
-    def move_product_folder(self, current_path, folder_name, target_folder):
-        """
-        Moves and renames a product folder to the target folder based on the specified criteria.
-        The new folder name includes the product ID and a truncated version of the product name.
+        Replaces non-alphanumeric (except dash and space) characters in a filename with 'x'.
+        This ensures compatibility with file system limitations.
         """
 
-        # Log before attempting to move the folder
-        self.logger.info(f"Moving folder '{folder_name}' to '{target_folder}'")
+        # Log before starting the replacement process
+        self.logger.info(f"Replacing invalid characters in filename: {filename}")
 
-        if target_folder and os.path.exists(target_folder):
-            full_path = os.path.join(current_path, folder_name)
-            new_folder_name = folder_name.split('-', 1)[0].strip() + ' -'
-            new_full_path = os.path.join(target_folder, new_folder_name)
+        # Replace each character that is not a letter, number, space, or dash with 'x'
+        filename = re.sub(r'[^a-zA-Z0-9 \-]', '_', filename)
 
-            try:
-                if os.path.exists(new_full_path):
-                    self.logger.warning(f"Folder with name '{new_folder_name}' already exists in the target directory")
-                    return
+        # Log after completing the replacement
+        self.logger.info(f"Filename after replacing invalid characters: {filename}")
 
-                os.rename(full_path, new_full_path)
-                # Log the successful move and rename of the folder
-                self.logger.info(f"Moved and renamed folder '{folder_name}' to '{new_folder_name}' in '{target_folder}'")
-            except Exception as e:
-                self.logger.error(f"Error moving folder '{folder_name}': {e}")
-        else:
-            self.logger.warning(f"Target folder not found: {target_folder}")
+        return filename
 
     def is_date_today_or_before(self, date_input):
         """
@@ -2954,7 +2963,7 @@ class Application(tk.Frame):
         """
 
         # Log before processing the date input
-        self.logger.debug(f"Checking if the date '{date_input}' is today or before")
+        self.logger.info(f"Checking if the date '{date_input}' is today or before")
 
         if pd.isnull(date_input):
             return False
@@ -2965,12 +2974,12 @@ class Application(tk.Frame):
             try:
                 to_sell_date = datetime.strptime(date_input, "%m/%d/%Y").date()
             except ValueError:
-                self.logger.warning(f"Invalid date format: {date_input}")
+                self.logger.error(f"Invalid date format: {date_input}")
                 return False
 
         result = to_sell_date <= datetime.today().date()
         # Log the result of the date comparison
-        self.logger.debug(f"Date '{date_input}' is today or before: {result}")
+        self.logger.info(f"Date '{date_input}' is today or before: {result}")
         return result
 
     def rpc_formula(self, fair_market_value):
@@ -2981,7 +2990,7 @@ class Application(tk.Frame):
         """
 
         # Log the calculation process with the given fair market value
-        self.logger.debug(f"Calculating RPC formula for fair market value: {fair_market_value}")
+        self.logger.info(f"Calculating RPC formula for fair market value: {fair_market_value}")
 
         tax_rate = Decimal('0.115')
         original_value = (Decimal(fair_market_value) / (1 - tax_rate)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
@@ -3025,7 +3034,7 @@ class Application(tk.Frame):
             n_initial_empty_rows = 1  # Example value, adjust as needed
             df = df.iloc[n_initial_empty_rows - 1:]  # Adjust DataFrame to include initial empty rows
 
-            self.logger.debug("Prices updated in the DataFrame")
+            self.logger.info("Prices updated in the DataFrame")
 
             # Convert columns to 'object' type to avoid FutureWarning
             object_columns = ['Product Price', 'Product Price After IVU', 'IVU Tax', 'Discount']
@@ -3102,7 +3111,7 @@ class Application(tk.Frame):
         # Check if the Excel settings are properly loaded
         if not filepath or not sheet_name:
             messagebox.showerror("Error", "Excel database settings not found.")
-            self.logger.warning("Excel database settings not found, correlation aborted")
+            self.logger.error("Excel database settings not found, correlation aborted")
             return
 
         # Load the data into the ExcelManager instance
@@ -3113,7 +3122,7 @@ class Application(tk.Frame):
         try:
             # Load Excel data
             df = pd.read_excel(filepath, sheet_name=sheet_name)
-            self.logger.debug("Excel data loaded successfully")
+            self.logger.info("Excel data loaded successfully")
             product_ids = df['Product ID'].tolist()
             #print(f"Product IDs from Excel: {product_ids}")
         except Exception as e:
@@ -3181,7 +3190,7 @@ class Application(tk.Frame):
         for i, (folder_name, product_id, product_name) in enumerate(missing_docs):
             self.correlate_tree.insert('', 'end', iid=str(i), values=(folder_name, product_id, product_name))
 
-        self.logger.debug("Treeview setup completed with missing document entries")
+        self.logger.info("Treeview setup completed with missing document entries")
 
         # Bind double-click event to an item
         self.correlate_tree.bind('<Double-1>', self.on_item_double_click)
@@ -3209,7 +3218,7 @@ class Application(tk.Frame):
         doc_data = (item_values[0], item_values[1], item_values[2])
 
         # Log the data of the item being processed
-        self.logger.debug(f"Processing item for Word document creation: {doc_data}")
+        self.logger.info(f"Processing item for Word document creation: {doc_data}")
 
         self.create_word_doc(doc_data, item_id)
 
@@ -3226,7 +3235,7 @@ class Application(tk.Frame):
             doc_data = (item_values[0], item_values[1], item_values[2])
 
             # Log the data of each item being processed
-            self.logger.debug(f"Creating Word document for item: {doc_data}")
+            self.logger.info(f"Creating Word document for item: {doc_data}")
 
             self.create_word_doc(doc_data, iid, show_message=False)
 
@@ -3310,7 +3319,7 @@ class Application(tk.Frame):
                     discount_percentage = "N/A"  # Default to "N/A" 
 
             except Exception as e:
-                self.logger.debug(f"Error retrieving data: {e}")  # Debugging print statement
+                self.logger.info(f"Error retrieving data: {e}")  # Debugging print statement
 
             # Path for the new Word document named 'Product Information.docx'
             doc_path = os.path.join(folder_path, 'Product Information.docx')
@@ -3352,7 +3361,7 @@ class Application(tk.Frame):
                 self.logger.error(f"Failed to create document for product ID {product_id}: {e}")
         else:
             messagebox.showerror("Error", f"No folder found for Product ID {product_id}")
-            self.logger.warning(f"No folder found for product ID {product_id}")
+            self.logger.error(f"No folder found for product ID {product_id}")
 
     def backup_excel_database(self):
         """
@@ -3365,12 +3374,12 @@ class Application(tk.Frame):
 
         # Check if the Excel filepath is set
         if not self.excel_manager.filepath:
-            self.logger.warning("No Excel filepath is set. Backup process aborted.")
+            self.logger.error("No Excel filepath is set. Backup process aborted.")
             return
         
         # Check if inventory folder exists
         if not self.inventory_folder or not os.path.exists(self.inventory_folder):
-            self.logger.warning(f"Inventory folder is not set or does not exist: {self.inventory_folder}")
+            self.logger.error(f"Inventory folder is not set or does not exist: {self.inventory_folder}")
             return
         
         # Define backup folder, which is alongside the inventory folder
@@ -3384,7 +3393,7 @@ class Application(tk.Frame):
                 os.makedirs(backup_folder)
                 self.logger.info(f"Backup folder '{backup_folder}' created.")
             else:
-                self.logger.debug(f"Backup folder '{backup_folder}' already exists.")
+                self.logger.info(f"Backup folder '{backup_folder}' already exists.")
             
             # Generate backup file name
             date_time_str = datetime.now().strftime("%Y-%m-%d - %H-%M-%S")
@@ -3410,7 +3419,7 @@ class Application(tk.Frame):
         """
 
         # Log the attempt to close the database connection
-        self.logger.debug("Attempting to close database connection")
+        self.logger.info("Attempting to close database connection")
 
         try:
             self.db_manager.conn.close()
