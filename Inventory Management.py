@@ -231,9 +231,10 @@ class Application(tk.Frame):
 
         self.configure_logger()
         self.cache_images_on_load()
-        self.Main_Window_Widgets() 
         self.load_settings()
+        self.Main_Window_Widgets() 
         self.combine_and_display_folders()
+        self.master.update_idletasks()
         self.update_excel_file_on_start_question()
         #self.first_run()
         #remove update_folders_path function?
@@ -1940,7 +1941,9 @@ class Application(tk.Frame):
                 self.logger.error(f"Error retrieving product details: {e}")
         else:
             messagebox.showerror("Error", "Excel file path or sheet name is not set.")
-
+        print(self.master.focus_get())
+        
+        
         # Unbind the Enter key from the save_button's command
         self.master.unbind('<Return>')
         self.master.unbind('<Escape>')
