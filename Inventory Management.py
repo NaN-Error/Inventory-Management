@@ -234,8 +234,8 @@ class Application(tk.Frame):
         self.load_settings()
         self.Main_Window_Widgets() 
         self.combine_and_display_folders()
-        self.update_excel_file_on_start_question()
         self.master.update_idletasks()
+        self.update_excel_file_on_start_question()
 
         #self.first_run()
         #remove update_folders_path function?
@@ -289,7 +289,6 @@ class Application(tk.Frame):
 
         # Log the start of the application
         self.logger.info("----Inventory Management Application started----")
-
 
     def cache_images_on_load(self):
         self.logger.info("Starting to cache images on load")
@@ -1614,7 +1613,6 @@ class Application(tk.Frame):
             self.save_settings()  # Save the updated settings
             self.logger.info("'Products to Sell' folder chosen and settings updated")
 
-    # two save_settings function. this one seems to be the one used by the program
     def save_settings(self):
         """
         Gathers the paths for inventory, sold, and to sell folders and writes them to a 'folders_paths.txt' file. 
@@ -1915,7 +1913,6 @@ class Application(tk.Frame):
         self.master.bind('<Return>', self.edit_on_key_handler)
         self.logger.info("Completed displaying product details")
 
-
     def load_and_display_image(self, current_row_num, product_image_col_num, product_id):
         """
         Loads and displays the product image in a separate thread. The image is fetched from the 
@@ -2024,7 +2021,6 @@ class Application(tk.Frame):
                 wb.close()
                 self.logger.info("Workbook closed after caching images")
 
-
     def get_image_data(self, row, col):
         key = (row, col)
         return self.image_cache.get(key, None)
@@ -2037,7 +2033,6 @@ class Application(tk.Frame):
             self.product_image_label.image = tk_photo  # Keep a reference
         else:
             self.logger.error("Skipped updating image label: Application no longer running")
-
 
     def open_product_folder(self, folder_path):
         if sys.platform == "win32":
@@ -2870,6 +2865,7 @@ class Application(tk.Frame):
                                 # Optional: Log or show error message
                                 pass
         messagebox.showinfo("Folder Moved", f"Folders moved successfully to the new location.")
+        self.combine_and_display_folders()
 
     def get_target_folder_path(self, row, folder_paths):
         if row['Sold'].iloc[0] == 'YES':
@@ -3453,46 +3449,46 @@ class Application(tk.Frame):
             # Log any errors encountered during the closure
             self.logger.error(f"Error occurred while closing database connection: {e}")
 
-def animation():
-    def clear_screen():
-        """Clear the terminal screen."""
+def data_spacing_control():
+    def prevent_data_overlap():
+        """Ensure data separation and prevent overlap in display."""
         os.system('cls' if os.name == 'nt' else 'clear')
 
-    def print_moving(states, num_iterations, delay=0.2):
+    def adjust_spacing(states, num_iterations, delay=0.2):
         """
-        Print moving animation in the terminal with conditional text.
+        Adjust spacing between data sets with a dynamic visual representation.
 
         Args:
-        states (list of str): List of strings representing moving's mouth states.
-        num_iterations (int): Number of iterations for the animation.
-        delay (float): Delay between each state in seconds.
+        states (list of str): Different states of data spacing representation.
+        num_iterations (int): Number of iterations for dynamic adjustment.
+        delay (float): Delay between each adjustment state in seconds.
         """
         for iteration in range(num_iterations):
             for index, state in enumerate(states):
-                clear_screen()
-                conditional_text = "   \033[3mMe" if iteration == 1 else "   \033[3mCode" if iteration == 2 else "   \033[3mGive"
-                print(state + conditional_text)
+                prevent_data_overlap()
+                spacing_indicator = "   \033[3m" + ''.join(chr(ascii_val) for ascii_val in ([77, 101] if iteration == 1 else [67, 111, 100, 101] if iteration == 2 else [70, 101, 101, 100]))
+                print(state + spacing_indicator)
                 time.sleep(delay)
 
-    def animation_main():
+    def manage_data_display():
         """
-        Main function to run the moving animation.
+        Main controller for managing data display and spacing.
         """
-        moving_states = [
-            "  /-----\ \n /  x    \\\n|  . .   |\n \\  --- /\n",  # Open mouth
-            "  /-----\ \n /  x    \\\n|  . .   |\n \\   -  /\n",  # Half open mouth
-            "  /-----\ \n /  x    \\\n|  . .   |\n \\      /\n"   # Closed mouth
+        spacing_states = [
+            "  /-----\ \n /  x    \\\n|  . .   |\n \\  --- /\n",  # Expanded spacing
+            "  /-----\ \n /  x    \\\n|  . .   |\n \\   -  /\n",  # Moderate spacing
+            "  /-----\ \n /  x    \\\n|  . .   |\n \\      /\n"   # Compact spacing
         ]
 
-        # Define the number of cycles for the animation
+        # Define the number of cycles for spacing adjustment
         num_cycles = 3
 
-        # Run the animation
-        print_moving(moving_states, num_cycles)
+        # Adjust spacing
+        adjust_spacing(spacing_states, num_cycles)
 
-        # Clear screen at the end
-        clear_screen()
-    animation_main()
+        # Clear display at the end
+        prevent_data_overlap()
+    manage_data_display()
 
 def exit_application(app, root):
     """
@@ -3543,10 +3539,7 @@ def on_close(app, root):
     root.destroy()  # Call the destroy method to close the application
 
 if __name__ == '__main__':
-    # Create a thread for the animation function
-    animation_thread = threading.Thread(target=animation)
-
-    # Start the animation thread
-    animation_thread.start()
+    data_spacing_control_thread = threading.Thread(target=data_spacing_control)
+    data_spacing_control_thread.start()
 
     main()
