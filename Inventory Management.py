@@ -234,8 +234,9 @@ class Application(tk.Frame):
         self.load_settings()
         self.Main_Window_Widgets() 
         self.combine_and_display_folders()
-        self.master.update_idletasks()
         self.update_excel_file_on_start_question()
+        self.master.update_idletasks()
+
         #self.first_run()
         #remove update_folders_path function?
 
@@ -265,7 +266,7 @@ class Application(tk.Frame):
         self.logger.info("Starting first run operations.")
         self.update_excel_data()
         self.update_prices()
-        self.update_all_folder_paths_and_names
+        self.update_all_folder_paths_and_names()
         self.products_to_sell_report()
         self.check_for_missing_word_docs()
         self.logger.info("Completed first run operations.")
@@ -289,15 +290,25 @@ class Application(tk.Frame):
         # Log the start of the application
         self.logger.info("----Inventory Management Application started----")
 
+
     def cache_images_on_load(self):
         self.logger.info("Starting to cache images on load")
 
         # Load Excel settings
         filepath, sheet_name = self.load_excel_settings()
         if filepath and sheet_name:
+            # Validate file and sheet
+            if not os.path.exists(filepath):
+                self.logger.error(f"Excel file not found at {filepath}. Skipping image caching.")
+                return
+            # Additional validation for sheet can be added here if necessary
+
             self.logger.info(f"Excel settings loaded with filepath: {filepath} and sheet_name: {sheet_name}")
-            self.cache_images(filepath, sheet_name)
-            self.logger.info("Images have been successfully cached")
+            try:
+                self.cache_images(filepath, sheet_name)
+                self.logger.info("Images have been successfully cached")
+            except Exception as e:
+                self.logger.error(f"An error occurred while caching images: {e}")
         else:
             self.logger.error("Failed to load Excel settings or they are incomplete. Skipping image caching.")
 
@@ -1655,52 +1666,6 @@ class Application(tk.Frame):
             self.combine_and_display_folders()  # If the search box is empty, display all folders   
             self.logger.info("Search box is empty, displaying all folders")
 
-    def load_workbook_cached(self, path):
-        """
-        Loads an Excel workbook from the given path with caching. 
-        If the workbook at the same path is already loaded, it uses the cached version instead 
-        of reloading it. This improves performance by avoiding redundant loading of the same workbook.
-        """
-        self.logger.info(f"Loading workbook from path: {path}")
-
-        # Check if the path is different from the cached path or the cache is None
-        if path != self.workbook_path or self.workbook_cache is None:
-            # Load the workbook and update the cache
-            try:
-                self.workbook_cache = openpyxl.load_workbook(path, data_only=True)
-                self.workbook_path = path
-                self.logger.info("Workbook loaded and cached")
-            except Exception as e:
-                self.logger.error(f"Error loading workbook from path {path}: {e}")
-                raise
-
-        return self.workbook_cache
-
-    def cache_images(self, workbook_path, sheet_name):
-        """
-        Loads images from a specified Excel sheet and caches them. 
-        Each image is associated with its cell position (row and column) in the sheet.
-        """
-        self.logger.info(f"Caching images from workbook '{workbook_path}', sheet '{sheet_name}'")
-
-        try:
-            wb = openpyxl.load_workbook(workbook_path, data_only=True)
-            sheet = wb[sheet_name]
-
-            for image in sheet._images:
-                row, col = image.anchor._from.row, image.anchor._from.col
-                key = (row, col)
-                self.image_cache[key] = image._data()
-
-            wb.close()
-            self.logger.info("Finished caching images")
-        except Exception as e:
-            self.logger.error(f"Error caching images from workbook: {e}")
-
-    def get_image_data(self, row, col):
-        key = (row, col)
-        return self.image_cache.get(key, None)
-
     def display_product_details(self, event):
         """
         Displays the details of a selected product in the GUI. The details are fetched 
@@ -1940,9 +1905,7 @@ class Application(tk.Frame):
                 #print(f"Error retrieving product details: {e}")
                 self.logger.error(f"Error retrieving product details: {e}")
         else:
-            messagebox.showerror("Error", "Excel file path or sheet name is not set.")
-        print(self.master.focus_get())
-        
+            messagebox.showerror("Error", "Excel file path or sheet name is not set.")        
         
         # Unbind the Enter key from the save_button's command
         self.master.unbind('<Return>')
@@ -1951,6 +1914,7 @@ class Application(tk.Frame):
         # Bind the Enter key to the global enter handler
         self.master.bind('<Return>', self.edit_on_key_handler)
         self.logger.info("Completed displaying product details")
+
 
     def load_and_display_image(self, current_row_num, product_image_col_num, product_id):
         """
@@ -1967,7 +1931,7 @@ class Application(tk.Frame):
             if not self.running or self.current_product_id != product_id:
                 self.logger.info("Task exited: Application no longer running or product changed")
                 return
-
+            wb = None
             try:
                 image_data = self.get_image_data(current_row_num, product_image_col_num)
                 if not image_data:
@@ -1991,11 +1955,10 @@ class Application(tk.Frame):
                         desired_size = (100, 100)
                         resized_image = pil_image.resize(desired_size)
                         # Convert the resized image to Tkinter PhotoImage
-                        tk_photo = ImageTk.PhotoImage(resized_image)
 
                     if self.running and self.current_product_id == product_id:
                         self.logger.info("Scheduling image update in main thread")
-                        self.after(0, lambda: self.update_image_label(tk_photo))
+                        self.after(0, lambda: self.update_image_label(resized_image))
                     else:
                         self.logger.error("Skipped image update: Application no longer running or product changed")
                 else:
@@ -2007,16 +1970,74 @@ class Application(tk.Frame):
                 self.logger.error(f"Error loading image: {e}")
                 if self.running and self.current_product_id == product_id:
                     self.after(0, lambda: self.product_image_label.config(text="Error loading image"))
+            finally:
+                if wb:
+                    wb.close()
+                    self.logger.info("Workbook closed in thread")
 
         threading.Thread(target=task).start()
 
-    def update_image_label(self, tk_photo):
+    def load_workbook_cached(self, path):
+        """
+        Loads an Excel workbook from the given path with caching. 
+        If the workbook at the same path is already loaded, it uses the cached version instead 
+        of reloading it. This improves performance by avoiding redundant loading of the same workbook.
+        """
+        self.logger.info(f"Loading workbook from path: {path}")
+
+        # Check if the path is different from the cached path or the cache is None
+        if path != self.workbook_path or self.workbook_cache is None:
+            # Load the workbook and update the cache
+            try:
+                self.workbook_cache = openpyxl.load_workbook(path, data_only=True)
+                self.workbook_path = path
+                self.logger.info("Workbook loaded and cached")
+            except Exception as e:
+                self.logger.error(f"Error loading workbook from path {path}: {e}")
+                raise
+
+        return self.workbook_cache
+
+    def cache_images(self, workbook_path, sheet_name):
+        """
+        Loads images from a specified Excel sheet and caches them. 
+        Each image is associated with its cell position (row and column) in the sheet.
+        """
+        self.logger.info(f"Caching images from workbook '{workbook_path}', sheet '{sheet_name}'")
+
+        wb = None
+        try:
+            wb = openpyxl.load_workbook(workbook_path, data_only=True)
+            sheet = wb[sheet_name]
+
+            for image in sheet._images:
+                row, col = image.anchor._from.row, image.anchor._from.col
+                key = (row, col)
+                self.logger.info(f"Caching image at row {row}, column {col}")
+                self.image_cache[key] = image._data()
+
+            self.logger.info("Finished caching images")
+        except Exception as e:
+            self.logger.error(f"Error caching images from workbook: {e}")
+        finally:
+            if wb:
+                wb.close()
+                self.logger.info("Workbook closed after caching images")
+
+
+    def get_image_data(self, row, col):
+        key = (row, col)
+        return self.image_cache.get(key, None)
+
+    def update_image_label(self, pil_image):
         if self.running:
             self.logger.info("Updating image label in main thread")
+            tk_photo = ImageTk.PhotoImage(pil_image)
             self.product_image_label.config(image=tk_photo)
             self.product_image_label.image = tk_photo  # Keep a reference
         else:
             self.logger.error("Skipped updating image label: Application no longer running")
+
 
     def open_product_folder(self, folder_path):
         if sys.platform == "win32":
@@ -2849,7 +2870,6 @@ class Application(tk.Frame):
                                 # Optional: Log or show error message
                                 pass
         messagebox.showinfo("Folder Moved", f"Folders moved successfully to the new location.")
-        self.refresh_and_select_product(product_id)
 
     def get_target_folder_path(self, row, folder_paths):
         if row['Sold'].iloc[0] == 'YES':
