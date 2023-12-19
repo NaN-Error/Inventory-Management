@@ -384,6 +384,9 @@ class Application(tk.Frame):
             self.folder_list.pack(side='left', fill='both', expand=False)
             self.folder_list.bind('<<ListboxSelect>>', self.display_product_details)
 
+            self.folder_list.bind('<Down>', self.next_product)
+            self.folder_list.bind('<Up>', self.previous_product)
+
             self.list_scrollbar = ttk.Scrollbar(self.list_frame)
             self.list_scrollbar.pack(side='right', fill='y')
             self.folder_list.config(yscrollcommand=self.list_scrollbar.set)
@@ -394,6 +397,27 @@ class Application(tk.Frame):
 
         except Exception as e:
             self.logger.error(f"Error initializing main window widgets: {e}")
+
+    def next_product(self, event):
+        if self.folder_list.size() > 0:
+            current_selection = self.folder_list.curselection()
+            if current_selection:
+                next_index = current_selection[0] + 1
+                if next_index < self.folder_list.size():
+                    self.folder_list.selection_clear(current_selection)
+                    self.folder_list.selection_set(next_index)
+                    self.folder_list.see(next_index)
+
+    def previous_product(self, event):
+        if self.folder_list.size() > 0:
+            current_selection = self.folder_list.curselection()
+            if current_selection:
+                prev_index = current_selection[0] - 1
+                if prev_index >= 0:
+                    self.folder_list.selection_clear(current_selection)
+                    self.folder_list.selection_set(prev_index)
+                    self.folder_list.see(prev_index)
+
 
     def Product_Form(self):
         self.logger.info("Initializing product form widgets")
@@ -1211,6 +1235,8 @@ class Application(tk.Frame):
                     return "break"
         except Exception as e:
             self.logger.error(f"Error when opening hyperlink: {e}")
+
+
 
     def Settings_Window_Start(self):
         """
@@ -3349,10 +3375,10 @@ class Application(tk.Frame):
                 doc.add_paragraph(f"Product Name: {product_name}")
                 doc.add_paragraph(f"Product Price: {product_price}")
                 doc.add_paragraph(f"IVU Tax: {ivu_tax}")
-                doc.add_paragraph(f"Product Price After IVU (Sale Price): ${product_price_after_ivu}")
-                doc.add_paragraph(f"Reseller Earnings: ${discount}     [Reseller Earnings = {discount_percentage}% of {product_price} (Product Price)]") 
-                doc.add_paragraph(f"Amazon Link(to get the product description and pictures, if needed): {order_link}")
-                doc.add_paragraph(f"Comments: {comments}")
+                doc.add_paragraph(f"Product Price After IVU (Sale Price): ${product_price_after_ivu}")    
+                doc.add_paragraph(f"Reseller Earnings : ${discount}     [ = {discount_percentage}% of {product_price} (Product Price)]") 
+                doc.add_paragraph(f"Comments: {comments}")     
+                # doc.add_paragraph(f"Amazon Link(to get the product description and pictures, if needed): {order_link}")
 
                 # Save the document
                 doc.save(doc_path)
