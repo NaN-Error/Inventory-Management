@@ -856,7 +856,6 @@ class Application(tk.Frame):
         self.logger.info("Correlate window closed.")
         self.Settings_Window_Start()
 
-
     def products_to_sell_report(self):
 
         self.logger.info("Starting products to sell report generation")
@@ -875,8 +874,8 @@ class Application(tk.Frame):
             messagebox.showerror("Error", "To Sell folder path is not set or does not exist.")
             return
 
-        # Check for existing folder starting with "- New products added on"
-        folder_prefix = "- New products added on "
+        # Check for existing folder starting with "- See products added on"
+        folder_prefix = "- See products added on "
         existing_folder = None
         for folder in os.listdir(to_sell_folder):
             if folder.startswith(folder_prefix):
@@ -1006,13 +1005,17 @@ class Application(tk.Frame):
 
         self.logger.info("Saving the new workbook")
         today_str = datetime.now().strftime("%Y-%m-%d")
-        copy_path = os.path.join(new_folder_path, f"Products To Sell - {today_str}.xlsx")
-        new_workbook.save(copy_path)
-        self.logger.info(f"Report saved at {copy_path}")
+        new_report_path = os.path.join(new_folder_path, f"Products To Sell - {today_str}.xlsx")
+        new_workbook.save(new_report_path)
+        self.logger.info(f"Report saved at {new_report_path}")
+
+
+        # Call the method to backup old reports
+        self.backup_old_reports(new_folder_path, new_report_path)
 
         # Open the modified Excel file
         if sys.platform == "win32":
-            os.startfile(copy_path)
+            os.startfile(new_report_path)
         elif sys.platform == "darwin":  # macOS
             subprocess.run(["open", copy_path])
         else:  # Linux variants
@@ -1022,56 +1025,70 @@ class Application(tk.Frame):
         self.logger.info("Starting to get previous Excel report data")
 
         to_sell_folder = self.to_sell_folder
-        folder_prefix = "- New products added on "
-        latest_folder_date = None
-        latest_folder = None
-
-        # Find the most recent folder
-        for folder in os.listdir(to_sell_folder):
-            if folder.startswith(folder_prefix):
-                folder_date_str = folder[len(folder_prefix):]
-                try:
-                    folder_date = datetime.strptime(folder_date_str, "%Y-%m-%d").date()
-                    if latest_folder_date is None or folder_date > latest_folder_date:
-                        latest_folder_date = folder_date
-                        latest_folder = folder
-                except ValueError as e:
-                    self.logger.error(f"Error parsing date from folder name '{folder}': {e}")
-
-        if latest_folder is None:
-            self.logger.info("No latest folder found")
-            return [0], None
-
-        # Find the latest Excel report in the latest folder
+        folder_prefix = "- See products added on "
+        backup_folder_prefix = "Products to Sell Reports Backup"
         latest_file_date = None
-        latest_file = None
-        latest_folder_path = os.path.join(to_sell_folder, latest_folder)
+        latest_file_path = None
+        today = datetime.now().date()
 
-        for file in os.listdir(latest_folder_path):
-            if file.endswith(".xlsx"):
-                file_date_str = file[len("Products To Sell - "):-len(".xlsx")]
-                try:
-                    file_date = datetime.strptime(file_date_str, "%Y-%m-%d").date()
-                    if latest_file_date is None or file_date > latest_file_date:
-                        latest_file_date = file_date
-                        latest_file = file
-                except ValueError as e:
-                    self.logger.error(f"Error parsing date from file name '{file}': {e}")
-        
-        if latest_file is None:
-            self.logger.info("No latest Excel report found")
+        def find_latest_file(folder):
+            nonlocal latest_file_date, latest_file_path
+            for file in os.listdir(folder):
+                if file.endswith(".xlsx") and file.startswith("Products To Sell -"):
+                    file_date_str = file[len("Products To Sell - "):-len(".xlsx")]
+                    try:
+                        file_date = datetime.strptime(file_date_str, "%Y-%m-%d").date()
+                        if file_date < today and (latest_file_date is None or file_date > latest_file_date):
+                            latest_file_date = file_date
+                            latest_file_path = os.path.join(folder, file)
+                    except ValueError as e:
+                        self.logger.error(f"Error parsing date from file name '{file}': {e}")
+
+        # Check the latest file in the current folder
+        current_folder_date = datetime.now().strftime("%Y-%m-%d")
+        current_folder = os.path.join(to_sell_folder, f"{folder_prefix}{current_folder_date}")
+        if os.path.exists(current_folder):
+            find_latest_file(current_folder)
+
+        # Check the backup folder if no file found in the current folder
+        if latest_file_path is None:
+            backup_folder = os.path.join(os.path.dirname(self.inventory_folder), "Excel Backups", backup_folder_prefix)
+            if os.path.exists(backup_folder):
+                find_latest_file(backup_folder)
+
+        if latest_file_path is None:
+            self.logger.info("No previous report found.")
             return [0], None
-        
-        file_path = os.path.join(latest_folder_path, latest_file)
-        self.logger.info(f"Reading data from the latest file: {latest_file}")
 
-        workbook = load_workbook(file_path, data_only=True)
+        self.logger.info(f"Previous report found at: {latest_file_path}")
+
+        workbook = load_workbook(latest_file_path, data_only=True)
         sheet = workbook.active
-        product_ids = [row[0] for row in sheet.iter_rows(min_row=2, values_only=True)]
+        product_ids = [row[0] for row in sheet.iter_rows(min_row=2, values_only=True) if row[0] is not None]
 
-        self.logger.info(f"Retrieved product IDs from {latest_file}")
+        return set(product_ids), latest_file_date
 
-        return product_ids, latest_file_date
+    def backup_old_reports(self, current_report_folder, new_report_path):
+        self.logger.info("Starting backup of old reports")
+
+        # Define the backup folder path
+        parent_dir = os.path.dirname(self.inventory_folder)
+        backup_folder = os.path.join(parent_dir, "Excel Backups", "Products to Sell Reports Backup")
+
+        # Create the backup folder if it doesn't exist
+        if not os.path.exists(backup_folder):
+            os.makedirs(backup_folder)
+            self.logger.info(f"Backup folder '{backup_folder}' created.")
+        else:
+            self.logger.info(f"Backup folder '{backup_folder}' already exists.")
+
+        # Move the files
+        for file in os.listdir(current_report_folder):
+            file_path = os.path.join(current_report_folder, file)
+            if file_path.endswith(".xlsx") and file_path != new_report_path:
+                backup_path = os.path.join(backup_folder, file)
+                shutil.move(file_path, backup_path)
+                self.logger.info(f"Moved '{file}' to backup.")
 
 
 # Product Form with functions used in it.
@@ -1683,7 +1700,6 @@ class Application(tk.Frame):
             
         self.logger.info("Completed product selection process")
         self.toggle_edit_mode()
-
 
 
     def validate_input(self, input_value, is_percentage=False):
