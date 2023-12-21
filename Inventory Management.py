@@ -1082,6 +1082,13 @@ class Application(tk.Frame):
         else:
             self.logger.info(f"Backup folder '{backup_folder}' already exists.")
 
+        # Maintain a maximum of 100 backups
+        existing_backups = sorted(os.listdir(backup_folder))
+        while len(existing_backups) >= 100:
+            oldest_backup = existing_backups.pop(0)
+            os.remove(os.path.join(backup_folder, oldest_backup))
+            self.logger.info(f"Deleted oldest backup: {oldest_backup}")
+
         # Move the files
         for file in os.listdir(current_report_folder):
             file_path = os.path.join(current_report_folder, file)
@@ -3470,54 +3477,52 @@ class Application(tk.Frame):
             self.logger.error(f"Error updating prices in Excel: {e}")
 
 
+ 
     def backup_excel_database(self):
         """
-        Creates a backup of the current Excel database. The backup is stored in a separate folder 
-        alongside the inventory folder.
+        Creates a backup of the current Excel database in the Inventory Management Backups folder.
+        Limits the number of backups to 100.
         """
-
-        # Log the start of the backup process
         self.logger.info("Starting the backup process for the Excel database")
 
-        # Check if the Excel filepath is set
         if not self.excel_manager.filepath:
             self.logger.error("No Excel filepath is set. Backup process aborted.")
             return
-        
-        # Check if inventory folder exists
+
         if not self.inventory_folder or not os.path.exists(self.inventory_folder):
             self.logger.error(f"Inventory folder is not set or does not exist: {self.inventory_folder}")
             return
-        
-        # Define backup folder, which is alongside the inventory folder
-        # We obtain the parent directory of the inventory_folder using os.path.dirname
+
         parent_dir = os.path.dirname(self.inventory_folder)
-        backup_folder = os.path.join(parent_dir, "Excel Backups")
-        
+        excel_backups_folder = os.path.join(parent_dir, "Excel Backups")
+        inventory_management_backups_folder = os.path.join(excel_backups_folder, "Inventory Management Backups")
+
+        # Create backup folders if they don't exist
+        os.makedirs(inventory_management_backups_folder, exist_ok=True)
+
+        # Generate backup file name
+        date_time_str = datetime.now().strftime("%Y-%m-%d - %H-%M-%S")
+        backup_filename = f"Backup of {date_time_str}.xlsx"
+        backup_path = os.path.join(inventory_management_backups_folder, backup_filename)
+
+        # Maintain a maximum of 100 backups - delete the oldest if necessary
+        existing_backups = sorted(os.listdir(inventory_management_backups_folder))
+        while len(existing_backups) >= 100:
+            oldest_backup = existing_backups.pop(0)
+            os.remove(os.path.join(inventory_management_backups_folder, oldest_backup))
+            self.logger.info(f"Deleted oldest backup: {oldest_backup}")
+
+        # Perform the backup
         try:
-            # Create the backup folder if it doesn't exist
-            if not os.path.exists(backup_folder):
-                os.makedirs(backup_folder)
-                self.logger.info(f"Backup folder '{backup_folder}' created.")
-            else:
-                self.logger.info(f"Backup folder '{backup_folder}' already exists.")
-            
-            # Generate backup file name
-            date_time_str = datetime.now().strftime("%Y-%m-%d - %H-%M-%S")
-            backup_filename = f"Backup of {date_time_str}.xlsx"
-            backup_path = os.path.join(backup_folder, backup_filename)
-            
-            # Copy the Excel file to the backup location
             shutil.copy2(self.excel_manager.filepath, backup_path)
-            self.logger.info(f"Backup created at: {backup_path}")
-            
-            # Double check if the file was actually created
             if not os.path.isfile(backup_path):
                 raise FileNotFoundError(f"Backup file not found after copy operation: {backup_path}")
+            self.logger.info(f"Backup created at: {backup_path}")
             self.logger.info("Excel database backup completed successfully")
         except Exception as e:
             self.logger.error(f"Failed to create backup: {e}")
-            raise  # Reraise the exception to see the full traceback
+            raise
+
 
     def close_application(self):
         self.logger.info("Closing application.")
