@@ -236,40 +236,8 @@ class Application(tk.Frame):
         self.combine_and_display_folders()
         self.master.update_idletasks()
         self.update_excel_file_on_start_question()
-
         #self.first_run()
         #remove update_folders_path function?
-
-    def update_excel_file_on_start_question(self):
-        """
-        Displays a dialog asking the user if they want to update Excel empty fields.
-        Calls first_run if the user responds affirmatively.
-        """
-        root = tk.Tk()
-        root.withdraw()
-        self.logger.info("Asking user to update Excel data.")
-        user_response = messagebox.askyesno("Update Excel Data", "Do you want to update the Excel empty fields?")
-        root.destroy()
-
-        if user_response:
-            self.logger.info("User chose to update Excel data.")
-            self.first_run()
-        else:
-            self.logger.info("User chose not to update Excel data.")
-            pass
-
-    def first_run(self):
-        """
-        Executes a series of operations including updating Excel data, updating prices,
-        updating folder paths, generating a report of products to sell, and checking for missing Word documents.
-        """
-        self.logger.info("Starting first run operations.")
-        self.update_excel_data()
-        self.update_prices()
-        self.update_all_folder_paths_and_names()
-        self.products_to_sell_report()
-        self.check_for_missing_word_docs()
-        self.logger.info("Completed first run operations.")
 
     def configure_logger(self):
         # Set up a logger
@@ -311,11 +279,6 @@ class Application(tk.Frame):
         else:
             self.logger.error("Failed to load Excel settings or they are incomplete. Skipping image caching.")
 
-    def close_application(self):
-        self.logger.info("Closing application.")
-        self.running = False
-        self.destroy()
-
     def load_settings(self):
         self.logger.info("Attempting to load folders' paths from file")
         try:
@@ -351,6 +314,38 @@ class Application(tk.Frame):
 
     #     except Exception as e:
     #         self.logger.error(f"Error saving settings: {e}")
+    
+    def update_excel_file_on_start_question(self):
+        """
+        Displays a dialog asking the user if they want to update Excel empty fields.
+        Calls first_run if the user responds affirmatively.
+        """
+        root = tk.Tk()
+        root.withdraw()
+        self.logger.info("Asking user to update Excel data.")
+        user_response = messagebox.askyesno("Update Excel Data", "Do you want to update the Excel empty fields?")
+        root.destroy()
+
+        if user_response:
+            self.logger.info("User chose to update Excel data.")
+            self.first_run()
+        else:
+            self.logger.info("User chose not to update Excel data.")
+            pass
+
+    def first_run(self):
+        """
+        Executes a series of operations including updating Excel data, updating prices,
+        updating folder paths, generating a report of products to sell, and checking for missing Word documents.
+        """
+        self.logger.info("Starting first run operations.")
+        self.update_excel_data()
+        self.update_prices()
+        self.update_all_folder_paths_and_names()
+        self.products_to_sell_report()
+        self.check_for_missing_word_docs()
+        self.logger.info("Completed first run operations.")
+
 
     def Main_Window_Widgets(self):
         self.logger.info("Initializing main window widgets")
@@ -417,6 +412,440 @@ class Application(tk.Frame):
                     self.folder_list.selection_clear(current_selection)
                     self.folder_list.selection_set(prev_index)
                     self.folder_list.see(prev_index)
+
+    def combine_and_display_folders(self):
+        """
+        Combines and displays the folder names from various paths including inventory, sold, 
+        to sell, damaged, and personal folders. Updates these folder paths in the database. 
+        The folder list is first cleared, then updated with the combined and sorted folder names.
+        """
+        self.logger.info("Combining and displaying folders")
+
+        # Clear the folder list first
+        self.folder_list.delete(0, tk.END)
+
+        # Initialize additional folders based on the inventory folder
+        if self.inventory_folder:
+            parent_dir = os.path.dirname(self.inventory_folder)
+            self.damaged_folder = os.path.join(parent_dir, "Damaged")
+            self.personal_folder = os.path.join(parent_dir, "Personal")
+
+            # Create additional folders if they don't exist
+            for folder in [self.damaged_folder, self.personal_folder]:
+                if not os.path.exists(folder):
+                    os.makedirs(folder)
+
+        # Begin a transaction
+        self.db_manager.cur.execute("BEGIN")
+        try:
+            # Combine the folders from all paths including damaged and personal folders
+            combined_folders = []
+            for folder_path in [self.inventory_folder, self.sold_folder, self.to_sell_folder, self.damaged_folder, self.personal_folder]:
+                if folder_path and os.path.exists(folder_path):
+                    for root, dirs, files in os.walk(folder_path):
+                        for dir_name in dirs:
+                            combined_folders.append(dir_name)
+                            full_path = os.path.join(root, dir_name)
+                            # Update the database with the current folder paths
+                            self.db_manager.cur.execute("INSERT OR REPLACE INTO folder_paths (Folder, Path) VALUES (?, ?)", (dir_name, full_path))
+            self.db_manager.conn.commit()  # Commit the transaction if all is well
+        except Exception as e:
+            self.db_manager.conn.rollback()  # Rollback if there was an error
+            self.logger.error(f"Database error in combine_and_display_folders: {e}")
+
+        # Deduplicate folder names
+        unique_folders = list(set(combined_folders))
+
+        # Sort using the custom sort key function
+        sorted_folders = sorted(unique_folders, key=self.custom_sort_key)
+
+        # Insert the sorted folders into the list widget
+        for folder in sorted_folders:
+            self.folder_list.insert(tk.END, folder)
+        self.logger.info("Folders combined, sorted, and displayed")
+
+    def search(self, event):
+        """
+        Searches for folders based on the user's input in the search entry. 
+        The search is case-insensitive and looks for matches in all relevant folders including
+        inventory, sold, to sell, damaged, and personal folders.
+        """
+        self.logger.info("Performing search based on user input")
+        search_terms = self.search_entry.get().split()  # Split the search string into words
+        if search_terms:
+            self.folder_list.delete(0, tk.END)  # Clear the current list
+
+            # Define a list of folder paths to search in
+            search_paths = [
+                self.inventory_folder,
+                self.sold_folder,
+                self.to_sell_folder,
+                self.damaged_folder,
+                self.personal_folder
+            ]
+
+            # Filter out None or invalid paths
+            valid_search_paths = [path for path in search_paths if path and os.path.exists(path)]
+
+            # Perform the search in each valid path
+            for path in valid_search_paths:
+                for root, dirs, files in os.walk(path):
+                    # Check if 'dirs' is empty, meaning 'root' is a leaf directory
+                    if not dirs:
+                        folder_name = os.path.basename(root)  # Get the name of the leaf directory
+                        # Check if all search terms are in the folder name (case insensitive)
+                        if all(term.upper() in folder_name.upper() for term in search_terms):
+                            self.folder_list.insert(tk.END, folder_name)
+            self.logger.info("Search completed and results displayed")
+        else:
+            self.combine_and_display_folders()  # If the search box is empty, display all folders   
+            self.logger.info("Search box is empty, displaying all folders")
+
+
+
+    def Settings_Window_Start(self):
+        """
+        Opens the settings window where the user can configure various options like 
+        choosing inventory, sold inventory, and products to sell folders, selecting the Excel database, 
+        and other settings related to product data and reports.
+        """
+        self.logger.info("Opening settings window")
+
+        if hasattr(self, 'settings_window') and self.settings_window.winfo_exists():
+            self.settings_window.lift()
+            return
+        self.settings_window = tk.Toplevel(self)
+        self.settings_window.title("Settings")
+        self.settings_window.state('zoomed')
+
+        # Create and grid the settings frame
+        self.settings_frame = tk.Frame(self.settings_window)
+        self.settings_frame.grid(row=1, column=1, sticky='nw')
+
+        # Load settings
+        self.default_filepath, self.default_sheet = self.load_excel_settings()
+        
+        # Configure the grid columns of the frame
+        self.settings_frame.grid_columnconfigure(1, weight=1)  # Adjust the weight as needed
+
+        # Now grid all widgets onto the settings_frame
+        self.inventory_folder_button = ttk.Button(self.settings_frame, text="Choose Inventory Folder", command=self.choose_inventory_folder)
+        self.inventory_folder_button.grid(row=1, column=0, padx=5, pady=5, sticky='w')
+        self.inventory_folder_label = ttk.Label(self.settings_frame, text=self.inventory_folder if self.inventory_folder else "Not chosen")
+        self.inventory_folder_label.grid(row=1, column=1, padx=5, pady=5, sticky='w')
+
+        self.sold_folder_button = ttk.Button(self.settings_frame, text="Choose Sold Inventory Folder", command=self.choose_sold_folder)
+        self.sold_folder_button.grid(row=2, column=0, padx=5, pady=5, sticky='w')
+        self.sold_folder_label = ttk.Label(self.settings_frame, text=self.sold_folder if self.sold_folder else "Not chosen")
+        self.sold_folder_label.grid(row=2, column=1, padx=5, pady=5, sticky='w')
+
+        self.to_sell_folder_button = ttk.Button(self.settings_frame, text="Choose Products to Sell Folder", command=self.choose_to_sell_folder)
+        self.to_sell_folder_button.grid(row=3, column=0, padx=5, pady=5, sticky='w')
+        self.to_sell_folder_label = ttk.Label(self.settings_frame, text=self.to_sell_folder if self.to_sell_folder else "Not chosen")
+        self.to_sell_folder_label.grid(row=3, column=1, padx=5, pady=5, sticky='w')
+
+        self.excel_db_button = ttk.Button(self.settings_frame, text="Select Excel Database", command=self.select_excel_database)
+        self.excel_db_button.grid(row=4, column=0, padx=5, pady=5, sticky='w')
+        excel_db_text = f"{self.default_filepath} - Sheet: {self.default_sheet}" if self.default_filepath and self.default_sheet else "Not chosen"
+        self.excel_db_label = ttk.Label(self.settings_frame, text=excel_db_text)
+        self.excel_db_label.grid(row=4, column=1, padx=5, pady=5, sticky='w')
+
+        self.create_word_files_button = ttk.Button(self.settings_frame, text="Create Word Files for Products", command=self.check_for_missing_word_docs)
+        self.create_word_files_button.grid(row=5, column=0, padx=5, pady=5, sticky='w')
+
+        self.autofill_links_asin_tosellafter_data_button = ttk.Button(self.settings_frame, text="Autofill Excel Data(link, asin, tosellafter)", command=self.update_excel_data)
+        self.autofill_links_asin_tosellafter_data_button.grid(row=6, column=0, padx=5, pady=5, sticky='w')
+
+        self.update_foldersnames_folderpaths_button = ttk.Button(self.settings_frame, text="Update folder names and paths", command=self.update_all_folder_paths_and_names)
+        self.update_foldersnames_folderpaths_button.grid(row=7, column=0, padx=5, pady=5, sticky='w')
+
+        self.products_to_sell_list_button = ttk.Button(self.settings_frame, text="Show list of products available to sell", command=self.products_to_sell_report)
+        self.products_to_sell_list_button.grid(row=8, column=0, padx=5, pady=5, sticky='w')
+
+        self.update_prices_button = ttk.Button(self.settings_frame, text="Update empty product prices based on Fair Market Value.", command=self.update_prices)
+        self.update_prices_button.grid(row=9, column=0, padx=5, pady=5, sticky='w')
+
+        self.update_prices_button = ttk.Button(self.settings_frame, text="First run.", command=self.first_run)
+        self.update_prices_button.grid(row=10, column=0, padx=5, pady=5, sticky='w')
+
+        self.back_button = ttk.Button(self.settings_window, text="<- Back", command=self.back_to_main)
+        self.back_button.grid(row=0, column=0, sticky='w', padx=5, pady=5)
+
+
+        self.logger.info("Settings window initialized and displayed")
+
+        self.combine_and_display_folders()
+        self.settings_window.protocol("WM_DELETE_WINDOW", lambda: on_close(self, self.master))
+        self.master.withdraw()
+    
+    def create_all_word_docs(self):
+        """
+        Creates Word documents for all items listed in the correlation window.
+        """
+
+        # Log the start of creating all Word documents
+        self.logger.info("Starting the creation of all Word documents")
+
+        for iid in self.correlate_tree.get_children():
+            item_values = self.correlate_tree.item(iid, 'values')
+            doc_data = (item_values[0], item_values[1], item_values[2])
+
+            # Log the data of each item being processed
+            self.logger.info(f"Creating Word document for item: {doc_data}")
+
+            self.create_word_doc(doc_data, iid, show_message=False)
+
+        messagebox.showinfo("Success", "All Word documents have been created.")
+        self.correlate_window.destroy()
+        self.Settings_Window_Start()
+
+        # Log the completion of creating all Word documents
+        self.logger.info("All Word documents created successfully")
+
+    def create_word_doc(self, doc_data, iid, show_message=True):
+        """
+        Creates a Word document for a specific product, pulling relevant information from the Excel data. 
+        The document includes details like product ID, name, price, link, and comments.
+        """
+
+        # Log the start of the Word document creation process
+        self.logger.info(f"Creating Word document for product ID {doc_data[1]}")
+
+        # Unpack the data tuple
+        folder_name, product_id, product_name = doc_data
+        # Retrieve the folder path from the database
+        folder_path = self.get_folder_path_from_db(str(product_id))
+
+        if folder_path:
+            try:
+                # Retrieve the product link
+                product_price_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Product Price']
+                if not product_price_series.empty:
+                    product_price = product_price_series.iloc[0]
+                else:
+                    product_price = "N/A"  # Default to "N/A" if not found
+
+                # Retrieve the product link
+                ivu_tax_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'IVU Tax']
+                if not ivu_tax_series.empty:
+                    ivu_tax = ivu_tax_series.iloc[0]
+                else:
+                    ivu_tax = "N/A"  # Default to "N/A" if not found
+
+                # Retrieve the product link
+                product_price_after_ivu_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Product Price After IVU']
+                if not product_price_after_ivu_series.empty:
+                    product_price_after_ivu = product_price_after_ivu_series.iloc[0]
+                else:
+                    product_price_after_ivu = "N/A"  # Default to "N/A" if not found
+
+                # Retrieve the product link
+                order_link_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Order Link']
+                if not order_link_series.empty:
+                    order_link = order_link_series.iloc[0]
+                else:
+                    order_link = "N/A"  # Default to "N/A"            
+                    
+                    # Retrieve the product 
+                comments_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Comments']
+                if not comments_series.empty:
+                    comments = comments_series.iloc[0]
+                else:
+                    comments = "N/A"  # Default to "N/A" 
+                    
+                    # Retrieve the product 
+                product_name_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Product Name']
+                if not product_name_series.empty:
+                    product_name = product_name_series.iloc[0]
+                else:
+                    product_name = "N/A"  # Default to "N/A" 
+
+                    # Retrieve the product 
+                discount_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Discount']
+                if not discount_series.empty:
+                    discount = discount_series.iloc[0]
+                else:
+                    discount = "N/A"  # Default to "N/A" 
+
+                    # Retrieve the product 
+                discount_percentage_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Discount Percentage']
+                if not discount_percentage_series.empty:
+                    discount_percentage = discount_percentage_series.iloc[0]
+                else:
+                    discount_percentage = "N/A"  # Default to "N/A" 
+
+            except Exception as e:
+                self.logger.info(f"Error retrieving data: {e}")  # Debugging print statement
+
+            # Path for the new Word document named 'Product Information.docx'
+            doc_path = os.path.join(folder_path, 'Product Information.docx')
+            try:
+                # Create a new Word document
+                doc = Document()
+                doc.add_paragraph(f"Product ID: {product_id}")
+                doc.add_paragraph(f"Product Name: {product_name}")
+                doc.add_paragraph(f"Product Price: {product_price}")
+                doc.add_paragraph(f"IVU Tax: {ivu_tax}")
+                doc.add_paragraph(f"Product Price After IVU (Sale Price): ${product_price_after_ivu}")    
+                doc.add_paragraph(f"Reseller Earnings : ${discount}     [ = {discount_percentage}% of {product_price} (Product Price)]") 
+                doc.add_paragraph(f"Comments: {comments}")     
+                # doc.add_paragraph(f"Amazon Link(to get the product description and pictures, if needed): {order_link}")
+
+                # Save the document
+                doc.save(doc_path)
+
+                if show_message:
+                    messagebox.showinfo("Document Created", f"Word document for '{product_id}' has been created successfully.")
+                    self.logger.info(f"Word document for product ID {product_id} created successfully")
+
+                # Check if 'correlate_tree' exists before trying to delete an item
+                if hasattr(self, 'correlate_tree'):
+                    try:
+                        self.correlate_tree.delete(iid)
+                    except Exception as e:
+                        self.logger.error(f"Error while updating the Treeview: {e}")
+                # Bring the correlate_window back to the top
+
+                if hasattr(self, 'correlate_window'):
+                    self.correlate_window.lift()
+
+                if hasattr(self, 'correlate_tree') and not self.correlate_tree.get_children():
+                    self.correlate_window.destroy()
+                    self.Settings_Window_Start()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to create document for Product ID {product_id}: {e}")
+                self.logger.error(f"Failed to create document for product ID {product_id}: {e}")
+        else:
+            messagebox.showerror("Error", f"No folder found for Product ID {product_id}")
+            self.logger.error(f"No folder found for product ID {product_id}")
+
+    def check_for_missing_word_docs(self):
+        """
+        Correlates data between the Excel file and Word documents. 
+        It checks if each product in the Excel file has an associated Word document in its respective folder.
+        Notifies if any Word documents are missing for the products listed in the Excel file.
+        """
+
+        # Log when correlation process is initiated
+        self.logger.info("Initiating data correlation between Excel file and Word documents")
+        
+        filepath, sheet_name = self.load_excel_settings()
+
+        # Check if the Excel settings are properly loaded
+        if not filepath or not sheet_name:
+            messagebox.showerror("Error", "Excel database settings not found.")
+            self.logger.error("Excel database settings not found, correlation aborted")
+            return
+
+        # Load the data into the ExcelManager instance
+        self.excel_manager.filepath = filepath  # Set the filepath
+        self.excel_manager.sheet_name = sheet_name  # Set the sheet name
+        self.excel_manager.load_data()  # Load the data
+        
+        try:
+            # Load Excel data
+            df = pd.read_excel(filepath, sheet_name=sheet_name)
+            self.logger.info("Excel data loaded successfully")
+            product_ids = df['Product ID'].tolist()
+            #print(f"Product IDs from Excel: {product_ids}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Unable to load Excel file: {str(e)}")
+            self.logger.error(f"Unable to load Excel file: {e}")
+
+            return
+            # Filter out nan values from the product_ids list using pandas notnull function
+            
+        # Sort the DataFrame based on 'Product ID'
+        df_sorted = df.sort_values('Product ID').dropna(subset=['Product ID'])
+
+        # Filter out nan values from the product_ids list
+        product_ids = df_sorted['Product ID'].tolist()
+        #print(f"Sorted and Filtered Product IDs from Excel: {product_ids}")
+        
+        missing_docs = []
+        for product_id in product_ids:
+            folder_path = self.get_folder_path_from_db(str(product_id))
+            if folder_path:
+                # Check specifically for 'Product Information.docx' file
+                if not os.path.isfile(os.path.join(folder_path, 'Product Information.docx')):
+                    product_name = df.loc[df['Product ID'] == product_id, 'Product Name'].iloc[0]
+                    missing_docs.append((os.path.basename(folder_path), product_id, product_name))
+
+
+        #print(f"Missing documents: {missing_docs}")
+        if missing_docs:
+            self.prompt_missing_word_docs(missing_docs)            
+            self.logger.info("Missing Word documents found, prompting user for action")
+        else:
+            messagebox.showinfo("Check complete", "No missing Word documents found.")
+            self.logger.info("No missing Word documents found, check complete")
+        # Filter out nan values from the product_ids list
+
+    def prompt_missing_word_docs(self, missing_docs):
+        """
+        Opens a window displaying a list of products for which Word documents are missing. 
+        Provides options to create missing documents or exit the process.
+        """
+
+        # Log the start of the prompt for missing Word documents
+        self.logger.info("Prompting for missing Word documents")
+
+        self.correlate_window = Toplevel(self)
+        self.correlate_window.title("Correlate Data")
+
+        self.missing_docs = missing_docs
+
+        # Create a Treeview with columns
+        self.correlate_tree = ttk.Treeview(self.correlate_window, columns=('Folder Name', 'Product ID', 'Product Name'), show='headings')
+        self.correlate_tree.pack(fill='both', expand=True)
+
+        # Configure the columns
+        self.correlate_tree.column('Folder Name', anchor='w', width=150)
+        self.correlate_tree.column('Product ID', anchor='center', width=100)
+        self.correlate_tree.column('Product Name', anchor='w', width=150)
+
+        # Define the headings
+        self.correlate_tree.heading('Folder Name', text='Folder Name', anchor='w')
+        self.correlate_tree.heading('Product ID', text='Product ID', anchor='center')
+        self.correlate_tree.heading('Product Name', text='Product Name', anchor='w')
+
+        # Add the items to the Treeview
+        for i, (folder_name, product_id, product_name) in enumerate(missing_docs):
+            self.correlate_tree.insert('', 'end', iid=str(i), values=(folder_name, product_id, product_name))
+
+        self.logger.info("Treeview setup completed with missing document entries")
+
+        # Bind double-click event to an item
+        self.correlate_tree.bind('<Double-1>', self.on_item_double_click)
+        
+        # Adding a Yes to All button
+        yes_to_all_button = ttk.Button(self.correlate_window, text="Yes to All", command=self.create_all_word_docs)
+        yes_to_all_button.pack()
+
+        exit_button = ttk.Button(self.correlate_window, text="Exit", command=self.exit_correlate_window)
+        exit_button.pack()
+
+        self.logger.info("Correlation prompt window setup completed")
+
+    def on_item_double_click(self, event):
+        """
+        Handles the double-click event on a tree item in the correlation window. 
+        Initiates the creation of a Word document for the selected item.
+        """
+
+        # Log when an item is double-clicked
+        self.logger.info("Item double-clicked in the correlation window")
+
+        item_id = self.correlate_tree.selection()[0]
+        item_values = self.correlate_tree.item(item_id, 'values')
+        doc_data = (item_values[0], item_values[1], item_values[2])
+
+        # Log the data of the item being processed
+        self.logger.info(f"Processing item for Word document creation: {doc_data}")
+
+        self.create_word_doc(doc_data, item_id)
+
+
 
 
     def Product_Form(self):
@@ -742,6 +1171,293 @@ class Application(tk.Frame):
 
         except Exception as e:
             self.logger.error(f"Error initializing main window widgets: {e}")
+
+    def display_product_details(self, event):
+        """
+        Displays the details of a selected product in the GUI. The details are fetched 
+        from an Excel sheet based on the selected product ID. This function updates various 
+        fields in the GUI with the product's information.
+        """
+
+        # Before fetching product details
+        self.logger.info("Displaying product details")
+
+        selection = self.folder_list.curselection()
+        # Get the index of the selected item
+        if not selection:
+            return  # No item selected
+        index = selection[0]
+        selected_folder_name = self.folder_list.get(index)
+        selected_product_id = selected_folder_name.split(' ')[0].upper()  # Assuming the product ID is at the beginning
+        self.current_product_id = selected_product_id  # Set the current product ID
+
+        if self.edit_mode:
+            self.toggle_edit_mode()
+        # Ensure that the Excel file path and sheet name are set
+        filepath, sheet_name = self.load_excel_settings()
+        if filepath and sheet_name:
+            self.excel_manager.filepath = filepath
+            self.excel_manager.sheet_name = sheet_name
+            self.excel_manager.load_data()  # Load the data
+
+            # Retrieve product information from the DataFrame
+            try:
+                product_info = self.excel_manager.get_product_info(selected_product_id)
+                # Right after fetching product_info
+                self.product_folder_path = self.get_folder_path_from_db(selected_product_id)
+
+                if product_info:
+
+                    self.edit_button.config(state="normal")
+                    self.order_link_text.config(state='normal')
+                    self.cancelled_order_var.set(self.excel_value_to_bool(product_info.get('Cancelled Order')))
+                    self.damaged_var.set(self.excel_value_to_bool(product_info.get('Damaged')))
+                    self.personal_var.set(self.excel_value_to_bool(product_info.get('Personal')))
+                    self.reviewed_var.set(self.excel_value_to_bool(product_info.get('Reviewed')))
+                    self.pictures_downloaded_var.set(self.excel_value_to_bool(product_info.get('Pictures Downloaded')))
+                    self.sold_var.set(self.excel_value_to_bool(product_info.get('Sold')))
+                    
+                    # For each field, check if the value is NaN using pd.isnull and set it to an empty string if it is
+                    self.asin_var.set('' if pd.isnull(product_info.get('ASIN')) else product_info.get('ASIN', ''))
+                    self.product_id_var.set('' if pd.isnull(product_info.get('Product ID')) else product_info.get('Product ID', ''))
+
+                    self.product_name_text.configure(state='normal')
+                    self.product_name_text.delete(1.0, "end")
+                    product_name = product_info.get('Product Name', '')
+                    if product_name:
+                        self.product_name_text.insert("insert", product_name) 
+                    self.product_name_text.configure(state='disabled')
+
+                    self.comments_text.configure(state='normal')
+                    self.comments_text.delete(1.0, "end")
+
+                    # Assuming product_info['Comments'] can be NaN, None, or a string
+                    comments_text = product_info.get('Comments', None)
+                    # Check for NaN (using pandas' isna function if you're working with pandas)
+                    # You can also directly check if comments_text is None, which covers both None and NaN cases
+                    if comments_text is None or pd.isna(comments_text):
+                        display_text = "No comments found."
+                    else:
+                        display_text = comments_text
+                    self.comments_text.insert("insert", display_text)
+                    self.comments_text.configure(state='disabled')
+
+                    # When a product is selected and the order date is fetched
+                    order_date = product_info.get('Order Date', '')
+                    formatted_order_date = ''  # Default value
+                    if isinstance(order_date, datetime):
+                        formatted_order_date = order_date.strftime('%m/%d/%Y')
+                        self.order_date_var.set(formatted_order_date)
+                    elif isinstance(order_date, str) and order_date:
+                        try:
+                            # If the date is in the format 'mm/dd/yy', such as '2/15/23'
+                            order_date = datetime.strptime(order_date, "%m/%d/%Y")
+                            formatted_order_date = order_date.strftime('%m/%d/%Y')
+                            self.order_date_var.set(formatted_order_date)
+                        except ValueError as e:
+                            
+                            messagebox.showerror("Error", f"Incorrect date format: {e}")
+                    else:
+                        self.order_date_var.set('')
+                    self.order_date_var.set(formatted_order_date)
+                    
+                    # When a product is selected and the order date is fetched
+                    to_sell_after = product_info.get('To Sell After', '')
+                    formatted_to_sell_after = ''  # Default value
+                    if pd.notnull(to_sell_after):  # Check if 'To Sell After' is not null
+                        try:
+                            if isinstance(to_sell_after, datetime):
+                                formatted_to_sell_after = to_sell_after.strftime('%m/%d/%Y')
+                            elif isinstance(to_sell_after, str) and to_sell_after:
+                                to_sell_after = datetime.strptime(to_sell_after, "%m/%d/%Y")
+                                formatted_to_sell_after = to_sell_after.strftime('%m/%d/%Y')
+                        except ValueError as e:
+                            messagebox.showerror("Error", f"Incorrect date format: {e}")
+                    self.to_sell_after_var.set(formatted_to_sell_after)
+                    self.update_to_sell_after_color()
+                    
+                    sold_date = product_info.get('Sold Date', '')
+                    formatted_sold_date = ''  # Default value
+
+                    if pd.notnull(sold_date):  # Check if 'Sold Date' is not null
+                        try:
+                            if isinstance(sold_date, datetime):
+                                formatted_sold_date = sold_date.strftime('%m/%d/%Y')
+                            elif isinstance(sold_date, str) and sold_date:
+                                # Parse the date string to a date object and format it
+                                sold_date = datetime.strptime(sold_date, "%m/%d/%Y").date()
+                                formatted_sold_date = sold_date.strftime('%m/%d/%Y')
+                        except ValueError as e:
+                            messagebox.showerror("Error", f"Incorrect date format: {e}")
+                    else:
+                        formatted_sold_date = ''
+
+                    self.sold_date_var.set(formatted_sold_date)
+
+                    def format_price(value):
+                        if pd.isnull(value):
+                            return ''
+                        # Separate the fractional and integer parts
+                        fractional, integer = math.modf(value)
+                        # If the fractional part is 0, use the integer part; otherwise, format with two decimal places
+                        return f"${int(integer) if fractional == 0 else f'{value:.2f}'}"
+
+                    def format_percentage(value):
+                        if pd.isnull(value):
+                            return ''
+                        # Separate the fractional and integer parts
+                        fractional, integer = math.modf(value)
+                        # If the fractional part is 0, use the integer part; otherwise, format with two decimal places
+                        return f"{int(integer) if fractional == 0 else f'{value:.2f}'}%"
+
+                    self.fair_market_value_var.set(format_price(product_info.get('Fair Market Value')))
+                    self.discount_var.set(format_price(product_info.get('Discount')))
+                    self.percent_discount_var.set(format_percentage(product_info.get('Discount Percentage')))
+
+                    self.regular_product_price_var.set(format_price(product_info.get('Product Price')))
+                    self.ivu_tax_var.set(format_price(product_info.get('IVU Tax')))
+                    self.product_price_plus_ivu_var.set(format_price(product_info.get('Product Price After IVU')))
+
+                    self.product_price_after_discount_var.set(format_price(product_info.get('Product Price After Discount')))
+                    self.ivu_tax_after_discount_var.set(format_price(product_info.get('IVU Tax After Discount')))
+                    self.product_price_minus_discount_plus_ivu_var.set(format_price(product_info.get('Product Price After IVU and Discount')))
+
+                    self.sold_price_var.set(format_price(product_info.get('Sold Price')) if not pd.isnull(product_info.get('Sold Price')) else '')
+
+                    self.order_link_text.delete(1.0, "end")
+                    hyperlink = product_info.get('Order Link', '')
+                    if hyperlink:
+                        self.order_link_text.insert("insert", hyperlink, "hyperlink")
+                        self.order_link_text.tag_add("hyperlink", "1.0", "end")
+                        
+                    self.payment_type_var.set('' if pd.isnull(product_info.get('Payment Type')) else product_info.get('Payment Type', ''))
+                    # ... continue with other fields as needed ...
+                    # Add code here to populate the Sold Date and other date-related fields, if applicable
+                    
+                    # Fetch the full folder path from the database using the product ID.
+                    folder_path = self.get_folder_path_from_db(selected_product_id)
+
+                    # Extract the name of the parent directory (where the product folder is located)
+                    parent_folder_name = os.path.basename(os.path.dirname(folder_path)) if folder_path else "No Folder"
+                    self.product_folder_var.set(parent_folder_name)
+
+                    # If the folder path exists, update the button to open the product folder when clicked
+                    if folder_path and os.path.exists(folder_path):
+                        self.product_folder_link.config(command=lambda: self.open_product_folder(folder_path), state='normal')
+                    else:
+                        self.product_folder_var.set("No Folder")
+                        self.product_folder_link.config(state='disabled')
+                    self.product_image_label.config(image='')
+                    self.product_image_label.configure(text='Loading image...')
+                    # 1. Find the column number for "Product Image"
+                    product_image_col_num = None
+                    for col_num, col_name in enumerate(self.excel_manager.data_frame.columns):
+                        if col_name == 'Product Image':
+                            product_image_col_num = col_num
+                            break
+                    # 2. Get the current row number
+                    current_row_num = self.excel_manager.data_frame[self.excel_manager.data_frame['Product ID'].str.upper() == selected_product_id.upper()].index[0]
+  
+                    # 3. Print the column name and row number
+                    if product_image_col_num is not None:
+                        self.load_and_display_image(current_row_num + 1, product_image_col_num, selected_product_id)
+                    
+                    self.logger.info(f"Product details displayed for: {selected_product_id}")
+                else:
+                    self.edit_button.config(state='disabled')
+                    self.cancelled_order_var.set(False)
+                    self.damaged_var.set(False)
+                    self.personal_var.set(False)
+                    self.reviewed_var.set(False)
+                    self.pictures_downloaded_var.set(False)
+                    self.sold_var.set(False)
+                    self.product_image_label.config(image='')
+                    self.product_image_label.configure(text="Image not loaded.")
+                    # Populate the widgets with the matched data
+                    self.asin_var.set('')
+                    self.product_id_var.set('')
+                    self.to_sell_after_var.set('')
+                    # Add code here to handle the product image, if applicable
+                    self.product_name_text.configure(state='normal')
+                    self.product_name_text.delete(1.0, tk.END)
+                    self.product_name_text.insert(tk.END, 'Product not found in Excel.')
+                    self.product_name_text.configure(state='disabled')
+                    self.comments_text.configure(state='normal')
+                    self.comments_text.delete(1.0, tk.END)
+                    self.comments_text.insert(tk.END, 'Comment not found in Excel.')
+                    self.comments_text.configure(state='disabled')
+                    self.order_date_var.set('')
+                    self.fair_market_value_var.set('')
+                    self.discount_var.set('')
+                    self.percent_discount_var.set("")
+
+                    self.product_price_after_discount_var.set("")
+                    self.ivu_tax_after_discount_var.set("")
+                    self.product_price_minus_discount_plus_ivu_var.set("")
+
+                    self.product_price_plus_ivu_var.set('')
+                    self.ivu_tax_var.set('')
+                    self.regular_product_price_var.set('')
+                    self.order_link_text.delete(1.0, "end")
+                    self.sold_price_var.set('')
+                    self.payment_type_var.set('')
+                    self.sold_date_var.set('')
+                    self.product_folder_var.set("No Folder")
+                    self.product_folder_link.config(state='disabled')
+                    self.order_link_text.config(state='disabled')
+
+            except Exception as e:
+                messagebox.showerror("Error", f"An error occurred: {e}")
+                #print(f"Error retrieving product details: {e}")
+                self.logger.error(f"Error retrieving product details: {e}")
+        else:
+            messagebox.showerror("Error", "Excel file path or sheet name is not set.")        
+        
+        # Unbind the Enter key from the save_button's command
+        self.master.unbind('<Return>')
+        self.master.unbind('<Escape>')
+       
+        # Bind the Enter key to the global enter handler
+        self.master.bind('<Return>', self.edit_on_key_handler)
+        self.logger.info("Completed displaying product details")
+
+    def refresh_and_select_product(self, product_id):
+        """
+        Refreshes the list of products and selects the specified product. 
+        This function is typically called after updating product information to reflect changes in the UI.
+        """
+
+        # Log before starting the refresh process
+        self.logger.info(f"Refreshing and selecting product with ID: {product_id}")
+
+        # Refresh the list of products
+        self.combine_and_display_folders()
+        
+        # Convert the product_id to uppercase for case-insensitive comparison
+        product_id_upper = product_id.upper()
+
+        # Log after refreshing the list
+        self.logger.info("Product list refreshed")
+
+        # Find the index of the product that was just edited
+        product_index = None
+        for index, product_name in enumerate(self.folder_list.get(0, tk.END)):
+            # Use .split() to get the first part of the folder name and compare it in uppercase
+            if product_name.split()[0].upper() == product_id_upper:
+                product_index = index
+                break
+        
+        # If the product is found in the list, select it
+        if product_index is not None:
+            self.folder_list.selection_set(product_index)
+            self.folder_list.see(product_index)  # Ensure the product is visible in the list
+            self.folder_list.event_generate("<<ListboxSelect>>")  # Trigger the event to display product details
+            self.logger.info(f"Selected and displayed details for product ID: {product_id}")
+            
+        self.logger.info("Completed product selection process")
+        self.toggle_edit_mode()
+
+
 
     def validate_input(self, input_value, is_percentage=False):
         # Check for empty input
@@ -1238,81 +1954,7 @@ class Application(tk.Frame):
 
 
 
-    def Settings_Window_Start(self):
-        """
-        Opens the settings window where the user can configure various options like 
-        choosing inventory, sold inventory, and products to sell folders, selecting the Excel database, 
-        and other settings related to product data and reports.
-        """
-        self.logger.info("Opening settings window")
 
-        if hasattr(self, 'settings_window') and self.settings_window.winfo_exists():
-            self.settings_window.lift()
-            return
-        self.settings_window = tk.Toplevel(self)
-        self.settings_window.title("Settings")
-        self.settings_window.state('zoomed')
-
-        # Create and grid the settings frame
-        self.settings_frame = tk.Frame(self.settings_window)
-        self.settings_frame.grid(row=1, column=1, sticky='nw')
-
-        # Load settings
-        self.default_filepath, self.default_sheet = self.load_excel_settings()
-        
-        # Configure the grid columns of the frame
-        self.settings_frame.grid_columnconfigure(1, weight=1)  # Adjust the weight as needed
-
-        # Now grid all widgets onto the settings_frame
-        self.inventory_folder_button = ttk.Button(self.settings_frame, text="Choose Inventory Folder", command=self.choose_inventory_folder)
-        self.inventory_folder_button.grid(row=1, column=0, padx=5, pady=5, sticky='w')
-        self.inventory_folder_label = ttk.Label(self.settings_frame, text=self.inventory_folder if self.inventory_folder else "Not chosen")
-        self.inventory_folder_label.grid(row=1, column=1, padx=5, pady=5, sticky='w')
-
-        self.sold_folder_button = ttk.Button(self.settings_frame, text="Choose Sold Inventory Folder", command=self.choose_sold_folder)
-        self.sold_folder_button.grid(row=2, column=0, padx=5, pady=5, sticky='w')
-        self.sold_folder_label = ttk.Label(self.settings_frame, text=self.sold_folder if self.sold_folder else "Not chosen")
-        self.sold_folder_label.grid(row=2, column=1, padx=5, pady=5, sticky='w')
-
-        self.to_sell_folder_button = ttk.Button(self.settings_frame, text="Choose Products to Sell Folder", command=self.choose_to_sell_folder)
-        self.to_sell_folder_button.grid(row=3, column=0, padx=5, pady=5, sticky='w')
-        self.to_sell_folder_label = ttk.Label(self.settings_frame, text=self.to_sell_folder if self.to_sell_folder else "Not chosen")
-        self.to_sell_folder_label.grid(row=3, column=1, padx=5, pady=5, sticky='w')
-
-        self.excel_db_button = ttk.Button(self.settings_frame, text="Select Excel Database", command=self.select_excel_database)
-        self.excel_db_button.grid(row=4, column=0, padx=5, pady=5, sticky='w')
-        excel_db_text = f"{self.default_filepath} - Sheet: {self.default_sheet}" if self.default_filepath and self.default_sheet else "Not chosen"
-        self.excel_db_label = ttk.Label(self.settings_frame, text=excel_db_text)
-        self.excel_db_label.grid(row=4, column=1, padx=5, pady=5, sticky='w')
-
-        self.create_word_files_button = ttk.Button(self.settings_frame, text="Create Word Files for Products", command=self.check_for_missing_word_docs)
-        self.create_word_files_button.grid(row=5, column=0, padx=5, pady=5, sticky='w')
-
-        self.autofill_links_asin_tosellafter_data_button = ttk.Button(self.settings_frame, text="Autofill Excel Data(link, asin, tosellafter)", command=self.update_excel_data)
-        self.autofill_links_asin_tosellafter_data_button.grid(row=6, column=0, padx=5, pady=5, sticky='w')
-
-        self.update_foldersnames_folderpaths_button = ttk.Button(self.settings_frame, text="Update folder names and paths", command=self.update_all_folder_paths_and_names)
-        self.update_foldersnames_folderpaths_button.grid(row=7, column=0, padx=5, pady=5, sticky='w')
-
-        self.products_to_sell_list_button = ttk.Button(self.settings_frame, text="Show list of products available to sell", command=self.products_to_sell_report)
-        self.products_to_sell_list_button.grid(row=8, column=0, padx=5, pady=5, sticky='w')
-
-        self.update_prices_button = ttk.Button(self.settings_frame, text="Update empty product prices based on Fair Market Value.", command=self.update_prices)
-        self.update_prices_button.grid(row=9, column=0, padx=5, pady=5, sticky='w')
-
-        self.update_prices_button = ttk.Button(self.settings_frame, text="First run.", command=self.first_run)
-        self.update_prices_button.grid(row=10, column=0, padx=5, pady=5, sticky='w')
-
-        self.back_button = ttk.Button(self.settings_window, text="<- Back", command=self.back_to_main)
-        self.back_button.grid(row=0, column=0, sticky='w', padx=5, pady=5)
-
-
-        self.logger.info("Settings window initialized and displayed")
-
-        self.combine_and_display_folders()
-        self.settings_window.protocol("WM_DELETE_WINDOW", lambda: on_close(self, self.master))
-        self.master.withdraw()
-    
     def get_previous_excel_report_data(self):
         self.logger.info("Starting to get previous Excel report data")
 
@@ -1548,56 +2190,6 @@ class Application(tk.Frame):
         # Lowercase all words for case-insensitive comparison, numbers will sort naturally before letters.
         return (len(words[0]),) + tuple(words)
 
-    def combine_and_display_folders(self):
-        """
-        Combines and displays the folder names from various paths including inventory, sold, 
-        to sell, damaged, and personal folders. Updates these folder paths in the database. 
-        The folder list is first cleared, then updated with the combined and sorted folder names.
-        """
-        self.logger.info("Combining and displaying folders")
-
-        # Clear the folder list first
-        self.folder_list.delete(0, tk.END)
-
-        # Initialize additional folders based on the inventory folder
-        if self.inventory_folder:
-            parent_dir = os.path.dirname(self.inventory_folder)
-            self.damaged_folder = os.path.join(parent_dir, "Damaged")
-            self.personal_folder = os.path.join(parent_dir, "Personal")
-
-            # Create additional folders if they don't exist
-            for folder in [self.damaged_folder, self.personal_folder]:
-                if not os.path.exists(folder):
-                    os.makedirs(folder)
-
-        # Begin a transaction
-        self.db_manager.cur.execute("BEGIN")
-        try:
-            # Combine the folders from all paths including damaged and personal folders
-            combined_folders = []
-            for folder_path in [self.inventory_folder, self.sold_folder, self.to_sell_folder, self.damaged_folder, self.personal_folder]:
-                if folder_path and os.path.exists(folder_path):
-                    for root, dirs, files in os.walk(folder_path):
-                        for dir_name in dirs:
-                            combined_folders.append(dir_name)
-                            full_path = os.path.join(root, dir_name)
-                            # Update the database with the current folder paths
-                            self.db_manager.cur.execute("INSERT OR REPLACE INTO folder_paths (Folder, Path) VALUES (?, ?)", (dir_name, full_path))
-            self.db_manager.conn.commit()  # Commit the transaction if all is well
-        except Exception as e:
-            self.db_manager.conn.rollback()  # Rollback if there was an error
-            self.logger.error(f"Database error in combine_and_display_folders: {e}")
-
-        # Deduplicate folder names
-        unique_folders = list(set(combined_folders))
-
-        # Sort using the custom sort key function
-        sorted_folders = sorted(unique_folders, key=self.custom_sort_key)
-
-        # Insert the sorted folders into the list widget
-        for folder in sorted_folders:
-            self.folder_list.insert(tk.END, folder)
-        self.logger.info("Folders combined, sorted, and displayed")
 
     def choose_sold_folder(self):
         """
@@ -1653,291 +2245,7 @@ class Application(tk.Frame):
         except Exception as e:
             self.logger.error(f"Error saving folder settings to file: {e}")
 
-    def search(self, event):
-        """
-        Searches for folders based on the user's input in the search entry. 
-        The search is case-insensitive and looks for matches in all relevant folders including
-        inventory, sold, to sell, damaged, and personal folders.
-        """
-        self.logger.info("Performing search based on user input")
-        search_terms = self.search_entry.get().split()  # Split the search string into words
-        if search_terms:
-            self.folder_list.delete(0, tk.END)  # Clear the current list
 
-            # Define a list of folder paths to search in
-            search_paths = [
-                self.inventory_folder,
-                self.sold_folder,
-                self.to_sell_folder,
-                self.damaged_folder,
-                self.personal_folder
-            ]
-
-            # Filter out None or invalid paths
-            valid_search_paths = [path for path in search_paths if path and os.path.exists(path)]
-
-            # Perform the search in each valid path
-            for path in valid_search_paths:
-                for root, dirs, files in os.walk(path):
-                    # Check if 'dirs' is empty, meaning 'root' is a leaf directory
-                    if not dirs:
-                        folder_name = os.path.basename(root)  # Get the name of the leaf directory
-                        # Check if all search terms are in the folder name (case insensitive)
-                        if all(term.upper() in folder_name.upper() for term in search_terms):
-                            self.folder_list.insert(tk.END, folder_name)
-            self.logger.info("Search completed and results displayed")
-        else:
-            self.combine_and_display_folders()  # If the search box is empty, display all folders   
-            self.logger.info("Search box is empty, displaying all folders")
-
-    def display_product_details(self, event):
-        """
-        Displays the details of a selected product in the GUI. The details are fetched 
-        from an Excel sheet based on the selected product ID. This function updates various 
-        fields in the GUI with the product's information.
-        """
-
-        # Before fetching product details
-        self.logger.info("Displaying product details")
-
-        selection = self.folder_list.curselection()
-        # Get the index of the selected item
-        if not selection:
-            return  # No item selected
-        index = selection[0]
-        selected_folder_name = self.folder_list.get(index)
-        selected_product_id = selected_folder_name.split(' ')[0].upper()  # Assuming the product ID is at the beginning
-        self.current_product_id = selected_product_id  # Set the current product ID
-
-        if self.edit_mode:
-            self.toggle_edit_mode()
-        # Ensure that the Excel file path and sheet name are set
-        filepath, sheet_name = self.load_excel_settings()
-        if filepath and sheet_name:
-            self.excel_manager.filepath = filepath
-            self.excel_manager.sheet_name = sheet_name
-            self.excel_manager.load_data()  # Load the data
-
-            # Retrieve product information from the DataFrame
-            try:
-                product_info = self.excel_manager.get_product_info(selected_product_id)
-                # Right after fetching product_info
-                self.product_folder_path = self.get_folder_path_from_db(selected_product_id)
-
-                if product_info:
-
-                    self.edit_button.config(state="normal")
-                    self.order_link_text.config(state='normal')
-                    self.cancelled_order_var.set(self.excel_value_to_bool(product_info.get('Cancelled Order')))
-                    self.damaged_var.set(self.excel_value_to_bool(product_info.get('Damaged')))
-                    self.personal_var.set(self.excel_value_to_bool(product_info.get('Personal')))
-                    self.reviewed_var.set(self.excel_value_to_bool(product_info.get('Reviewed')))
-                    self.pictures_downloaded_var.set(self.excel_value_to_bool(product_info.get('Pictures Downloaded')))
-                    self.sold_var.set(self.excel_value_to_bool(product_info.get('Sold')))
-                    
-                    # For each field, check if the value is NaN using pd.isnull and set it to an empty string if it is
-                    self.asin_var.set('' if pd.isnull(product_info.get('ASIN')) else product_info.get('ASIN', ''))
-                    self.product_id_var.set('' if pd.isnull(product_info.get('Product ID')) else product_info.get('Product ID', ''))
-
-                    self.product_name_text.configure(state='normal')
-                    self.product_name_text.delete(1.0, "end")
-                    product_name = product_info.get('Product Name', '')
-                    if product_name:
-                        self.product_name_text.insert("insert", product_name) 
-                    self.product_name_text.configure(state='disabled')
-
-                    self.comments_text.configure(state='normal')
-                    self.comments_text.delete(1.0, "end")
-
-                    # Assuming product_info['Comments'] can be NaN, None, or a string
-                    comments_text = product_info.get('Comments', None)
-                    # Check for NaN (using pandas' isna function if you're working with pandas)
-                    # You can also directly check if comments_text is None, which covers both None and NaN cases
-                    if comments_text is None or pd.isna(comments_text):
-                        display_text = "No comments found."
-                    else:
-                        display_text = comments_text
-                    self.comments_text.insert("insert", display_text)
-                    self.comments_text.configure(state='disabled')
-
-                    # When a product is selected and the order date is fetched
-                    order_date = product_info.get('Order Date', '')
-                    formatted_order_date = ''  # Default value
-                    if isinstance(order_date, datetime):
-                        formatted_order_date = order_date.strftime('%m/%d/%Y')
-                        self.order_date_var.set(formatted_order_date)
-                    elif isinstance(order_date, str) and order_date:
-                        try:
-                            # If the date is in the format 'mm/dd/yy', such as '2/15/23'
-                            order_date = datetime.strptime(order_date, "%m/%d/%Y")
-                            formatted_order_date = order_date.strftime('%m/%d/%Y')
-                            self.order_date_var.set(formatted_order_date)
-                        except ValueError as e:
-                            
-                            messagebox.showerror("Error", f"Incorrect date format: {e}")
-                    else:
-                        self.order_date_var.set('')
-                    self.order_date_var.set(formatted_order_date)
-                    
-                    # When a product is selected and the order date is fetched
-                    to_sell_after = product_info.get('To Sell After', '')
-                    formatted_to_sell_after = ''  # Default value
-                    if pd.notnull(to_sell_after):  # Check if 'To Sell After' is not null
-                        try:
-                            if isinstance(to_sell_after, datetime):
-                                formatted_to_sell_after = to_sell_after.strftime('%m/%d/%Y')
-                            elif isinstance(to_sell_after, str) and to_sell_after:
-                                to_sell_after = datetime.strptime(to_sell_after, "%m/%d/%Y")
-                                formatted_to_sell_after = to_sell_after.strftime('%m/%d/%Y')
-                        except ValueError as e:
-                            messagebox.showerror("Error", f"Incorrect date format: {e}")
-                    self.to_sell_after_var.set(formatted_to_sell_after)
-                    self.update_to_sell_after_color()
-                    
-                    sold_date = product_info.get('Sold Date', '')
-                    formatted_sold_date = ''  # Default value
-
-                    if pd.notnull(sold_date):  # Check if 'Sold Date' is not null
-                        try:
-                            if isinstance(sold_date, datetime):
-                                formatted_sold_date = sold_date.strftime('%m/%d/%Y')
-                            elif isinstance(sold_date, str) and sold_date:
-                                # Parse the date string to a date object and format it
-                                sold_date = datetime.strptime(sold_date, "%m/%d/%Y").date()
-                                formatted_sold_date = sold_date.strftime('%m/%d/%Y')
-                        except ValueError as e:
-                            messagebox.showerror("Error", f"Incorrect date format: {e}")
-                    else:
-                        formatted_sold_date = ''
-
-                    self.sold_date_var.set(formatted_sold_date)
-
-                    def format_price(value):
-                        if pd.isnull(value):
-                            return ''
-                        # Separate the fractional and integer parts
-                        fractional, integer = math.modf(value)
-                        # If the fractional part is 0, use the integer part; otherwise, format with two decimal places
-                        return f"${int(integer) if fractional == 0 else f'{value:.2f}'}"
-
-                    def format_percentage(value):
-                        if pd.isnull(value):
-                            return ''
-                        # Separate the fractional and integer parts
-                        fractional, integer = math.modf(value)
-                        # If the fractional part is 0, use the integer part; otherwise, format with two decimal places
-                        return f"{int(integer) if fractional == 0 else f'{value:.2f}'}%"
-
-                    self.fair_market_value_var.set(format_price(product_info.get('Fair Market Value')))
-                    self.discount_var.set(format_price(product_info.get('Discount')))
-                    self.percent_discount_var.set(format_percentage(product_info.get('Discount Percentage')))
-
-                    self.regular_product_price_var.set(format_price(product_info.get('Product Price')))
-                    self.ivu_tax_var.set(format_price(product_info.get('IVU Tax')))
-                    self.product_price_plus_ivu_var.set(format_price(product_info.get('Product Price After IVU')))
-
-                    self.product_price_after_discount_var.set(format_price(product_info.get('Product Price After Discount')))
-                    self.ivu_tax_after_discount_var.set(format_price(product_info.get('IVU Tax After Discount')))
-                    self.product_price_minus_discount_plus_ivu_var.set(format_price(product_info.get('Product Price After IVU and Discount')))
-
-                    self.sold_price_var.set(format_price(product_info.get('Sold Price')) if not pd.isnull(product_info.get('Sold Price')) else '')
-
-                    self.order_link_text.delete(1.0, "end")
-                    hyperlink = product_info.get('Order Link', '')
-                    if hyperlink:
-                        self.order_link_text.insert("insert", hyperlink, "hyperlink")
-                        self.order_link_text.tag_add("hyperlink", "1.0", "end")
-                        
-                    self.payment_type_var.set('' if pd.isnull(product_info.get('Payment Type')) else product_info.get('Payment Type', ''))
-                    # ... continue with other fields as needed ...
-                    # Add code here to populate the Sold Date and other date-related fields, if applicable
-                    
-                    # Fetch the full folder path from the database using the product ID.
-                    folder_path = self.get_folder_path_from_db(selected_product_id)
-
-                    # Extract the name of the parent directory (where the product folder is located)
-                    parent_folder_name = os.path.basename(os.path.dirname(folder_path)) if folder_path else "No Folder"
-                    self.product_folder_var.set(parent_folder_name)
-
-                    # If the folder path exists, update the button to open the product folder when clicked
-                    if folder_path and os.path.exists(folder_path):
-                        self.product_folder_link.config(command=lambda: self.open_product_folder(folder_path), state='normal')
-                    else:
-                        self.product_folder_var.set("No Folder")
-                        self.product_folder_link.config(state='disabled')
-                    self.product_image_label.config(image='')
-                    self.product_image_label.configure(text='Loading image...')
-                    # 1. Find the column number for "Product Image"
-                    product_image_col_num = None
-                    for col_num, col_name in enumerate(self.excel_manager.data_frame.columns):
-                        if col_name == 'Product Image':
-                            product_image_col_num = col_num
-                            break
-                    # 2. Get the current row number
-                    current_row_num = self.excel_manager.data_frame[self.excel_manager.data_frame['Product ID'].str.upper() == selected_product_id.upper()].index[0]
-  
-                    # 3. Print the column name and row number
-                    if product_image_col_num is not None:
-                        self.load_and_display_image(current_row_num + 1, product_image_col_num, selected_product_id)
-                    
-                    self.logger.info(f"Product details displayed for: {selected_product_id}")
-                else:
-                    self.edit_button.config(state='disabled')
-                    self.cancelled_order_var.set(False)
-                    self.damaged_var.set(False)
-                    self.personal_var.set(False)
-                    self.reviewed_var.set(False)
-                    self.pictures_downloaded_var.set(False)
-                    self.sold_var.set(False)
-                    self.product_image_label.config(image='')
-                    self.product_image_label.configure(text="Image not loaded.")
-                    # Populate the widgets with the matched data
-                    self.asin_var.set('')
-                    self.product_id_var.set('')
-                    self.to_sell_after_var.set('')
-                    # Add code here to handle the product image, if applicable
-                    self.product_name_text.configure(state='normal')
-                    self.product_name_text.delete(1.0, tk.END)
-                    self.product_name_text.insert(tk.END, 'Product not found in Excel.')
-                    self.product_name_text.configure(state='disabled')
-                    self.comments_text.configure(state='normal')
-                    self.comments_text.delete(1.0, tk.END)
-                    self.comments_text.insert(tk.END, 'Comment not found in Excel.')
-                    self.comments_text.configure(state='disabled')
-                    self.order_date_var.set('')
-                    self.fair_market_value_var.set('')
-                    self.discount_var.set('')
-                    self.percent_discount_var.set("")
-
-                    self.product_price_after_discount_var.set("")
-                    self.ivu_tax_after_discount_var.set("")
-                    self.product_price_minus_discount_plus_ivu_var.set("")
-
-                    self.product_price_plus_ivu_var.set('')
-                    self.ivu_tax_var.set('')
-                    self.regular_product_price_var.set('')
-                    self.order_link_text.delete(1.0, "end")
-                    self.sold_price_var.set('')
-                    self.payment_type_var.set('')
-                    self.sold_date_var.set('')
-                    self.product_folder_var.set("No Folder")
-                    self.product_folder_link.config(state='disabled')
-                    self.order_link_text.config(state='disabled')
-
-            except Exception as e:
-                messagebox.showerror("Error", f"An error occurred: {e}")
-                #print(f"Error retrieving product details: {e}")
-                self.logger.error(f"Error retrieving product details: {e}")
-        else:
-            messagebox.showerror("Error", "Excel file path or sheet name is not set.")        
-        
-        # Unbind the Enter key from the save_button's command
-        self.master.unbind('<Return>')
-        self.master.unbind('<Escape>')
-       
-        # Bind the Enter key to the global enter handler
-        self.master.bind('<Return>', self.edit_on_key_handler)
-        self.logger.info("Completed displaying product details")
 
     def load_and_display_image(self, current_row_num, product_image_col_num, product_id):
         """
@@ -2366,41 +2674,6 @@ class Application(tk.Frame):
         # if you want to be able to press Enter to switch to edit mode again
         #self.master.bind('<Return>', lambda e: self.edit_on_key_handler.invoke())
 
-    def refresh_and_select_product(self, product_id):
-        """
-        Refreshes the list of products and selects the specified product. 
-        This function is typically called after updating product information to reflect changes in the UI.
-        """
-
-        # Log before starting the refresh process
-        self.logger.info(f"Refreshing and selecting product with ID: {product_id}")
-
-        # Refresh the list of products
-        self.combine_and_display_folders()
-        
-        # Convert the product_id to uppercase for case-insensitive comparison
-        product_id_upper = product_id.upper()
-
-        # Log after refreshing the list
-        self.logger.info("Product list refreshed")
-
-        # Find the index of the product that was just edited
-        product_index = None
-        for index, product_name in enumerate(self.folder_list.get(0, tk.END)):
-            # Use .split() to get the first part of the folder name and compare it in uppercase
-            if product_name.split()[0].upper() == product_id_upper:
-                product_index = index
-                break
-        
-        # If the product is found in the list, select it
-        if product_index is not None:
-            self.folder_list.selection_set(product_index)
-            self.folder_list.see(product_index)  # Ensure the product is visible in the list
-            self.folder_list.event_generate("<<ListboxSelect>>")  # Trigger the event to display product details
-            self.logger.info(f"Selected and displayed details for product ID: {product_id}")
-            
-        self.logger.info("Completed product selection process")
-        self.toggle_edit_mode()
 
     def get_folder_names_from_db(self):
         """
@@ -3141,272 +3414,6 @@ class Application(tk.Frame):
             # Log the error encountered during the price update process
             self.logger.error(f"Error updating prices in Excel: {e}")
 
-    def check_for_missing_word_docs(self):
-        """
-        Correlates data between the Excel file and Word documents. 
-        It checks if each product in the Excel file has an associated Word document in its respective folder.
-        Notifies if any Word documents are missing for the products listed in the Excel file.
-        """
-
-        # Log when correlation process is initiated
-        self.logger.info("Initiating data correlation between Excel file and Word documents")
-        
-        filepath, sheet_name = self.load_excel_settings()
-
-        # Check if the Excel settings are properly loaded
-        if not filepath or not sheet_name:
-            messagebox.showerror("Error", "Excel database settings not found.")
-            self.logger.error("Excel database settings not found, correlation aborted")
-            return
-
-        # Load the data into the ExcelManager instance
-        self.excel_manager.filepath = filepath  # Set the filepath
-        self.excel_manager.sheet_name = sheet_name  # Set the sheet name
-        self.excel_manager.load_data()  # Load the data
-        
-        try:
-            # Load Excel data
-            df = pd.read_excel(filepath, sheet_name=sheet_name)
-            self.logger.info("Excel data loaded successfully")
-            product_ids = df['Product ID'].tolist()
-            #print(f"Product IDs from Excel: {product_ids}")
-        except Exception as e:
-            messagebox.showerror("Error", f"Unable to load Excel file: {str(e)}")
-            self.logger.error(f"Unable to load Excel file: {e}")
-
-            return
-            # Filter out nan values from the product_ids list using pandas notnull function
-            
-        # Sort the DataFrame based on 'Product ID'
-        df_sorted = df.sort_values('Product ID').dropna(subset=['Product ID'])
-
-        # Filter out nan values from the product_ids list
-        product_ids = df_sorted['Product ID'].tolist()
-        #print(f"Sorted and Filtered Product IDs from Excel: {product_ids}")
-        
-        missing_docs = []
-        for product_id in product_ids:
-            folder_path = self.get_folder_path_from_db(str(product_id))
-            if folder_path:
-                # Check specifically for 'Product Information.docx' file
-                if not os.path.isfile(os.path.join(folder_path, 'Product Information.docx')):
-                    product_name = df.loc[df['Product ID'] == product_id, 'Product Name'].iloc[0]
-                    missing_docs.append((os.path.basename(folder_path), product_id, product_name))
-
-
-        #print(f"Missing documents: {missing_docs}")
-        if missing_docs:
-            self.prompt_missing_word_docs(missing_docs)            
-            self.logger.info("Missing Word documents found, prompting user for action")
-        else:
-            messagebox.showinfo("Check complete", "No missing Word documents found.")
-            self.logger.info("No missing Word documents found, check complete")
-        # Filter out nan values from the product_ids list
-
-    def prompt_missing_word_docs(self, missing_docs):
-        """
-        Opens a window displaying a list of products for which Word documents are missing. 
-        Provides options to create missing documents or exit the process.
-        """
-
-        # Log the start of the prompt for missing Word documents
-        self.logger.info("Prompting for missing Word documents")
-
-        self.correlate_window = Toplevel(self)
-        self.correlate_window.title("Correlate Data")
-
-        self.missing_docs = missing_docs
-
-        # Create a Treeview with columns
-        self.correlate_tree = ttk.Treeview(self.correlate_window, columns=('Folder Name', 'Product ID', 'Product Name'), show='headings')
-        self.correlate_tree.pack(fill='both', expand=True)
-
-        # Configure the columns
-        self.correlate_tree.column('Folder Name', anchor='w', width=150)
-        self.correlate_tree.column('Product ID', anchor='center', width=100)
-        self.correlate_tree.column('Product Name', anchor='w', width=150)
-
-        # Define the headings
-        self.correlate_tree.heading('Folder Name', text='Folder Name', anchor='w')
-        self.correlate_tree.heading('Product ID', text='Product ID', anchor='center')
-        self.correlate_tree.heading('Product Name', text='Product Name', anchor='w')
-
-        # Add the items to the Treeview
-        for i, (folder_name, product_id, product_name) in enumerate(missing_docs):
-            self.correlate_tree.insert('', 'end', iid=str(i), values=(folder_name, product_id, product_name))
-
-        self.logger.info("Treeview setup completed with missing document entries")
-
-        # Bind double-click event to an item
-        self.correlate_tree.bind('<Double-1>', self.on_item_double_click)
-        
-        # Adding a Yes to All button
-        yes_to_all_button = ttk.Button(self.correlate_window, text="Yes to All", command=self.create_all_word_docs)
-        yes_to_all_button.pack()
-
-        exit_button = ttk.Button(self.correlate_window, text="Exit", command=self.exit_correlate_window)
-        exit_button.pack()
-
-        self.logger.info("Correlation prompt window setup completed")
-
-    def on_item_double_click(self, event):
-        """
-        Handles the double-click event on a tree item in the correlation window. 
-        Initiates the creation of a Word document for the selected item.
-        """
-
-        # Log when an item is double-clicked
-        self.logger.info("Item double-clicked in the correlation window")
-
-        item_id = self.correlate_tree.selection()[0]
-        item_values = self.correlate_tree.item(item_id, 'values')
-        doc_data = (item_values[0], item_values[1], item_values[2])
-
-        # Log the data of the item being processed
-        self.logger.info(f"Processing item for Word document creation: {doc_data}")
-
-        self.create_word_doc(doc_data, item_id)
-
-    def create_all_word_docs(self):
-        """
-        Creates Word documents for all items listed in the correlation window.
-        """
-
-        # Log the start of creating all Word documents
-        self.logger.info("Starting the creation of all Word documents")
-
-        for iid in self.correlate_tree.get_children():
-            item_values = self.correlate_tree.item(iid, 'values')
-            doc_data = (item_values[0], item_values[1], item_values[2])
-
-            # Log the data of each item being processed
-            self.logger.info(f"Creating Word document for item: {doc_data}")
-
-            self.create_word_doc(doc_data, iid, show_message=False)
-
-        messagebox.showinfo("Success", "All Word documents have been created.")
-        self.correlate_window.destroy()
-        self.Settings_Window_Start()
-
-        # Log the completion of creating all Word documents
-        self.logger.info("All Word documents created successfully")
-
-    def create_word_doc(self, doc_data, iid, show_message=True):
-        """
-        Creates a Word document for a specific product, pulling relevant information from the Excel data. 
-        The document includes details like product ID, name, price, link, and comments.
-        """
-
-        # Log the start of the Word document creation process
-        self.logger.info(f"Creating Word document for product ID {doc_data[1]}")
-
-        # Unpack the data tuple
-        folder_name, product_id, product_name = doc_data
-        # Retrieve the folder path from the database
-        folder_path = self.get_folder_path_from_db(str(product_id))
-
-        if folder_path:
-            try:
-                # Retrieve the product link
-                product_price_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Product Price']
-                if not product_price_series.empty:
-                    product_price = product_price_series.iloc[0]
-                else:
-                    product_price = "N/A"  # Default to "N/A" if not found
-
-                # Retrieve the product link
-                ivu_tax_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'IVU Tax']
-                if not ivu_tax_series.empty:
-                    ivu_tax = ivu_tax_series.iloc[0]
-                else:
-                    ivu_tax = "N/A"  # Default to "N/A" if not found
-
-                # Retrieve the product link
-                product_price_after_ivu_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Product Price After IVU']
-                if not product_price_after_ivu_series.empty:
-                    product_price_after_ivu = product_price_after_ivu_series.iloc[0]
-                else:
-                    product_price_after_ivu = "N/A"  # Default to "N/A" if not found
-
-                # Retrieve the product link
-                order_link_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Order Link']
-                if not order_link_series.empty:
-                    order_link = order_link_series.iloc[0]
-                else:
-                    order_link = "N/A"  # Default to "N/A"            
-                    
-                    # Retrieve the product 
-                comments_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Comments']
-                if not comments_series.empty:
-                    comments = comments_series.iloc[0]
-                else:
-                    comments = "N/A"  # Default to "N/A" 
-                    
-                    # Retrieve the product 
-                product_name_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Product Name']
-                if not product_name_series.empty:
-                    product_name = product_name_series.iloc[0]
-                else:
-                    product_name = "N/A"  # Default to "N/A" 
-
-                    # Retrieve the product 
-                discount_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Discount']
-                if not discount_series.empty:
-                    discount = discount_series.iloc[0]
-                else:
-                    discount = "N/A"  # Default to "N/A" 
-
-                    # Retrieve the product 
-                discount_percentage_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Discount Percentage']
-                if not discount_percentage_series.empty:
-                    discount_percentage = discount_percentage_series.iloc[0]
-                else:
-                    discount_percentage = "N/A"  # Default to "N/A" 
-
-            except Exception as e:
-                self.logger.info(f"Error retrieving data: {e}")  # Debugging print statement
-
-            # Path for the new Word document named 'Product Information.docx'
-            doc_path = os.path.join(folder_path, 'Product Information.docx')
-            try:
-                # Create a new Word document
-                doc = Document()
-                doc.add_paragraph(f"Product ID: {product_id}")
-                doc.add_paragraph(f"Product Name: {product_name}")
-                doc.add_paragraph(f"Product Price: {product_price}")
-                doc.add_paragraph(f"IVU Tax: {ivu_tax}")
-                doc.add_paragraph(f"Product Price After IVU (Sale Price): ${product_price_after_ivu}")    
-                doc.add_paragraph(f"Reseller Earnings : ${discount}     [ = {discount_percentage}% of {product_price} (Product Price)]") 
-                doc.add_paragraph(f"Comments: {comments}")     
-                # doc.add_paragraph(f"Amazon Link(to get the product description and pictures, if needed): {order_link}")
-
-                # Save the document
-                doc.save(doc_path)
-
-                if show_message:
-                    messagebox.showinfo("Document Created", f"Word document for '{product_id}' has been created successfully.")
-                    self.logger.info(f"Word document for product ID {product_id} created successfully")
-
-                # Check if 'correlate_tree' exists before trying to delete an item
-                if hasattr(self, 'correlate_tree'):
-                    try:
-                        self.correlate_tree.delete(iid)
-                    except Exception as e:
-                        self.logger.error(f"Error while updating the Treeview: {e}")
-                # Bring the correlate_window back to the top
-
-                if hasattr(self, 'correlate_window'):
-                    self.correlate_window.lift()
-
-                if hasattr(self, 'correlate_tree') and not self.correlate_tree.get_children():
-                    self.correlate_window.destroy()
-                    self.Settings_Window_Start()
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to create document for Product ID {product_id}: {e}")
-                self.logger.error(f"Failed to create document for product ID {product_id}: {e}")
-        else:
-            messagebox.showerror("Error", f"No folder found for Product ID {product_id}")
-            self.logger.error(f"No folder found for product ID {product_id}")
 
     def backup_excel_database(self):
         """
@@ -3456,6 +3463,11 @@ class Application(tk.Frame):
         except Exception as e:
             self.logger.error(f"Failed to create backup: {e}")
             raise  # Reraise the exception to see the full traceback
+
+    def close_application(self):
+        self.logger.info("Closing application.")
+        self.running = False
+        self.destroy()
 
     def __del__(self):
         """
