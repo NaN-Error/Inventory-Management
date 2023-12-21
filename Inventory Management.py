@@ -502,7 +502,7 @@ class Application(tk.Frame):
             self.logger.info("Search box is empty, displaying all folders")
 
 
-
+# Settings Window with functions used in it.
     def Settings_Window_Start(self):
         """
         Opens the settings window where the user can configure various options like 
@@ -844,10 +844,237 @@ class Application(tk.Frame):
         self.logger.info(f"Processing item for Word document creation: {doc_data}")
 
         self.create_word_doc(doc_data, item_id)
+    
+    def exit_correlate_window(self):
+        """
+        Closes the window that shows Word documents that can be created for each product 
+        and opens the Settings window.
+        """
+        self.logger.info("Closing the correlate window and opening the settings window")
+
+        self.correlate_window.destroy()
+        self.logger.info("Correlate window closed.")
+        self.Settings_Window_Start()
 
 
+    def products_to_sell_report(self):
+
+        self.logger.info("Starting products to sell report generation")
+
+        # Ensure the Excel file path and sheet name are set
+        filepath, sheet_name = self.load_excel_settings()
+        if not filepath or not sheet_name:
+            self.logger.error("Excel file path or sheet name is not set")
+            messagebox.showerror("Error", "Excel file path or sheet name is not set.")
+            return
+
+        # Define the To Sell folder path
+        to_sell_folder = self.to_sell_folder
+        if not os.path.exists(to_sell_folder):
+            self.logger.error("To Sell folder path is not set or does not exist")
+            messagebox.showerror("Error", "To Sell folder path is not set or does not exist.")
+            return
+
+        # Check for existing folder starting with "- New products added on"
+        folder_prefix = "- New products added on "
+        existing_folder = None
+        for folder in os.listdir(to_sell_folder):
+            if folder.startswith(folder_prefix):
+                existing_folder = folder
+                break
+
+        # Get today's date in the required format
+        today_formatted = datetime.now().strftime("%Y-%m-%d")
+
+        # Folder path for the new or existing folder
+        new_folder_name = f"{folder_prefix}{today_formatted}"
+        new_folder_path = os.path.join(to_sell_folder, new_folder_name)
+
+        if existing_folder:
+            # Rename the existing folder
+            os.rename(os.path.join(to_sell_folder, existing_folder), new_folder_path)
+        else:
+            # Create a new folder
+            os.makedirs(new_folder_path)
+
+        self.logger.info("Loading data from the Excel workbook")
+
+        # Load the original workbook and read the specified sheet into a DataFrame
+        workbook = load_workbook(filepath, data_only=True)
+        sheet = workbook[sheet_name]
+        data = sheet.values
+        columns = next(data)[0:]
+        df = pd.DataFrame(data, columns=columns)
+
+        # Get the names of the folders in the to_sell_folder and extract product IDs
+        folder_names = os.listdir(to_sell_folder)
+        folder_product_ids = set(folder_name.split(' ', 1)[0] for folder_name in folder_names)
+
+        self.logger.info("Filtering and processing product data")
+
+        # Filter out unwanted products and keep only necessary columns
+        initial_count = len(df)
+        df = df[(df['Damaged'] != 'YES') & (df['Cancelled Order'] != 'YES') & (df['Personal'] != 'YES') & (df['Sold'] != 'YES') & (~pd.isna(df['Product ID']))]
+        df = df[df['Product ID'].isin(folder_product_ids)]
+        df = df[['Product ID', 'To Sell After', 'Product Name', 'Product Price After IVU']]
+        filtered_count = len(df)
+        self.logger.info(f"Filtered from {initial_count} products to {filtered_count} products")
+
+        # Convert 'To Sell After' to datetime
+        df['To Sell After'] = pd.to_datetime(df['To Sell After'], errors='coerce')
+        today = pd.to_datetime('today').normalize()
+        df = df.dropna(subset=['To Sell After'])
+        df = df[df['To Sell After'] <= today]
+        self.logger.info("Converted 'To Sell After' dates and performed additional filtering")
+
+        # Sort the DataFrame by 'Product ID'
+        sorted_df = df.sort_values(by='Product ID', ascending=True)
+        self.logger.info("Sorted the DataFrame based on 'Product ID'")
+
+        # Call get_previous_excel_report_data and assign the return value to listx
+        previous_product_ids, latest_file_date = self.get_previous_excel_report_data()
+        self.logger.info(f"Retrieved data from the previous report dated {latest_file_date}")
+
+        # Define the light green fill
+        light_green_fill = PatternFill(start_color='90EE90', end_color='90EE90', fill_type='solid')
+
+        # Create a new workbook and add the sorted data to it
+        self.logger.info("Creating new workbook for the report")
+        new_workbook = Workbook()
+        new_sheet = new_workbook.active
+        new_sheet.title = sheet_name
+
+        self.logger.info("Applying formatting and styles to the workbook")
+        for r_idx, row in enumerate(dataframe_to_rows(sorted_df, index=False, header=True), start=1):
+            for c_idx, value in enumerate(row, start=1):
+                cell = new_sheet.cell(row=r_idx, column=c_idx, value=value)
+                if c_idx == 1 and r_idx > 1:  # Skip header row                    
+                    if cell.value is not None and cell.value.upper() in previous_product_ids:
+                        previous_product_ids.remove(cell.value)
+                    else:
+                        cell.fill = light_green_fill
+                if c_idx == 2 and r_idx > 1:  # Skip header row
+                    cell.number_format = 'MM/DD/YYYY'
+                # Apply currency format to 'Product Price After IVU' column (assuming it's the fourth column)
+                if c_idx == 4 and r_idx > 1:  # Skip header row
+                    cell.number_format = '"$"#,##0.00'
+                # Apply middle and center alignment to all cells
+                if c_idx == 3 and r_idx > 1:  # 'Product Name' column
+                    cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                else:
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+
+        # Define the table dimensions
+        table_ref = f"A1:{chr(65 + sorted_df.shape[1] - 1)}{sorted_df.shape[0] + 1}"
+
+        # Create a table
+        self.logger.info("Creating a table in the new workbook")
+        table = Table(displayName="ProductsToSellTable", ref=table_ref)
+        style = TableStyleInfo(name="TableStyleMedium9", showFirstColumn=False, showLastColumn=False, showRowStripes=True, showColumnStripes=True)
+        table.tableStyleInfo = style
+        new_sheet.add_table(table)
+
+        # Adjust column widths
+        new_sheet.column_dimensions['A'].width = 120 / 7  # Width for 'Product ID'
+        new_sheet.column_dimensions['B'].width = 120 / 7  # Width for 'To Sell After'
+        new_sheet.column_dimensions['C'].width = 700 / 7  # Width for 'Product Name'
+        new_sheet.column_dimensions['D'].width = 200 / 7  # Width for 'Product Price After IVU'
+
+        if latest_file_date is not None:
+            formatted_date = latest_file_date.strftime('%A, %B %d, %Y')
+            new_sheet['F2'] = f"Product IDs highlighted in green represent new products added since the \nlast report from {formatted_date}."
+        else:
+            new_sheet['F2'] = "Product IDs highlighted in green represent new products added."
+
+        new_sheet['F3'] = datetime.now().strftime("This report was generated on %A, %B %d, %Y at %I:%M %p.")
+
+        # Creating an Alignment object for center and middle alignment
+        align_center_middle = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+        # Applying the alignment and fill to the cells
+        new_sheet['F2'].alignment = align_center_middle
+        new_sheet['F2'].fill = light_green_fill
+        new_sheet['F3'].alignment = align_center_middle
+        new_sheet['F3'].fill = light_green_fill
+
+        # Setting the width of column 'F' to 80 points
+        new_sheet.column_dimensions['F'].width = 80
 
 
+        self.logger.info("Finalizing and saving the report")
+
+
+        self.logger.info("Saving the new workbook")
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        copy_path = os.path.join(new_folder_path, f"Products To Sell - {today_str}.xlsx")
+        new_workbook.save(copy_path)
+        self.logger.info(f"Report saved at {copy_path}")
+
+        # Open the modified Excel file
+        if sys.platform == "win32":
+            os.startfile(copy_path)
+        elif sys.platform == "darwin":  # macOS
+            subprocess.run(["open", copy_path])
+        else:  # Linux variants
+            subprocess.run(["xdg-open", copy_path])
+
+    def get_previous_excel_report_data(self):
+        self.logger.info("Starting to get previous Excel report data")
+
+        to_sell_folder = self.to_sell_folder
+        folder_prefix = "- New products added on "
+        latest_folder_date = None
+        latest_folder = None
+
+        # Find the most recent folder
+        for folder in os.listdir(to_sell_folder):
+            if folder.startswith(folder_prefix):
+                folder_date_str = folder[len(folder_prefix):]
+                try:
+                    folder_date = datetime.strptime(folder_date_str, "%Y-%m-%d").date()
+                    if latest_folder_date is None or folder_date > latest_folder_date:
+                        latest_folder_date = folder_date
+                        latest_folder = folder
+                except ValueError as e:
+                    self.logger.error(f"Error parsing date from folder name '{folder}': {e}")
+
+        if latest_folder is None:
+            self.logger.info("No latest folder found")
+            return [0], None
+
+        # Find the latest Excel report in the latest folder
+        latest_file_date = None
+        latest_file = None
+        latest_folder_path = os.path.join(to_sell_folder, latest_folder)
+
+        for file in os.listdir(latest_folder_path):
+            if file.endswith(".xlsx"):
+                file_date_str = file[len("Products To Sell - "):-len(".xlsx")]
+                try:
+                    file_date = datetime.strptime(file_date_str, "%Y-%m-%d").date()
+                    if latest_file_date is None or file_date > latest_file_date:
+                        latest_file_date = file_date
+                        latest_file = file
+                except ValueError as e:
+                    self.logger.error(f"Error parsing date from file name '{file}': {e}")
+        
+        if latest_file is None:
+            self.logger.info("No latest Excel report found")
+            return [0], None
+        
+        file_path = os.path.join(latest_folder_path, latest_file)
+        self.logger.info(f"Reading data from the latest file: {latest_file}")
+
+        workbook = load_workbook(file_path, data_only=True)
+        sheet = workbook.active
+        product_ids = [row[0] for row in sheet.iter_rows(min_row=2, values_only=True)]
+
+        self.logger.info(f"Retrieved product IDs from {latest_file}")
+
+        return product_ids, latest_file_date
+
+
+# Product Form with functions used in it.
     def Product_Form(self):
         self.logger.info("Initializing product form widgets")
         try:
@@ -1952,194 +2179,6 @@ class Application(tk.Frame):
         except Exception as e:
             self.logger.error(f"Error when opening hyperlink: {e}")
 
-
-
-
-    def get_previous_excel_report_data(self):
-        self.logger.info("Starting to get previous Excel report data")
-
-        to_sell_folder = self.to_sell_folder
-        latest_file_date = None
-        latest_file = None
-
-        today = datetime.today().date()
-
-        for file in os.listdir(to_sell_folder):
-            if file.startswith("Products To Sell -") and file.endswith(".xlsx"):
-                file_date_str = file[len("Products To Sell - "):-len(".xlsx")]
-                self.logger.info(f"Extracted date string: '{file_date_str}' from file name: '{file}'")
-                try:
-                    file_date = datetime.strptime(file_date_str, "%Y-%m-%d").date()
-                    if file_date < today and (latest_file_date is None or file_date > latest_file_date):
-                        latest_file_date = file_date
-                        latest_file = file
-                except ValueError as e:
-                    self.logger.error(f"Error parsing date from file name '{file}': {e}")
-
-        if latest_file is None:
-            self.logger.info("No latest file found")
-            return [0], None
-
-        file_path = os.path.join(to_sell_folder, latest_file)
-        self.logger.info(f"Reading data from the latest file: {latest_file}")
-
-        workbook = load_workbook(file_path, data_only=True)
-        sheet = workbook.active
-        product_ids = [row[0] for row in sheet.iter_rows(min_row=2, values_only=True)]
-
-        self.logger.info(f"Retrieved product IDs from {latest_file}")
-
-        return product_ids, latest_file_date
-
-    def products_to_sell_report(self):
-
-        self.logger.info("Starting products to sell report generation")
-
-        # Ensure the Excel file path and sheet name are set
-        filepath, sheet_name = self.load_excel_settings()
-        if not filepath or not sheet_name:
-            self.logger.error("Excel file path or sheet name is not set")
-            messagebox.showerror("Error", "Excel file path or sheet name is not set.")
-            return
-
-        # Define the To Sell folder path
-        to_sell_folder = self.to_sell_folder
-        if not os.path.exists(to_sell_folder):
-            self.logger.error("To Sell folder path is not set or does not exist")
-            messagebox.showerror("Error", "To Sell folder path is not set or does not exist.")
-            return
-
-        self.logger.info("Loading data from the Excel workbook")
-
-        # Load the original workbook and read the specified sheet into a DataFrame
-        workbook = load_workbook(filepath, data_only=True)
-        sheet = workbook[sheet_name]
-        data = sheet.values
-        columns = next(data)[0:]
-        df = pd.DataFrame(data, columns=columns)
-
-        # Get the names of the folders in the to_sell_folder and extract product IDs
-        folder_names = os.listdir(to_sell_folder)
-        folder_product_ids = set(folder_name.split(' ', 1)[0] for folder_name in folder_names)
-
-        self.logger.info("Filtering and processing product data")
-
-        # Filter out unwanted products and keep only necessary columns
-        initial_count = len(df)
-        df = df[(df['Damaged'] != 'YES') & (df['Cancelled Order'] != 'YES') & (df['Personal'] != 'YES') & (df['Sold'] != 'YES') & (~pd.isna(df['Product ID']))]
-        df = df[df['Product ID'].isin(folder_product_ids)]
-        df = df[['Product ID', 'To Sell After', 'Product Name', 'Product Price After IVU']]
-        filtered_count = len(df)
-        self.logger.info(f"Filtered from {initial_count} products to {filtered_count} products")
-
-        # Convert 'To Sell After' to datetime
-        df['To Sell After'] = pd.to_datetime(df['To Sell After'], errors='coerce')
-        today = pd.to_datetime('today').normalize()
-        df = df.dropna(subset=['To Sell After'])
-        df = df[df['To Sell After'] <= today]
-        self.logger.info("Converted 'To Sell After' dates and performed additional filtering")
-
-        # Sort the DataFrame by 'Product ID'
-        sorted_df = df.sort_values(by='Product ID', ascending=True)
-        self.logger.info("Sorted the DataFrame based on 'Product ID'")
-
-        # Call get_previous_excel_report_data and assign the return value to listx
-        previous_product_ids, latest_file_date = self.get_previous_excel_report_data()
-        self.logger.info(f"Retrieved data from the previous report dated {latest_file_date}")
-
-        # Define the light green fill
-        light_green_fill = PatternFill(start_color='90EE90', end_color='90EE90', fill_type='solid')
-
-        # Create a new workbook and add the sorted data to it
-        self.logger.info("Creating new workbook for the report")
-        new_workbook = Workbook()
-        new_sheet = new_workbook.active
-        new_sheet.title = sheet_name
-
-        self.logger.info("Applying formatting and styles to the workbook")
-        for r_idx, row in enumerate(dataframe_to_rows(sorted_df, index=False, header=True), start=1):
-            for c_idx, value in enumerate(row, start=1):
-                cell = new_sheet.cell(row=r_idx, column=c_idx, value=value)
-                if c_idx == 1 and r_idx > 1:  # Skip header row                    
-                    if cell.value is not None and cell.value.upper() in previous_product_ids:
-                        previous_product_ids.remove(cell.value)
-                    else:
-                        cell.fill = light_green_fill
-                if c_idx == 2 and r_idx > 1:  # Skip header row
-                    cell.number_format = 'MM/DD/YYYY'
-                # Apply currency format to 'Product Price After IVU' column (assuming it's the fourth column)
-                if c_idx == 4 and r_idx > 1:  # Skip header row
-                    cell.number_format = '"$"#,##0.00'
-                # Apply middle and center alignment to all cells
-                if c_idx == 3 and r_idx > 1:  # 'Product Name' column
-                    cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-                else:
-                    cell.alignment = Alignment(horizontal='center', vertical='center')
-
-        # Define the table dimensions
-        table_ref = f"A1:{chr(65 + sorted_df.shape[1] - 1)}{sorted_df.shape[0] + 1}"
-
-        # Create a table
-        self.logger.info("Creating a table in the new workbook")
-        table = Table(displayName="ProductsToSellTable", ref=table_ref)
-        style = TableStyleInfo(name="TableStyleMedium9", showFirstColumn=False, showLastColumn=False, showRowStripes=True, showColumnStripes=True)
-        table.tableStyleInfo = style
-        new_sheet.add_table(table)
-
-        # Adjust column widths
-        new_sheet.column_dimensions['A'].width = 120 / 7  # Width for 'Product ID'
-        new_sheet.column_dimensions['B'].width = 120 / 7  # Width for 'To Sell After'
-        new_sheet.column_dimensions['C'].width = 700 / 7  # Width for 'Product Name'
-        new_sheet.column_dimensions['D'].width = 200 / 7  # Width for 'Product Price After IVU'
-
-        if latest_file_date is not None:
-            formatted_date = latest_file_date.strftime('%A, %B %d, %Y')
-            new_sheet['F2'] = f"Product IDs highlighted in green represent new products added since the \nlast report from {formatted_date}."
-        else:
-            new_sheet['F2'] = "Product IDs highlighted in green represent new products added."
-
-        new_sheet['F3'] = datetime.now().strftime("This report was generated on %A, %B %d, %Y at %I:%M %p.")
-
-        # Creating an Alignment object for center and middle alignment
-        align_center_middle = Alignment(horizontal='center', vertical='center', wrap_text=True)
-
-        # Applying the alignment and fill to the cells
-        new_sheet['F2'].alignment = align_center_middle
-        new_sheet['F2'].fill = light_green_fill
-        new_sheet['F3'].alignment = align_center_middle
-        new_sheet['F3'].fill = light_green_fill
-
-        # Setting the width of column 'F' to 80 points
-        new_sheet.column_dimensions['F'].width = 80
-
-
-        self.logger.info("Finalizing and saving the report")
-        # Save the new workbook
-        today_str = datetime.now().strftime("%Y-%m-%d")
-
-        self.logger.info("Saving the new workbook")
-        copy_path = os.path.join(to_sell_folder, f"Products To Sell - {today_str}.xlsx")
-        new_workbook.save(copy_path)
-        self.logger.info(f"Report saved at {copy_path}")
-
-        # Open the modified Excel file
-        if sys.platform == "win32":
-            os.startfile(copy_path)
-        elif sys.platform == "darwin":  # macOS
-            subprocess.run(["open", copy_path])
-        else:  # Linux variants
-            subprocess.run(["xdg-open", copy_path])
-
-    def exit_correlate_window(self):
-        """
-        Closes the window that shows Word documents that can be created for each product 
-        and opens the Settings window.
-        """
-        self.logger.info("Closing the correlate window and opening the settings window")
-
-        self.correlate_window.destroy()
-        self.logger.info("Correlate window closed.")
-        self.Settings_Window_Start()
 
     def back_to_main(self):
         """
