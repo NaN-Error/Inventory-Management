@@ -1424,6 +1424,9 @@ class Application(tk.Frame):
             self.pictures_downloaded_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Pictures Downloaded', variable=self.pictures_downloaded_var)
             self.pictures_downloaded_checkbutton.grid(row=8, column=0, sticky='w', padx=0, pady=0)
 
+            self.uploaded_to_site_var = tk.BooleanVar()
+            self.uploaded_to_site_checkbutton = ttk.Checkbutton(self.checkbox_frame, text='Uploaded to Site', variable=self.uploaded_to_site_var)
+            self.uploaded_to_site_checkbutton.grid(row=9, column=0, sticky='w', padx=0, pady=0)
 
             self.product_frame.grid_rowconfigure(3, minsize=60)  # This creates a 20-pixel-high empty row as a spacer
             
@@ -1454,6 +1457,7 @@ class Application(tk.Frame):
             self.personal_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.personal_var))
             self.reviewed_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.reviewed_var))
             self.pictures_downloaded_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.pictures_downloaded_var))
+            self.uploaded_to_site_checkbutton.bind('<Button-1>', lambda e: self.checkbox_click_control(self.uploaded_to_site_var))
 
             self.product_price_plus_ivu_entry.bind("<FocusIn>", self.on_price_focus_in)
             self.product_price_plus_ivu_entry.bind("<FocusOut>", self.on_price_focus_out)
@@ -1530,6 +1534,7 @@ class Application(tk.Frame):
                     self.personal_var.set(self.excel_value_to_bool(product_info.get('Personal')))
                     self.reviewed_var.set(self.excel_value_to_bool(product_info.get('Reviewed')))
                     self.pictures_downloaded_var.set(self.excel_value_to_bool(product_info.get('Pictures Downloaded')))
+                    self.uploaded_to_site_var.set(self.excel_value_to_bool(product_info.get('Uploaded to Site')))
                     self.sold_var.set(self.excel_value_to_bool(product_info.get('Sold')))
                     
                     # For each field, check if the value is NaN using pd.isnull and set it to an empty string if it is
@@ -1699,6 +1704,8 @@ class Application(tk.Frame):
                     self.personal_var.set(False)
                     self.reviewed_var.set(False)
                     self.pictures_downloaded_var.set(False)
+                    self.uploaded_to_site_var.set(False)
+                    
                     self.sold_var.set(False)
                     self.product_image_label.config(image='')
                     self.product_image_label.configure(text="Image not loaded.")
@@ -2727,6 +2734,7 @@ class Application(tk.Frame):
             'Personal': self.personal_var.get(),
             'Reviewed': self.reviewed_var.get(),
             'Pictures Downloaded': self.pictures_downloaded_var.get(),
+            'Uploaded to Site': self.uploaded_to_site_var.get(),
             'Sold': self.sold_var.get(),
             'To Sell After': self.to_sell_after_var.get(),
             'Product Name': self.product_name_text.get("1.0", tk.END).strip(),
@@ -2845,6 +2853,21 @@ class Application(tk.Frame):
         # if you want to be able to press Enter to switch to edit mode again
         #self.master.bind('<Return>', lambda e: self.edit_on_key_handler.invoke())
 
+    def get_folder_path_from_db(self, product_id):
+        """
+        Retrieves the folder path for a given product ID from the database. 
+        The function assumes that the folder name in the database starts with the product ID followed by a space.
+        """
+
+        # Log before executing the database query
+        self.logger.info(f"Fetching folder path for product ID: {product_id} from the database")
+
+        self.db_manager.cur.execute("SELECT Path FROM folder_paths WHERE Folder LIKE ?", (product_id + ' %',))
+        result = self.db_manager.cur.fetchone()
+
+
+        return result[0] if result else None
+
 
     def get_folder_names_from_db(self):
         """
@@ -2863,20 +2886,6 @@ class Application(tk.Frame):
 
         return folder_names
 
-    def get_folder_path_from_db(self, product_id):
-        """
-        Retrieves the folder path for a given product ID from the database. 
-        The function assumes that the folder name in the database starts with the product ID followed by a space.
-        """
-
-        # Log before executing the database query
-        self.logger.info(f"Fetching folder path for product ID: {product_id} from the database")
-
-        self.db_manager.cur.execute("SELECT Path FROM folder_paths WHERE Folder LIKE ?", (product_id + ' %',))
-        result = self.db_manager.cur.fetchone()
-
-
-        return result[0] if result else None
 
     def select_excel_database(self):
         """
