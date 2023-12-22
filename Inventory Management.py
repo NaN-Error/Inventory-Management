@@ -654,6 +654,13 @@ class Application(tk.Frame):
                     comments = "N/A"  # Default to "N/A" 
                     
                     # Retrieve the product 
+                product_description_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Product Description']
+                if not product_description_series.empty:
+                    product_description = product_description_series.iloc[0]
+                else:
+                    product_description = "N/A"  # Default to "N/A" 
+                    
+                    # Retrieve the product 
                 product_name_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Product Name']
                 if not product_name_series.empty:
                     product_name = product_name_series.iloc[0]
@@ -688,6 +695,7 @@ class Application(tk.Frame):
                 doc.add_paragraph(f"IVU Tax: {ivu_tax}")
                 doc.add_paragraph(f"Product Price After IVU (Sale Price): ${product_price_after_ivu}")    
                 doc.add_paragraph(f"Reseller Earnings : ${discount}     [ = {discount_percentage}% of {product_price} (Product Price)]") 
+                doc.add_paragraph(f"Product Description: ${product_description}")   
                 doc.add_paragraph(f"Comments: {comments}")     
                 # doc.add_paragraph(f"Amazon Link(to get the product description and pictures, if needed): {order_link}")
 
@@ -1380,7 +1388,10 @@ class Application(tk.Frame):
             self.comments_frame.grid(row=4, column=0, columnspan=3, sticky='nw', padx=25, pady=5)
 
             self.comments_text = tk.Text(self.comments_frame, height=8, width=150, bg="#eff0f1", fg="#000000", wrap="word", state="disabled", bd=0, highlightthickness=1, highlightcolor="#94cfeb", font=product_name_font)
-            self.comments_text.grid(row=4, column=0, sticky='w', padx=0, pady=1)
+            self.comments_text.grid(row=0, column=0, sticky='w', padx=0, pady=1)
+
+            self.product_description_text = tk.Text(self.comments_frame, height=8, width=150, bg="#eff0f1", fg="#000000", wrap="word", state="disabled", bd=0, highlightthickness=1, highlightcolor="#94cfeb", font=product_name_font)
+            self.product_description_text.grid(row=1, column=0, sticky='w', padx=0, pady=1)
 
 
             # Bind the new checkbox click control function to the checkboxes
@@ -1492,6 +1503,20 @@ class Application(tk.Frame):
                         display_text = comments_text
                     self.comments_text.insert("insert", display_text)
                     self.comments_text.configure(state='disabled')
+
+
+                    self.product_description_text.configure(state='normal')
+                    self.product_description_text.delete(1.0, "end")
+
+                    product_description_text = product_info.get('Product Description', None)
+                    # Check for NaN (using pandas' isna function if you're working with pandas)
+                    # You can also directly check if product_description_text is None, which covers both None and NaN cases
+                    if product_description_text is None or pd.isna(product_description_text):
+                        display_product_description_text = "No product description found."
+                    else:
+                        display_product_description_text = product_description_text
+                    self.product_description_text.insert("insert", display_product_description_text)
+                    self.product_description_text.configure(state='disabled')
 
                     # When a product is selected and the order date is fetched
                     order_date = product_info.get('Order Date', '')
@@ -1637,6 +1662,11 @@ class Application(tk.Frame):
                     self.comments_text.delete(1.0, tk.END)
                     self.comments_text.insert(tk.END, 'Comment not found in Excel.')
                     self.comments_text.configure(state='disabled')
+                    
+                    self.product_description_text.configure(state='normal')
+                    self.product_description_text.delete(1.0, tk.END)
+                    self.product_description_text.insert(tk.END, 'Product description not found in Excel.')
+                    self.product_description_text.configure(state='disabled')
                     self.order_date_var.set('')
                     self.fair_market_value_var.set('')
                     self.discount_var.set('')
@@ -2308,7 +2338,6 @@ class Application(tk.Frame):
             self.logger.error(f"Error saving folder settings to file: {e}")
 
 
-
     def load_and_display_image(self, current_row_num, product_image_col_num, product_id):
         """
         Loads and displays the product image in a separate thread. The image is fetched from the 
@@ -2547,6 +2576,7 @@ class Application(tk.Frame):
         self.sold_price_entry.config(state=state)
         self.save_button.config(state=state)
         self.comments_text.config(state=state)
+        self.product_description_text.config(state=state)
 
         if self.edit_mode:
             self.logger.info("Edit mode enabled, setting widget states and bindings")
@@ -2626,6 +2656,7 @@ class Application(tk.Frame):
             'Payment Type': self.payment_type_var.get(),
             'Sold Date': self.sold_date_var.get(),
             'Comments': self.comments_text.get("1.0", tk.END).strip(),
+            'Product Description': self.product_description_text.get("1.0", tk.END).strip(),
             'Fair Market Value': to_float(remove_dollar_sign(self.fair_market_value_var.get())),
             'Discount': to_float(remove_dollar_sign(self.discount_var.get())),
             'Discount Percentage': to_float(remove_dollar_sign(self.percent_discount_var.get())),
@@ -3477,7 +3508,6 @@ class Application(tk.Frame):
             self.logger.error(f"Error updating prices in Excel: {e}")
 
 
- 
     def backup_excel_database(self):
         """
         Creates a backup of the current Excel database in the Inventory Management Backups folder.
@@ -3522,7 +3552,6 @@ class Application(tk.Frame):
         except Exception as e:
             self.logger.error(f"Failed to create backup: {e}")
             raise
-
 
     def close_application(self):
         self.logger.info("Closing application.")
