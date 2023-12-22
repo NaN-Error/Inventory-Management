@@ -66,6 +66,9 @@ from tkinter import Label, Toplevel
 import logging
 from logging.handlers import RotatingFileHandler
 import time
+from docx.enum.text import WD_COLOR_INDEX
+from docx.shared import Pt
+
 
 # Prototyping (make it work, then make it pretty.)
 
@@ -607,6 +610,28 @@ class Application(tk.Frame):
         Creates a Word document for a specific product, pulling relevant information from the Excel data. 
         The document includes details like product ID, name, price, link, and comments.
         """
+        def safe_format_currency(value):
+            try:
+                return f"${float(value):.2f}" if value is not None else "N/A"
+            except ValueError:
+                return str(value)
+
+        def safe_format_percentage(value):
+            try:
+                return f"{float(value)}%" if value is not None else "N/A"
+            except ValueError:
+                return str(value)
+            
+        def add_styled_paragraph(doc, text, variable_text):
+            p = doc.add_paragraph()
+            run = p.add_run(text)
+            run.bold = True
+            run.italic = True
+            run.underline = True
+            run.font.highlight_color = WD_COLOR_INDEX.BRIGHT_GREEN  # Applying light green highlight
+            run.font.size = Pt(12)  # Setting font size to 12
+            p.add_run(variable_text)
+
 
         # Log the start of the Word document creation process
         self.logger.info(f"Creating Word document for product ID {doc_data[1]}")
@@ -646,19 +671,19 @@ class Application(tk.Frame):
                 else:
                     order_link = "N/A"  # Default to "N/A"            
                     
-                    # Retrieve the product 
-                comments_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Comments']
-                if not comments_series.empty:
-                    comments = comments_series.iloc[0]
-                else:
-                    comments = "N/A"  # Default to "N/A" 
-                    
-                    # Retrieve the product 
+                # Retrieve the product description
                 product_description_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Product Description']
-                if not product_description_series.empty:
+                if not product_description_series.empty and not pd.isna(product_description_series.iloc[0]):
                     product_description = product_description_series.iloc[0]
                 else:
-                    product_description = "N/A"  # Default to "N/A" 
+                    product_description = "No Product Description At The Moment"
+
+                # Retrieve the comments
+                comments_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Comments']
+                if not comments_series.empty and not pd.isna(comments_series.iloc[0]):
+                    comments = comments_series.iloc[0]
+                else:
+                    comments = "No Comments Found"
                     
                     # Retrieve the product 
                 product_name_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Product Name']
@@ -689,15 +714,36 @@ class Application(tk.Frame):
             try:
                 # Create a new Word document
                 doc = Document()
-                doc.add_paragraph(f"Product ID: {product_id}")
-                doc.add_paragraph(f"Product Name: {product_name}")
-                doc.add_paragraph(f"Product Price: {product_price}")
-                doc.add_paragraph(f"IVU Tax: {ivu_tax}")
-                doc.add_paragraph(f"Product Price After IVU (Sale Price): ${product_price_after_ivu}")    
-                doc.add_paragraph(f"Reseller Earnings : ${discount}     [ = {discount_percentage}% of {product_price} (Product Price)]") 
-                doc.add_paragraph(f"Product Description: ${product_description}")   
-                doc.add_paragraph(f"Comments: {comments}")     
-                # doc.add_paragraph(f"Amazon Link(to get the product description and pictures, if needed): {order_link}")
+
+                # Convert all values to strings with appropriate formatting
+                product_id_str = str(product_id)
+                product_name_str = str(product_name) if product_name is not None else "N/A"
+                product_price_str = safe_format_currency(product_price)
+                ivu_tax_str = safe_format_currency(ivu_tax)
+                product_price_after_ivu_str = safe_format_currency(product_price_after_ivu)
+                discount_str = safe_format_currency(discount)
+                discount_percentage_str = safe_format_percentage(discount_percentage)
+                product_description_str = str(product_description) if product_description is not None else "N/A"
+                comments_str = str(comments) if comments is not None else "N/A"
+
+                # Adding styled paragraphs with specified font size
+                add_styled_paragraph(doc, "Product ID: ", product_id_str)
+                add_styled_paragraph(doc, "Product Name: ", product_name_str)
+                doc.add_paragraph("")  # Empty line
+                add_styled_paragraph(doc, "Product Price: ", product_price_str)
+                add_styled_paragraph(doc, "IVU Tax: ", ivu_tax_str)
+                add_styled_paragraph(doc, "Product Price After IVU (Sale Price): ", product_price_after_ivu_str)
+                add_styled_paragraph(doc, "Reseller Earnings : ", f"{discount_str}     [ = {discount_percentage_str} of {product_price_str} (Product Price)]")
+                doc.add_paragraph("")  # Empty line
+                add_styled_paragraph(doc, "Product Description:", "")
+                doc.add_paragraph(product_description_str)
+                doc.add_paragraph("")  # Empty line
+                add_styled_paragraph(doc, "Comments:", "")
+                doc.add_paragraph(comments_str)
+
+                # Uncomment the next line if you want to include the order link
+                # add_styled_paragraph(doc, "Amazon Link (to get the product description and pictures, if needed): ", order_link)
+
 
                 # Save the document
                 doc.save(doc_path)
@@ -863,6 +909,7 @@ class Application(tk.Frame):
         self.correlate_window.destroy()
         self.logger.info("Correlate window closed.")
         self.Settings_Window_Start()
+
 
     def products_to_sell_report(self):
 
@@ -1390,8 +1437,14 @@ class Application(tk.Frame):
             self.comments_text = tk.Text(self.comments_frame, height=8, width=150, bg="#eff0f1", fg="#000000", wrap="word", state="disabled", bd=0, highlightthickness=1, highlightcolor="#94cfeb", font=product_name_font)
             self.comments_text.grid(row=0, column=0, sticky='w', padx=0, pady=1)
 
+            self.comments_text.bind("<FocusIn>", self.on_comments_focus_in)
+            self.comments_text.bind("<FocusOut>", self.on_comments_focus_out)
+
             self.product_description_text = tk.Text(self.comments_frame, height=8, width=150, bg="#eff0f1", fg="#000000", wrap="word", state="disabled", bd=0, highlightthickness=1, highlightcolor="#94cfeb", font=product_name_font)
             self.product_description_text.grid(row=1, column=0, sticky='w', padx=0, pady=1)
+
+            self.product_description_text.bind("<FocusIn>", self.on_product_description_focus_in)
+            self.product_description_text.bind("<FocusOut>", self.on_product_description_focus_out)
 
 
             # Bind the new checkbox click control function to the checkboxes
@@ -1498,7 +1551,7 @@ class Application(tk.Frame):
                     # Check for NaN (using pandas' isna function if you're working with pandas)
                     # You can also directly check if comments_text is None, which covers both None and NaN cases
                     if comments_text is None or pd.isna(comments_text):
-                        display_text = "No comments found."
+                        display_text = "No Comments Found."
                     else:
                         display_text = comments_text
                     self.comments_text.insert("insert", display_text)
@@ -1512,7 +1565,7 @@ class Application(tk.Frame):
                     # Check for NaN (using pandas' isna function if you're working with pandas)
                     # You can also directly check if product_description_text is None, which covers both None and NaN cases
                     if product_description_text is None or pd.isna(product_description_text):
-                        display_product_description_text = "No product description found."
+                        display_product_description_text = "No Product Description At The Moment."
                     else:
                         display_product_description_text = product_description_text
                     self.product_description_text.insert("insert", display_product_description_text)
@@ -1738,6 +1791,31 @@ class Application(tk.Frame):
         self.logger.info("Completed product selection process")
         self.toggle_edit_mode()
 
+    def on_product_description_focus_in(self, event):
+        # Assuming self.product_description_text is a text widget, 
+        # you should get its current text using the appropriate method.
+        current_text = self.product_description_text.get("1.0", "end-1c")
+        if current_text == "No Product Description At The Moment.":
+            self.product_description_text.delete("1.0", "end")
+
+    def on_product_description_focus_out(self, event):
+        # Get the current text from the widget.
+        current_text = self.product_description_text.get("1.0", "end-1c")
+        if current_text.strip() == "":
+            self.product_description_text.insert("1.0", "No Product Description At The Moment.")
+
+    def on_comments_focus_in(self, event):
+        # Assuming self.product_description_text is a text widget, 
+        # you should get its current text using the appropriate method.
+        current_text = self.comments_text.get("1.0", "end-1c")
+        if current_text == "No Comments Found.":
+            self.comments_text.delete("1.0", "end")
+
+    def on_comments_focus_out(self, event):
+        # Get the current text from the widget.
+        current_text = self.comments_text.get("1.0", "end-1c")
+        if current_text.strip() == "":
+            self.comments_text.insert("1.0", "No Comments Found.")
 
     def validate_input(self, input_value, is_percentage=False):
         # Check for empty input
