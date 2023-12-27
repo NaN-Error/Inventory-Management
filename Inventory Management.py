@@ -71,6 +71,7 @@ from docx.shared import Pt
 
 
 # Prototyping (make it work, then make it pretty.)
+# change Load workbook to dataframe on load. (speed optimization)
 
 
 class DatabaseManager: #DB practice(use txt/json to store folder paths when program finished for faster reads.)
@@ -141,7 +142,7 @@ class ExcelManager:
 
     def get_product_info(self, product_id):
         if self.data_frame is not None:
-            # Convert both the product_id and the 'Product ID' column to lower case for comparison
+            # Convert both the product_id and the 'Product ID' column to upper case for comparison
             query_result = self.data_frame[self.data_frame['Product ID'].str.upper() == product_id.upper()]
             if not query_result.empty:
                 return query_result.iloc[0].to_dict()
@@ -265,7 +266,7 @@ class Application(tk.Frame):
         self.logger.info("Starting to cache images on load")
 
         # Load Excel settings
-        filepath, sheet_name = self.load_excel_settings()
+        filepath, sheet_name = self.load_excel_path_and_sheet()
         if filepath and sheet_name:
             # Validate file and sheet
             if not os.path.exists(filepath):
@@ -526,7 +527,7 @@ class Application(tk.Frame):
         self.settings_frame.grid(row=1, column=1, sticky='nw')
 
         # Load settings
-        self.default_filepath, self.default_sheet = self.load_excel_settings()
+        self.default_filepath, self.default_sheet = self.load_excel_path_and_sheet()
         
         # Configure the grid columns of the frame
         self.settings_frame.grid_columnconfigure(1, weight=1)  # Adjust the weight as needed
@@ -783,7 +784,7 @@ class Application(tk.Frame):
         # Log when correlation process is initiated
         self.logger.info("Initiating data correlation between Excel file and Word documents")
         
-        filepath, sheet_name = self.load_excel_settings()
+        filepath, sheet_name = self.load_excel_path_and_sheet()
 
         # Check if the Excel settings are properly loaded
         if not filepath or not sheet_name:
@@ -916,7 +917,7 @@ class Application(tk.Frame):
         self.logger.info("Starting products to sell report generation")
 
         # Ensure the Excel file path and sheet name are set
-        filepath, sheet_name = self.load_excel_settings()
+        filepath, sheet_name = self.load_excel_path_and_sheet()
         if not filepath or not sheet_name:
             self.logger.error("Excel file path or sheet name is not set")
             messagebox.showerror("Error", "Excel file path or sheet name is not set.")
@@ -1225,7 +1226,13 @@ class Application(tk.Frame):
             self.product_id_label = ttk.Label(self.r2column0_frame, text='Product ID')
             self.product_id_label.grid(row=0, column=0, sticky='w', padx=0, pady=0)
             self.product_id_entry = ttk.Entry(self.r2column0_frame, textvariable=self.product_id_var, state='disabled', style='BlackOnDisabled.TEntry')
-            self.product_id_entry.grid(row=1, column=0, sticky='w', padx=0, pady=0)
+            self.product_id_entry.grid(row=1, column=0, sticky='w', padx=0, pady=0) 
+
+            self.rack_id_var = tk.StringVar()
+            self.rack_id_label = ttk.Label(self.r2column0_frame, text='Rack ID')
+            self.rack_id_label.grid(row=0, column=0, sticky='e', padx=0, pady=0)
+            self.rack_id_entry = ttk.Entry(self.r2column0_frame, textvariable=self.rack_id_var, state='disabled', style='BlackOnDisabled.TEntry')
+            self.rack_id_entry.grid(row=1, column=0, sticky='e', padx=0, pady=0)
 
             self.r2column0_frame.grid_rowconfigure(2, minsize=2)  # Adjust 'minsize' for desired space
 
@@ -1512,8 +1519,9 @@ class Application(tk.Frame):
 
         if self.edit_mode:
             self.toggle_edit_mode()
+
         # Ensure that the Excel file path and sheet name are set
-        filepath, sheet_name = self.load_excel_settings()
+        filepath, sheet_name = self.load_excel_path_and_sheet()
         if filepath and sheet_name:
             self.excel_manager.filepath = filepath
             self.excel_manager.sheet_name = sheet_name
@@ -1540,6 +1548,8 @@ class Application(tk.Frame):
                     # For each field, check if the value is NaN using pd.isnull and set it to an empty string if it is
                     self.asin_var.set('' if pd.isnull(product_info.get('ASIN')) else product_info.get('ASIN', ''))
                     self.product_id_var.set('' if pd.isnull(product_info.get('Product ID')) else product_info.get('Product ID', ''))
+                    self.rack_id_var.set(product_info.get('Rack ID', ''))
+
 
                     self.product_name_text.configure(state='normal')
                     self.product_name_text.delete(1.0, "end")
@@ -1712,6 +1722,7 @@ class Application(tk.Frame):
                     # Populate the widgets with the matched data
                     self.asin_var.set('')
                     self.product_id_var.set('')
+                    self.rack_id_var.set('')
                     self.to_sell_after_var.set('')
                     # Add code here to handle the product image, if applicable
                     self.product_name_text.configure(state='normal')
@@ -2651,6 +2662,7 @@ class Application(tk.Frame):
         self.payment_type_combobox.config(state=readonly_state)
         self.asin_entry.config(state=state)
         self.product_id_entry.config(state='disabled')
+        self.rack_id_entry.config(state=state)
         self.product_name_text.config(state='disabled')
         self.fair_market_value_entry.config(state='disabled')
         self.regular_product_price_entry.config(state='disabled')
@@ -2721,7 +2733,7 @@ class Application(tk.Frame):
         product_id = self.product_id_var.get().strip().upper()
 
         # Ensure that the Excel file path and sheet name are set.
-        filepath, sheet_name = self.load_excel_settings()
+        filepath, sheet_name = self.load_excel_path_and_sheet()
 
         if not filepath or not sheet_name:
             messagebox.showerror("Error", "Excel file path or sheet name is not set.")
@@ -2736,8 +2748,10 @@ class Application(tk.Frame):
             'Pictures Downloaded': self.pictures_downloaded_var.get(),
             'Uploaded to Site': self.uploaded_to_site_var.get(),
             'Sold': self.sold_var.get(),
+
             'To Sell After': self.to_sell_after_var.get(),
             'Product Name': self.product_name_text.get("1.0", tk.END).strip(),
+            'Rack ID': self.rack_id_var.get(),
             'Sold Price': self.sold_price_var.get(),
             'Payment Type': self.payment_type_var.get(),
             'Sold Date': self.sold_date_var.get(),
@@ -3022,7 +3036,7 @@ class Application(tk.Frame):
             messagebox.showerror("Error", f"Unable to save settings: {str(e)}")
             self.logger.error(f"Failed to save Excel settings: {e}")
 
-    def load_excel_settings(self):
+    def load_excel_path_and_sheet(self):
         """
         Loads the saved Excel file path and sheet name from a text file. 
         If the settings file is not found or an error occurs, it returns None for both filepath and sheet_name.
@@ -3294,7 +3308,7 @@ class Application(tk.Frame):
 
     def update_all_folder_paths_and_names(self):
         # Load Excel data
-        filepath, sheet_name = self.load_excel_settings()
+        filepath, sheet_name = self.load_excel_path_and_sheet()
         df = pd.read_excel(filepath, sheet_name)  # Replace with the actual path to your Excel file
 
         # Define all folder paths
@@ -3731,7 +3745,7 @@ def main():
     app = Application(master=root)
 
     try:
-        app.excel_manager.filepath, _ = app.load_excel_settings()
+        app.excel_manager.filepath, _ = app.load_excel_path_and_sheet()
         root.protocol("WM_DELETE_WINDOW", lambda: exit_application(app, root))
         app.mainloop()
     except Exception as e:
