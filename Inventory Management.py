@@ -1693,6 +1693,7 @@ class Application(tk.Frame):
                         self.product_folder_link.config(state='disabled')
                     self.product_image_label.config(image='')
                     self.product_image_label.configure(text='Loading image...')
+
                     # 1. Find the column number for "Product Image"
                     product_image_col_num = None
                     for col_num, col_name in enumerate(self.excel_manager.data_frame.columns):
@@ -1754,8 +1755,21 @@ class Application(tk.Frame):
                     self.sold_price_var.set('')
                     self.payment_type_var.set('')
                     self.sold_date_var.set('')
-                    self.product_folder_var.set("No Folder")
-                    self.product_folder_link.config(state='disabled')
+
+                    # Fetch the full folder path from the database using the product ID.
+                    folder_path = self.get_folder_path_from_db(selected_product_id)
+
+                    # Extract the name of the parent directory (where the product folder is located)
+                    parent_folder_name = os.path.basename(os.path.dirname(folder_path)) if folder_path else "No Folder"
+                    self.product_folder_var.set(parent_folder_name)
+
+                    # If the folder path exists, update the button to open the product folder when clicked
+                    if folder_path and os.path.exists(folder_path):
+                        self.product_folder_link.config(command=lambda: self.open_product_folder(folder_path), state='normal')
+                    else:
+                        self.product_folder_var.set("No Folder")
+                        self.product_folder_link.config(state='disabled')
+
                     self.order_link_text.config(state='disabled')
 
             except Exception as e:
