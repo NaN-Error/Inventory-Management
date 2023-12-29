@@ -491,6 +491,9 @@ class Application(tk.Frame):
             # Filter out None or invalid paths
             valid_search_paths = [path for path in search_paths if path and os.path.exists(path)]
 
+            # Create a list to store matching folder names
+            matching_folders = []
+
             # Perform the search in each valid path
             for path in valid_search_paths:
                 for root, dirs, files in os.walk(path):
@@ -499,8 +502,17 @@ class Application(tk.Frame):
                         folder_name = os.path.basename(root)  # Get the name of the leaf directory
                         # Check if all search terms are in the folder name (case insensitive)
                         if all(term.upper() in folder_name.upper() for term in search_terms):
-                            self.folder_list.insert(tk.END, folder_name)
-            self.logger.info("Search completed and results displayed")
+                            matching_folders.append(folder_name)
+
+            # Sort the matching folder names alphabetically
+            matching_folders.sort()
+
+            # Insert the sorted folder names into the list widget
+            for folder_name in matching_folders:
+                self.folder_list.insert(tk.END, folder_name)
+
+            self.logger.info("Search completed and sorted results displayed")
+
         else:
             self.combine_and_display_folders()  # If the search box is empty, display all folders   
             self.logger.info("Search box is empty, displaying all folders")
