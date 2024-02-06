@@ -21,7 +21,6 @@ Usage:
 Execute the script to start the inventory management application. Use the GUI to perform operations like adding, updating, deleting, and viewing inventory items.
 
 Author: [WB]
-Version: [Your Version]
 
 Note: The docstring provides a general overview. Detailed documentation for each class and function within the code is recommended for better understanding and maintenance.
 """
@@ -71,8 +70,18 @@ from docx.shared import Pt
 
 
 # Prototyping (make it work, then make it pretty.)
+# Practicing DB, excel management, classes, etc. Program is functional, code can be improved for clarity and speed.
 # change Load workbook to dataframe on load. (speed optimization)
+# use certain variables as global to avoid loading them everytime or passing them as parameters to all functions.
 
+
+# Condition widget to read the content for the current product. drop down with:
+# New
+# Used - Like New
+# Used - Good
+# Used - Fair
+
+# add window to input a bunch of product id and shows back the rack ids.?
 
 class DatabaseManager: #DB practice(use txt/json to store folder paths when program finished for faster reads.)
 
@@ -418,104 +427,66 @@ class Application(tk.Frame):
                     self.folder_list.see(prev_index)
 
     def combine_and_display_folders(self):
-        """
-        Combines and displays the folder names from various paths including inventory, sold, 
-        to sell, damaged, and personal folders. Updates these folder paths in the database. 
-        The folder list is first cleared, then updated with the combined and sorted folder names.
-        """
         self.logger.info("Combining and displaying folders")
-
-        # Clear the folder list first
         self.folder_list.delete(0, tk.END)
 
-        # Initialize additional folders based on the inventory folder
         if self.inventory_folder:
             parent_dir = os.path.dirname(self.inventory_folder)
             self.damaged_folder = os.path.join(parent_dir, "Damaged")
             self.personal_folder = os.path.join(parent_dir, "Personal")
 
-            # Create additional folders if they don't exist
             for folder in [self.damaged_folder, self.personal_folder]:
                 if not os.path.exists(folder):
                     os.makedirs(folder)
 
-        # Begin a transaction
         self.db_manager.cur.execute("BEGIN")
         try:
-            # Combine the folders from all paths including damaged and personal folders
             combined_folders = []
             for folder_path in [self.inventory_folder, self.sold_folder, self.to_sell_folder, self.damaged_folder, self.personal_folder]:
                 if folder_path and os.path.exists(folder_path):
                     for root, dirs, files in os.walk(folder_path):
+                        dirs[:] = [d for d in dirs if not d.startswith("-")]  # Exclude folders starting with "-"
                         for dir_name in dirs:
                             combined_folders.append(dir_name)
                             full_path = os.path.join(root, dir_name)
-                            # Update the database with the current folder paths
                             self.db_manager.cur.execute("INSERT OR REPLACE INTO folder_paths (Folder, Path) VALUES (?, ?)", (dir_name, full_path))
-            self.db_manager.conn.commit()  # Commit the transaction if all is well
+            self.db_manager.conn.commit()
         except Exception as e:
-            self.db_manager.conn.rollback()  # Rollback if there was an error
+            self.db_manager.conn.rollback()
             self.logger.error(f"Database error in combine_and_display_folders: {e}")
 
-        # Deduplicate folder names
         unique_folders = list(set(combined_folders))
-
-        # Sort using the custom sort key function
         sorted_folders = sorted(unique_folders, key=self.custom_sort_key)
-
-        # Insert the sorted folders into the list widget
         for folder in sorted_folders:
             self.folder_list.insert(tk.END, folder)
         self.logger.info("Folders combined, sorted, and displayed")
 
     def search(self, event):
-        """
-        Searches for folders based on the user's input in the search entry. 
-        The search is case-insensitive and looks for matches in all relevant folders including
-        inventory, sold, to sell, damaged, and personal folders.
-        """
         self.logger.info("Performing search based on user input")
-        search_terms = self.search_entry.get().split()  # Split the search string into words
-        if search_terms:
-            self.folder_list.delete(0, tk.END)  # Clear the current list
+        # Directly use the search term without stripping whitespace
+        search_term = self.search_entry.get()
+        self.folder_list.delete(0, tk.END)
 
-            # Define a list of folder paths to search in
-            search_paths = [
-                self.inventory_folder,
-                self.sold_folder,
-                self.to_sell_folder,
-                self.damaged_folder,
-                self.personal_folder
-            ]
+        search_paths = [self.inventory_folder, self.sold_folder, self.to_sell_folder, self.damaged_folder, self.personal_folder]
+        valid_search_paths = [path for path in search_paths if path and os.path.exists(path)]
+        matching_folders = []
 
-            # Filter out None or invalid paths
-            valid_search_paths = [path for path in search_paths if path and os.path.exists(path)]
+        for path in valid_search_paths:
+            for root, dirs, files in os.walk(path):
+                dirs[:] = [d for d in dirs if not d.startswith("-")]  # Exclude folders starting with "-"
+                for dir_name in dirs:
+                    folder_name = os.path.basename(os.path.join(root, dir_name))
+                    # Ensure exact match considering leading/trailing spaces
+                    if search_term.lower() in folder_name.lower():
+                        matching_folders.append(folder_name)
 
-            # Create a list to store matching folder names
-            matching_folders = []
+        matching_folders = list(set(matching_folders))  # Remove duplicates
+        matching_folders.sort(key=lambda x: x.lower())  # Sort folders case-insensitively
+        for folder_name in matching_folders:
+            self.folder_list.insert(tk.END, folder_name)
+        self.logger.info("Search completed and sorted results displayed")
 
-            # Perform the search in each valid path
-            for path in valid_search_paths:
-                for root, dirs, files in os.walk(path):
-                    # Check if 'dirs' is empty, meaning 'root' is a leaf directory
-                    if not dirs:
-                        folder_name = os.path.basename(root)  # Get the name of the leaf directory
-                        # Check if all search terms are in the folder name (case insensitive)
-                        if all(term.upper() in folder_name.upper() for term in search_terms):
-                            matching_folders.append(folder_name)
 
-            # Sort the matching folder names alphabetically
-            matching_folders.sort()
-
-            # Insert the sorted folder names into the list widget
-            for folder_name in matching_folders:
-                self.folder_list.insert(tk.END, folder_name)
-
-            self.logger.info("Search completed and sorted results displayed")
-
-        else:
-            self.combine_and_display_folders()  # If the search box is empty, display all folders   
-            self.logger.info("Search box is empty, displaying all folders")
 
 
 # Settings Window with functions used in it.
@@ -719,6 +690,19 @@ class Application(tk.Frame):
                 else:
                     discount_percentage = "N/A"  # Default to "N/A" 
 
+                # Retrieve the category
+                category_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Category']
+                category = category_series.iloc[0] if not category_series.empty else "N/A"
+
+                # Retrieve the condition
+                condition_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Condition']
+                condition = condition_series.iloc[0] if not condition_series.empty else "N/A"
+
+                # Retrieve the product tags
+                product_tags_series = self.excel_manager.data_frame.loc[self.excel_manager.data_frame['Product ID'] == product_id, 'Product Tags']
+                product_tags = product_tags_series.iloc[0] if not product_tags_series.empty else "N/A"
+                product_tags = product_tags.rstrip(',')  # Remove trailing comma if present
+
             except Exception as e:
                 self.logger.info(f"Error retrieving data: {e}")  # Debugging print statement
 
@@ -739,23 +723,49 @@ class Application(tk.Frame):
                 product_description_str = str(product_description) if product_description is not None else "N/A"
                 comments_str = str(comments) if comments is not None else "N/A"
 
-                # Adding styled paragraphs with specified font size
+                # Extract title from product description
+                title = "N/A"
+                title_start = product_description.find("Título:") + 7  # Find start of title text
+                if title_start > 6:  # Check if "Título:" was found
+                    title_end = product_description.find('\n', title_start)
+                    title = product_description[title_start:title_end].strip() if title_end != -1 else product_description[title_start:].strip()
+
+
+               # Add content to the document
+                add_styled_paragraph(doc, "Title: ", title)
+                doc.add_paragraph("\n")
+                add_styled_paragraph(doc, "Product Price After IVU (Sale Price): ", product_price_after_ivu_str)
+                doc.add_paragraph("\n")
+                add_styled_paragraph(doc, "Category: ", category)
+                doc.add_paragraph("\n")
+                add_styled_paragraph(doc, "Condition: ", condition)
+                doc.add_paragraph("\n")
+                
+                # Adjust product description if it starts with "Título:"
+                product_description_str = str(product_description) if product_description is not None else "N/A"
+                if product_description_str.startswith("Título:"):
+                    first_newline_index = product_description_str.find('\n')
+                    if first_newline_index != -1:
+                        product_description_str = product_description_str[first_newline_index + 1:].strip()
+
+                add_styled_paragraph(doc, "Product Description:", "")
+                doc.add_paragraph(product_description_str)
+                doc.add_paragraph("\n")
+                add_styled_paragraph(doc, "Product Tags: ", product_tags)
+                doc.add_paragraph("\n")
                 add_styled_paragraph(doc, "Product ID: ", product_id_str)
+                doc.add_paragraph("\n")
                 add_styled_paragraph(doc, "Product Name: ", product_name_str)
-                doc.add_paragraph("")  # Empty line
+                doc.add_paragraph("\n")
+                add_styled_paragraph(doc, "Comments: ", comments_str)
+                doc.add_paragraph("\n")
+                doc.add_paragraph("---------------")
+                doc.add_paragraph("\n")
                 add_styled_paragraph(doc, "Product Price: ", product_price_str)
                 add_styled_paragraph(doc, "IVU Tax: ", ivu_tax_str)
                 add_styled_paragraph(doc, "Product Price After IVU (Sale Price): ", product_price_after_ivu_str)
-                add_styled_paragraph(doc, "Reseller Earnings : ", f"{discount_str}     [ = {discount_percentage_str} of {product_price_str} (Product Price)]")
-                doc.add_paragraph("")  # Empty line
-                add_styled_paragraph(doc, "Product Description:", "")
-                doc.add_paragraph(product_description_str)
-                doc.add_paragraph("")  # Empty line
-                add_styled_paragraph(doc, "Comments:", "")
-                doc.add_paragraph(comments_str)
+                add_styled_paragraph(doc, "Reseller Earnings: ", f"{discount_str}     [ = {discount_percentage_str} of {product_price_str} (Product Price)]")
 
-                # Uncomment the next line if you want to include the order link
-                # add_styled_paragraph(doc, "Amazon Link (to get the product description and pictures, if needed): ", order_link)
 
 
                 # Save the document
@@ -785,6 +795,8 @@ class Application(tk.Frame):
         else:
             messagebox.showerror("Error", f"No folder found for Product ID {product_id}")
             self.logger.error(f"No folder found for product ID {product_id}")
+
+
 
     def check_for_missing_word_docs(self):
         """
@@ -1218,6 +1230,10 @@ class Application(tk.Frame):
             self.to_sell_after_label.grid(row=2, column=0, sticky='w', padx=0, pady=0)
             self.to_sell_after_entry = ttk.Entry(self.row1_frame, textvariable=self.to_sell_after_var, state='disabled', style='BlackOnDisabled.TEntry')
             self.to_sell_after_entry.grid(row=3, column=0, sticky='w', padx=0, pady=0)
+
+            # self.condition_combobox = ttk.Combobox(self.row1_frame, textvariable=self.condition_var, state='disabled', style='BlackOnDisabled.TEntry')
+            # self.condition_combobox['values'] = ('', 'Cash', 'ATH Movil')
+            # self.condition_combobox.grid(row=0, column=1, sticky='w', padx=0, pady=0)    
 
             # Row 1 Widgets
             # Column 1 Widget
@@ -3793,7 +3809,14 @@ def on_close(app, root):
     root.destroy()  # Call the destroy method to close the application
 
 if __name__ == '__main__':
+
     data_spacing_control_thread = threading.Thread(target=data_spacing_control)
     data_spacing_control_thread.start()
+
+    # Get the directory of the script
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+
+    # Set the current working directory to the script's directory
+    os.chdir(script_dir)
 
     main()
