@@ -86,9 +86,19 @@ from docx.shared import Pt
 class DatabaseManager: #DB practice(use txt/json to store folder paths when program finished for faster reads.)
 
     def __init__(self, db_name='inventory_management.db'):
+        self.db_name = db_name
+        self.delete_db_file()  # Delete the existing DB file before setting up a new one (TODO: Temporary while db sync with changes is debugged. Json file will substitute db.)
         self.conn = sqlite3.connect(db_name)
         self.cur = self.conn.cursor()
         self.setup_database()
+
+    def delete_db_file(self):
+        """
+        Deletes the database file if it exists.
+        """
+        if os.path.exists(self.db_name):
+            os.remove(self.db_name)
+            print(f"Deleted database file: {self.db_name}")
 
     def setup_database(self):
         self.cur.execute('''
@@ -1552,7 +1562,7 @@ class Application(tk.Frame):
                     # For each field, check if the value is NaN using pd.isnull and set it to an empty string if it is
                     self.asin_var.set('' if pd.isnull(product_info.get('ASIN')) else product_info.get('ASIN', ''))
                     self.product_id_var.set('' if pd.isnull(product_info.get('Product ID')) else product_info.get('Product ID', ''))
-                    self.rack_id_var.set(product_info.get('Rack ID', ''))
+                    self.rack_id_var.set('' if pd.isnull(product_info.get('Rack ID')) else product_info.get('Rack ID', ''))
 
 
                     self.product_name_text.configure(state='normal')
@@ -2888,17 +2898,19 @@ class Application(tk.Frame):
     def get_folder_path_from_db(self, product_id):
         """
         Retrieves the folder path for a given product ID from the database. 
-        The function assumes that the folder name in the database starts with the product ID followed by a space.
+        The function now handles folder names in the database that may or may not have a space after the product ID.
         """
 
         # Log before executing the database query
         self.logger.info(f"Fetching folder path for product ID: {product_id} from the database")
 
-        self.db_manager.cur.execute("SELECT Path FROM folder_paths WHERE Folder LIKE ?", (product_id + ' %',))
+        # Adjust the query to match folders that start with the product ID, followed by any character (including none)
+        search_pattern = f"{product_id}%"  # '%' wildcard matches any sequence of characters
+        self.db_manager.cur.execute("SELECT Path FROM folder_paths WHERE Folder LIKE ?", (search_pattern,))
         result = self.db_manager.cur.fetchone()
 
-
         return result[0] if result else None
+
 
 
     def get_folder_names_from_db(self):
@@ -3217,71 +3229,69 @@ class Application(tk.Frame):
 
             return folder_paths['Inventory']
 
+
     def move_product_folder(self, current_path, folder_name, target_folder, product_name):
-        """
-        Moves and renames a product folder to the target folder based on the specified criteria.
-        The new folder name includes the product ID and a truncated version of the product name if necessary.
-        """
-        # Log before attempting to move the folder
         self.logger.info(f"Attempting to move folder '{folder_name}' to '{target_folder}'")
 
         if target_folder and os.path.exists(target_folder):
-            product_id = folder_name.split(' - ')[0].upper()
+            # Extract the product ID by taking the part before the first space or dash
+            product_id = folder_name.split(' - ')[0].split()[0].upper()
             sanitized_product_name = self.replace_invalid_chars(product_name)
 
-            # Utilize shorten_path to get a valid path
-            new_full_path = self.shorten_path(product_id, sanitized_product_name, target_folder)
+            new_full_path = self.shorten_path(product_id, sanitized_product_name, target_folder, folder_name)
 
             if new_full_path:
                 try:
-                    os.rename(current_path, new_full_path)  # Corrected this line
-                    # Log the successful move and rename of the folder
+                    os.rename(current_path, new_full_path)
                     new_folder_name = os.path.basename(new_full_path)
                     self.logger.info(f"Moved and renamed folder '{folder_name}' to '{new_folder_name}' in '{target_folder}'")
-                    return new_full_path  # Return the new full path
+                    return new_full_path
                 except Exception as e:
                     self.logger.error(f"Error moving folder '{folder_name}': {e}")
-            else:
-                self.logger.error(f"Unable to shorten the path sufficiently for '{folder_name}'")
         else:
             self.logger.error(f"Target folder not found: {target_folder}")
 
-    def shorten_path(self, product_id, product_name, base_path):
-        """
-        Shortens the path by truncating the product name to fit within the Windows MAX_PATH limit.
-        """
-
-        # Log before starting the path shortening process
+    def shorten_path(self, product_id, product_name, base_path, original_folder_name):
         self.logger.info(f"Shortening path for product ID: {product_id}")
 
         MAX_PATH = 260
         base_path_length = len(base_path)
-        product_id_length = len(product_id)
-        separator_length = 3  # Length of ' - '
-
-        # Initially set max_name_length to a reasonable value
+        separator = ' - '
         max_name_length = 60
-        product_name = str(product_name)
+
+        # If the original folder name already has the product ID with a dash, handle it correctly
+        if original_folder_name.startswith(product_id + separator):
+            # Remove the product ID and separator from the original folder name to avoid duplication
+            folder_name_suffix = original_folder_name[len(product_id + separator):]
+            product_id_and_separator = product_id + separator
+        else:
+            folder_name_suffix = product_name
+            product_id_and_separator = product_id
+
+        product_name = str(folder_name_suffix)
 
         while max_name_length > 0:
-            total_length = base_path_length + product_id_length + separator_length + max_name_length
+            total_length = base_path_length + len(product_id_and_separator) + max_name_length
 
             if total_length <= MAX_PATH:
                 truncated_product_name = product_name[:max_name_length]
                 self.logger.info(f"Truncated product name: {truncated_product_name}")
-                new_folder_name = f"{product_id} - {truncated_product_name}"
+
+                # Construct the new folder name correctly
+                new_folder_name = f"{product_id_and_separator}{truncated_product_name}" if product_id_and_separator.endswith(separator) else f"{product_id}{separator}{truncated_product_name}"
+
                 self.logger.info(f"Folder Name: {new_folder_name}")
                 new_full_path = os.path.join(base_path, new_folder_name)
 
                 self.logger.info(f"Path shortened successfully: {new_full_path}")
                 return new_full_path
             else:
-                self.logger.info(f"Total path length with max_name_length {max_name_length}: {total_length}")
-                max_name_length -= 1  # Reduce the length and try again
+                max_name_length -= 1
 
-        # Log if unable to shorten the path sufficiently
         self.logger.error("Unable to shorten the product name sufficiently for path limitations")
         return None
+
+
 
     def replace_invalid_chars(self, filename):
         """
@@ -3299,6 +3309,7 @@ class Application(tk.Frame):
         self.logger.info(f"Filename after replacing invalid characters: {filename}")
 
         return filename
+
 
     def is_date_today_or_before(self, date_input):
         """
