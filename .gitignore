@@ -1,0 +1,12 @@
+# Ignore all .log files
+*.log
+*.log.*
+
+# Ignore database files
+*.db
+
+# Ignore text files that might be for configuration or paths
+*.txt
+
+# Ignore configuration files
+*.ini
