@@ -31,7 +31,7 @@ Required Python packages (listed in `requirements.txt`):
 Installation
 Clone the repository:
 ```sh
-git clone https://github.com/yourusername/inventory-management.git
+git clone https://github.com/NaN-Error/Inventory-Management.git
 cd inventory-management
 ```
 Install dependencies:
@@ -40,7 +40,7 @@ pip install -r requirements.txt
 ```
 Run the application:
 ```sh
-python Inventory\ Management.py
+python Inventory Management.py
 ```
 
 Usage
